@@ -1,0 +1,11 @@
+**/node_modules/
+**/dist/
+**/build/
+**/.gradle/
+**/.idea/
+**/local.properties
+backend/data/*.sqlite*
+backend/data/stores/*.sqlite*
+*.log
+*.png
+!android-customer-app/app/src/main/res/**

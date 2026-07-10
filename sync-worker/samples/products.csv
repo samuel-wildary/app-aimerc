@@ -1,0 +1,5 @@
+sku,barcode,name,category,price,stock,unit,promo,image
+LEI001,789200000001,Leite Integral 1L,Bebidas,4.99,80,UN,true,https://images.unsplash.com/photo-1550583724-b2692b85b150?auto=format&fit=crop&w=600&q=80
+MAC001,789200000002,Macarrao Espaguete 500g,Mercearia,3.49,64,UN,false,https://images.unsplash.com/photo-1551892374-ecf8754cf8b0?auto=format&fit=crop&w=600&q=80
+MACA001,789200000003,Maca Nacional,Hortifruti,7.99,40.5,KG,true,https://images.unsplash.com/photo-1560806887-1e4cd0b6cbd6?auto=format&fit=crop&w=600&q=80
+AGU001,789100000005,Agua Mineral 1.5L,Bebidas,2.79,120,UN,true,https://images.unsplash.com/photo-1602143407151-7111542de6e8?auto=format&fit=crop&w=600&q=80

@@ -1,0 +1,9 @@
+{
+  "name": "aimerc-sync-worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "sync:sample": "node src/index.js samples/products.csv"
+  }
+}
