@@ -80,7 +80,7 @@ O repositorio possui Dockerfiles independentes para:
 - Painel do supermercado: `supermarket-dashboard/Dockerfile`, porta interna `80`.
 - Administracao SaaS: `saas-admin/Dockerfile`, porta interna `80`.
 
-Consulte [docs/EASYPANEL_DEPLOY.md](docs/EASYPANEL_DEPLOY.md) para configurar servicos, volumes, Firebase e variaveis secretas. O arquivo `easypanel-compose.yml` pode ser usado como referencia no modo Docker Compose.
+No EasyPanel, use o arquivo `docker-compose.yml` da raiz para criar os tres servicos de uma vez. Consulte [docs/EASYPANEL_DEPLOY.md](docs/EASYPANEL_DEPLOY.md) para configurar volumes, restauracao inicial, Firebase e variaveis secretas.
 
 URL publica planejada para a API:
 

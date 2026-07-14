@@ -6,7 +6,9 @@ import { DatabaseSync } from 'node:sqlite';
 import { hashPassword } from './auth.js';
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-const dataDir = path.join(rootDir, 'data');
+const dataDir = process.env.AIMERC_DATA_DIR
+  ? path.resolve(process.env.AIMERC_DATA_DIR)
+  : path.join(rootDir, 'data');
 const storesDir = path.join(dataDir, 'stores');
 fs.mkdirSync(storesDir, { recursive: true });
 

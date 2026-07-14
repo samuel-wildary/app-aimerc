@@ -8,15 +8,24 @@ const currentDir = path.dirname(fileURLToPath(import.meta.url));
 const credentialsPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH
   || path.resolve(currentDir, '..', '..', 'secrets', 'firebase-service-account.json');
 
+function serviceAccountJson() {
+  if (process.env.FIREBASE_SERVICE_ACCOUNT_BASE64) {
+    return Buffer.from(process.env.FIREBASE_SERVICE_ACCOUNT_BASE64, 'base64').toString('utf8');
+  }
+  if (fs.existsSync(credentialsPath)) return fs.readFileSync(credentialsPath, 'utf8');
+  return null;
+}
+
 function firebaseApp() {
   if (getApps().length) return getApps()[0];
-  if (!fs.existsSync(credentialsPath)) throw new Error('Credencial Firebase nao configurada no backend');
-  const serviceAccount = JSON.parse(fs.readFileSync(credentialsPath, 'utf8'));
+  const credentials = serviceAccountJson();
+  if (!credentials) throw new Error('Credencial Firebase nao configurada no backend');
+  const serviceAccount = JSON.parse(credentials);
   return initializeApp({ credential: cert(serviceAccount), projectId: serviceAccount.project_id });
 }
 
 export function firebaseStatus() {
-  return { configured: fs.existsSync(credentialsPath) };
+  return { configured: Boolean(process.env.FIREBASE_SERVICE_ACCOUNT_BASE64) || fs.existsSync(credentialsPath) };
 }
 
 export async function sendFirebaseNotification(tokens, campaign) {
