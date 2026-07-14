@@ -19,3 +19,5 @@ Antes da publicacao, registre o pacote `com.mercadinhoqueiroz.app` no projeto Fi
 ## Catalogo automatico
 
 O worker `sync-worker` consulta o PostgreSQL do Queiroz, cruza os EANs com a API de imagens e envia o catalogo para o backend AiMerc. O Android recebe somente URLs do backend. Execute `npm run watch:queiroz` com `QUEIROZ_DATABASE_URL`, `CATALOG_API_URL`, `AIMERC_API_URL`, `AIMERC_SYNC_EMAIL` e `AIMERC_SYNC_PASSWORD` configurados como variaveis seguras.
+
+Para publicar somente os arquivos de imagem sem alterar precos ou estoque, execute `npm run images:queiroz` no `sync-worker` com `CATALOG_API_URL`, `AIMERC_API_URL`, `AIMERC_SYNC_EMAIL` e `AIMERC_SYNC_PASSWORD`.

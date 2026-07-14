@@ -6,6 +6,7 @@
 **/local.properties
 backend/data/*.sqlite*
 backend/data/stores/*.sqlite*
+backend/data/images/
 backend/secrets/
 *.log
 *.png

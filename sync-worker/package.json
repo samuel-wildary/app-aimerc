@@ -6,6 +6,7 @@
   "scripts": {
     "sync:sample": "node src/index.js samples/products.csv",
     "sync:queiroz": "node src/sync-queiroz.js",
+    "images:queiroz": "node src/publish-queiroz-images.js",
     "watch:queiroz": "node src/watch-queiroz.js"
   },
   "dependencies": {

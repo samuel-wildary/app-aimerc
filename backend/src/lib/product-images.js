@@ -13,6 +13,13 @@ const imagesDir = path.join(dataDir, 'images');
 const maxImageBytes = 10 * 1024 * 1024;
 const allowedTypes = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif']);
 
+function validateImage(data, contentType) {
+  const normalizedType = String(contentType || '').split(';')[0].toLowerCase();
+  if (!allowedTypes.has(normalizedType)) throw new Error('Formato de imagem nao permitido');
+  if (!Buffer.isBuffer(data) || !data.length || data.length > maxImageBytes) throw new Error('Imagem vazia ou acima do limite permitido');
+  return normalizedType;
+}
+
 function isPrivateAddress(address) {
   if (address === '::1' || address === '::' || address.startsWith('fc') || address.startsWith('fd') || address.startsWith('fe80:')) return true;
   if (!net.isIPv4(address)) return false;
@@ -73,4 +80,15 @@ export async function productImage(storeId, product) {
   fs.renameSync(temporary, paths.image);
   fs.writeFileSync(paths.metadata, JSON.stringify({ contentType, source: source.origin, cachedAt: new Date().toISOString() }));
   return { data, contentType };
+}
+
+export function storeProductImage(storeId, product, data, contentType) {
+  const normalizedType = validateImage(data, contentType);
+  const paths = cachePaths(storeId, product);
+  fs.mkdirSync(paths.directory, { recursive: true });
+  const temporary = `${paths.image}.${process.pid}.tmp`;
+  fs.writeFileSync(temporary, data);
+  fs.renameSync(temporary, paths.image);
+  fs.writeFileSync(paths.metadata, JSON.stringify({ contentType: normalizedType, source: 'catalog-import', cachedAt: new Date().toISOString() }));
+  return { bytes: data.length, contentType: normalizedType };
 }

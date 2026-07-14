@@ -43,7 +43,7 @@ import {
   upsertProducts
 } from './lib/database.js';
 import { firebaseStatus, sendFirebaseNotification } from './lib/firebase.js';
-import { productImage } from './lib/product-images.js';
+import { productImage, storeProductImage } from './lib/product-images.js';
 import { createToken, requireAuth, verifyPassword } from './lib/auth.js';
 import { ApiError, normalizeEmail, oneOf, optionalText, positiveNumber, requiredText, slugify } from './lib/validation.js';
 
@@ -73,7 +73,8 @@ app.use((req, res, next) => {
   const count = (requestBuckets.get(key) || 0) + 1;
   requestBuckets.set(key, count);
   if (requestBuckets.size > 2_000) requestBuckets.clear();
-  if (count > 300) return res.status(429).json({ error: 'Muitas requisicoes. Tente novamente em instantes.' });
+  const limit = req.path.startsWith('/api/sync/product-images/') ? 3_000 : 300;
+  if (count > limit) return res.status(429).json({ error: 'Muitas requisicoes. Tente novamente em instantes.' });
   next();
 });
 
@@ -449,6 +450,20 @@ app.post('/api/sync/products', requireAuth('STORE_MANAGER'), asyncRoute((req, re
   const result = upsertProducts(req.user.storeId, req.body.items.map(normalizeProduct));
   res.json({ success: true, ...result, synchronizedAt: new Date().toISOString() });
 }));
+
+app.post(
+  '/api/sync/product-images/:productId',
+  requireAuth('STORE_MANAGER'),
+  express.raw({ type: ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif'], limit: '10mb' }),
+  asyncRoute((req, res) => {
+    managerStore(req);
+    const product = getProduct(req.user.storeId, req.params.productId);
+    if (!product) throw new ApiError(404, 'Produto nao encontrado');
+    if (!Buffer.isBuffer(req.body)) throw new ApiError(400, 'Arquivo de imagem invalido');
+    const stored = storeProductImage(req.user.storeId, product, req.body, req.headers['content-type']);
+    res.json({ success: true, productId: product.id, ...stored });
+  })
+);
 
 app.get('/api/admin/overview', requireAuth('PLATFORM_ADMIN'), (req, res) => {
   res.json(adminOverview());
