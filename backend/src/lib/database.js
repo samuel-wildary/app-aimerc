@@ -292,6 +292,32 @@ function ensureUser({ id, storeId = null, role, name, email, password }) {
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(id, storeId, role, name, email, credentials.hash, credentials.salt, isoNow());
 }
 
+function syncPlatformAdminFromEnvironment() {
+  const email = String(process.env.AIMERC_ADMIN_EMAIL || '').trim().toLowerCase();
+  const password = String(process.env.AIMERC_ADMIN_PASSWORD || '');
+  const name = String(process.env.AIMERC_ADMIN_NAME || 'Administrador AiMerc').trim();
+
+  if (!email && !password) return false;
+  if (!email || !password) throw new Error('Configure AIMERC_ADMIN_EMAIL e AIMERC_ADMIN_PASSWORD juntos');
+  if (!/^\S+@\S+\.\S+$/.test(email)) throw new Error('AIMERC_ADMIN_EMAIL invalido');
+  if (password.length < 12) throw new Error('AIMERC_ADMIN_PASSWORD deve ter pelo menos 12 caracteres');
+
+  const existing = master.prepare("SELECT id FROM users WHERE role = 'PLATFORM_ADMIN' ORDER BY created_at LIMIT 1").get();
+  const conflict = master.prepare('SELECT id FROM users WHERE email = ? AND id != ?').get(email, existing?.id || '');
+  if (conflict) throw new Error('AIMERC_ADMIN_EMAIL ja pertence a outro usuario');
+
+  const credentials = hashPassword(password);
+  if (existing) {
+    master.prepare(`UPDATE users SET name = ?, email = ?, password_hash = ?, password_salt = ? WHERE id = ?`)
+      .run(name, email, credentials.hash, credentials.salt, existing.id);
+  } else {
+    master.prepare(`INSERT INTO users (id, store_id, role, name, email, password_hash, password_salt, created_at)
+      VALUES (?, NULL, 'PLATFORM_ADMIN', ?, ?, ?, ?, ?)`)
+      .run('user_master_001', name, email, credentials.hash, credentials.salt, isoNow());
+  }
+  return true;
+}
+
 function seedMaster() {
   const demoId = 'store_001';
   if (!master.prepare('SELECT id FROM stores WHERE id = ?').get(demoId)) {
@@ -304,7 +330,12 @@ function seedMaster() {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
       .run('sub_001', demoId, 'PROFESSIONAL', 'TRIAL', 497, 'PIX', nextDueDate(), isoNow());
   }
-  ensureUser({ id: 'user_master_001', role: 'PLATFORM_ADMIN', name: 'Samuel Wildary', email: 'admin@aimerc.local', password: 'Admin@2026' });
+  const platformAdminConfigured = syncPlatformAdminFromEnvironment();
+  if (!platformAdminConfigured && process.env.NODE_ENV !== 'production') {
+    ensureUser({ id: 'user_master_001', role: 'PLATFORM_ADMIN', name: 'Samuel Wildary', email: 'admin@aimerc.local', password: 'Admin@2026' });
+  } else if (!platformAdminConfigured) {
+    console.warn('Administrador SaaS nao configurado. Defina AIMERC_ADMIN_EMAIL e AIMERC_ADMIN_PASSWORD.');
+  }
   ensureUser({ id: 'user_store_001', storeId: demoId, role: 'STORE_MANAGER', name: 'Marina Costa', email: 'gestor@aimerc.local', password: 'Aimerc@2026' });
   master.prepare("UPDATE stores SET support_phone = phone WHERE id = ? AND support_phone = ''").run(demoId);
   seedStore(demoId);

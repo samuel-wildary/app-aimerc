@@ -508,6 +508,5 @@ processPushAutomations().catch(error => console.error('Falha ao iniciar automaco
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`AiMerc backend running on http://127.0.0.1:${PORT}`);
-  console.log('Demo dashboard: gestor@aimerc.local / Aimerc@2026');
-  console.log('Demo SaaS Admin: admin@aimerc.local / Admin@2026');
+  if (process.env.NODE_ENV !== 'production') console.log('Contas locais de demonstracao habilitadas.');
 });

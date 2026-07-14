@@ -22,11 +22,15 @@ PORT=3000
 NODE_ENV=production
 AIMERC_TOKEN_SECRET=UMA_CHAVE_ALEATORIA_FORTE
 AIMERC_ALLOWED_ORIGINS=http://31.97.252.6:4201,http://31.97.252.6:4202
+AIMERC_ADMIN_NAME=Administrador AiMerc
+AIMERC_ADMIN_EMAIL=admin@seudominio.com.br
+AIMERC_ADMIN_PASSWORD=UMA_SENHA_FORTE_COM_12_OU_MAIS_CARACTERES
 DATABASE_URL=postgres://USUARIO:SENHA@31.97.252.6:5540/aimerc?sslmode=disable
 FIREBASE_SERVICE_ACCOUNT_BASE64=JSON_DA_CONTA_FIREBASE_CODIFICADO_EM_BASE64
 ```
 
 Nao grave a senha real em arquivos versionados. Use o painel de variaveis secretas do EasyPanel.
+As credenciais `AIMERC_ADMIN_*` atualizam a conta master existente sempre que o backend inicia.
 
 ## URL da API nos frontends
 
