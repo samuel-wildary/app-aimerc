@@ -33,7 +33,7 @@ Nao grave a senha real em arquivos versionados. Use o painel de variaveis secret
 Adicione como argumento de build nos dois frontends:
 
 ```env
-VITE_API_URL=http://31.97.252.6:3000/api
+VITE_API_URL=https://wildhub-aimerc-backend-app.5mos1l.easypanel.host/api
 ```
 
 ## Firebase no Docker

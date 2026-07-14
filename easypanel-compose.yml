@@ -24,7 +24,7 @@ services:
     build:
       context: ./supermarket-dashboard
       args:
-        VITE_API_URL: ${PUBLIC_API_URL:-http://31.97.252.6:3000/api}
+        VITE_API_URL: ${PUBLIC_API_URL:-https://wildhub-aimerc-backend-app.5mos1l.easypanel.host/api}
     ports:
       - "4201:80"
     depends_on:
@@ -35,7 +35,7 @@ services:
     build:
       context: ./saas-admin
       args:
-        VITE_API_URL: ${PUBLIC_API_URL:-http://31.97.252.6:3000/api}
+        VITE_API_URL: ${PUBLIC_API_URL:-https://wildhub-aimerc-backend-app.5mos1l.easypanel.host/api}
     ports:
       - "4202:80"
     depends_on:

@@ -1,4 +1,4 @@
-const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:4100/api';
+const API_URL = import.meta.env.VITE_API_URL || 'https://wildhub-aimerc-backend-app.5mos1l.easypanel.host/api';
 
 class AdminApi {
   constructor() { this.token = localStorage.getItem('aimerc.admin.token') || ''; }
