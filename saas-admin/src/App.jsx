@@ -45,8 +45,8 @@ function Status({ value }) {
 }
 
 function Login({ onSuccess }) {
-  const [email, setEmail] = useState('admin@aimerc.local');
-  const [password, setPassword] = useState('Admin@2026');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   async function submit(event) {
@@ -61,7 +61,7 @@ function Login({ onSuccess }) {
     } catch (requestError) { setError(requestError.message); }
     finally { setLoading(false); }
   }
-  return <main className="admin-login"><section className="login-copy"><div className="logo"><span>Ai</span>Merc <b>Control</b></div><div><p className="eyebrow">Comando da plataforma</p><h1>O negocio inteiro, sem pontos cegos.</h1><p>Clientes, receita recorrente e operacao SaaS em uma unica cabine de controle.</p></div><div className="trust"><ShieldCheck /><span>Ambiente administrativo isolado</span></div></section><section className="login-form"><form onSubmit={submit}><p className="eyebrow">Acesso master</p><h2>Entrar no Control</h2><p>Use sua conta administrativa da plataforma.</p><label>E-mail<input type="email" value={email} onChange={event => setEmail(event.target.value)} required /></label><label>Senha<input type="password" value={password} onChange={event => setPassword(event.target.value)} required /></label>{error && <div className="error">{error}</div>}<button className="accent" disabled={loading}>{loading ? 'Validando...' : <>Acessar painel <ArrowRight size={18} /></>}</button><small>Credenciais locais preenchidas para demonstracao.</small></form></section></main>;
+  return <main className="admin-login"><section className="login-copy"><div className="logo"><span>Ai</span>Merc <b>Control</b></div><div><p className="eyebrow">Comando da plataforma</p><h1>O negocio inteiro, sem pontos cegos.</h1><p>Clientes, receita recorrente e operacao SaaS em uma unica cabine de controle.</p></div><div className="trust"><ShieldCheck /><span>Ambiente administrativo isolado</span></div></section><section className="login-form"><form onSubmit={submit}><p className="eyebrow">Acesso master</p><h2>Entrar no Control</h2><p>Use sua conta administrativa da plataforma.</p><label>E-mail<input type="email" value={email} onChange={event => setEmail(event.target.value)} autoComplete="username" required /></label><label>Senha<input type="password" value={password} onChange={event => setPassword(event.target.value)} autoComplete="current-password" required /></label>{error && <div className="error">{error}</div>}<button className="accent" disabled={loading}>{loading ? 'Validando...' : <>Acessar painel <ArrowRight size={18} /></>}</button><small>Use as credenciais master configuradas com seguranca.</small></form></section></main>;
 }
 
 const nav = [
