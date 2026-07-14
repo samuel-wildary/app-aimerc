@@ -198,7 +198,13 @@ function normalizeCustomer(input, fulfillmentType) {
 }
 
 app.get('/api/health', (req, res) => {
-  res.json({ ok: true, app: 'AiMerc Backend', version: '1.0.0', persistence: 'sqlite', port: PORT });
+  res.json({
+    ok: true,
+    app: 'AiMerc Backend',
+    version: '1.1.0',
+    persistence: process.env.DATABASE_URL ? 'postgres-images+sqlite-cache' : 'sqlite',
+    port: PORT
+  });
 });
 
 app.post('/api/auth/login', asyncRoute((req, res) => {
@@ -455,12 +461,12 @@ app.post(
   '/api/sync/product-images/:productId',
   requireAuth('STORE_MANAGER'),
   express.raw({ type: ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif'], limit: '10mb' }),
-  asyncRoute((req, res) => {
+  asyncRoute(async (req, res) => {
     managerStore(req);
     const product = getProduct(req.user.storeId, req.params.productId);
     if (!product) throw new ApiError(404, 'Produto nao encontrado');
     if (!Buffer.isBuffer(req.body)) throw new ApiError(400, 'Arquivo de imagem invalido');
-    const stored = storeProductImage(req.user.storeId, product, req.body, req.headers['content-type']);
+    const stored = await storeProductImage(req.user.storeId, product, req.body, req.headers['content-type']);
     res.json({ success: true, productId: product.id, ...stored });
   })
 );

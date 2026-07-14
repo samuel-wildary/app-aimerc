@@ -4,6 +4,9 @@ import fs from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import pg from 'pg';
+
+const { Pool } = pg;
 
 const backendDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const dataDir = process.env.AIMERC_DATA_DIR
@@ -12,6 +15,56 @@ const dataDir = process.env.AIMERC_DATA_DIR
 const imagesDir = path.join(dataDir, 'images');
 const maxImageBytes = 10 * 1024 * 1024;
 const allowedTypes = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif']);
+const databaseUrl = String(process.env.DATABASE_URL || '').trim();
+const pool = databaseUrl ? new Pool({ connectionString: databaseUrl, max: 5, allowExitOnIdle: true }) : null;
+let schemaPromise;
+
+function ensureImageSchema() {
+  if (!pool) return Promise.resolve();
+  schemaPromise ||= pool.query(`
+    CREATE TABLE IF NOT EXISTS product_images (
+      store_id TEXT NOT NULL,
+      product_id TEXT NOT NULL,
+      content_type TEXT NOT NULL,
+      image_data BYTEA NOT NULL,
+      checksum TEXT NOT NULL,
+      byte_size INTEGER NOT NULL,
+      source TEXT NOT NULL DEFAULT 'catalog-import',
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (store_id, product_id)
+    );
+    CREATE INDEX IF NOT EXISTS product_images_store_idx ON product_images(store_id);
+  `);
+  return schemaPromise;
+}
+
+async function readDatabaseImage(storeId, productId) {
+  if (!pool) return null;
+  await ensureImageSchema();
+  const result = await pool.query(
+    'SELECT content_type, image_data FROM product_images WHERE store_id = $1 AND product_id = $2',
+    [storeId, productId]
+  );
+  if (!result.rowCount) return null;
+  return { contentType: result.rows[0].content_type, data: result.rows[0].image_data };
+}
+
+async function writeDatabaseImage(storeId, productId, data, contentType, source) {
+  await ensureImageSchema();
+  const checksum = crypto.createHash('sha256').update(data).digest('hex');
+  await pool.query(`
+    INSERT INTO product_images (store_id, product_id, content_type, image_data, checksum, byte_size, source, updated_at)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+    ON CONFLICT (store_id, product_id) DO UPDATE SET
+      content_type = EXCLUDED.content_type,
+      image_data = EXCLUDED.image_data,
+      checksum = EXCLUDED.checksum,
+      byte_size = EXCLUDED.byte_size,
+      source = EXCLUDED.source,
+      updated_at = NOW()
+  `, [storeId, productId, contentType, data, checksum, data.length, source]);
+  return { bytes: data.length, contentType, checksum, persistence: 'postgres' };
+}
 
 function validateImage(data, contentType) {
   const normalizedType = String(contentType || '').split(';')[0].toLowerCase();
@@ -55,8 +108,11 @@ function readCache(paths) {
 
 export async function productImage(storeId, product) {
   if (!product?.image) return null;
+  const databaseImage = await readDatabaseImage(storeId, product.id);
+  if (databaseImage) return databaseImage;
+
   const paths = cachePaths(storeId, product);
-  const cached = readCache(paths);
+  const cached = pool ? null : readCache(paths);
   if (cached) return cached;
 
   const source = await assertSafeSource(product.image);
@@ -74,21 +130,27 @@ export async function productImage(storeId, product) {
   const data = Buffer.from(await response.arrayBuffer());
   if (!data.length || data.length > maxImageBytes) throw new Error('Imagem vazia ou acima do limite permitido');
 
-  fs.mkdirSync(paths.directory, { recursive: true });
-  const temporary = `${paths.image}.${process.pid}.tmp`;
-  fs.writeFileSync(temporary, data);
-  fs.renameSync(temporary, paths.image);
-  fs.writeFileSync(paths.metadata, JSON.stringify({ contentType, source: source.origin, cachedAt: new Date().toISOString() }));
+  if (pool) {
+    await writeDatabaseImage(storeId, product.id, data, contentType, source.origin);
+  } else {
+    fs.mkdirSync(paths.directory, { recursive: true });
+    const temporary = `${paths.image}.${process.pid}.tmp`;
+    fs.writeFileSync(temporary, data);
+    fs.renameSync(temporary, paths.image);
+    fs.writeFileSync(paths.metadata, JSON.stringify({ contentType, source: source.origin, cachedAt: new Date().toISOString() }));
+  }
   return { data, contentType };
 }
 
-export function storeProductImage(storeId, product, data, contentType) {
+export async function storeProductImage(storeId, product, data, contentType) {
   const normalizedType = validateImage(data, contentType);
+  if (pool) return writeDatabaseImage(storeId, product.id, data, normalizedType, 'catalog-import');
+
   const paths = cachePaths(storeId, product);
   fs.mkdirSync(paths.directory, { recursive: true });
   const temporary = `${paths.image}.${process.pid}.tmp`;
   fs.writeFileSync(temporary, data);
   fs.renameSync(temporary, paths.image);
   fs.writeFileSync(paths.metadata, JSON.stringify({ contentType: normalizedType, source: 'catalog-import', cachedAt: new Date().toISOString() }));
-  return { bytes: data.length, contentType: normalizedType };
+  return { bytes: data.length, contentType: normalizedType, persistence: 'filesystem' };
 }

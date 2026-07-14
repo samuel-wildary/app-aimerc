@@ -113,8 +113,15 @@ CREATE TABLE IF NOT EXISTS push_devices (
   customer_phone TEXT NOT NULL DEFAULT '', active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL, last_seen_at TEXT NOT NULL,
   PRIMARY KEY (store_id,token)
 );
+CREATE TABLE IF NOT EXISTS product_images (
+  store_id TEXT NOT NULL, product_id TEXT NOT NULL, content_type TEXT NOT NULL,
+  image_data BYTEA NOT NULL, checksum TEXT NOT NULL, byte_size INTEGER NOT NULL,
+  source TEXT NOT NULL DEFAULT 'catalog-import', updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (store_id,product_id)
+);
 CREATE INDEX IF NOT EXISTS products_store_active_category_idx ON products(store_id,active,category);
 CREATE INDEX IF NOT EXISTS orders_store_created_idx ON orders(store_id,created_at DESC);
+CREATE INDEX IF NOT EXISTS product_images_store_idx ON product_images(store_id);
 `;
 
 const master = new DatabaseSync(masterPath);

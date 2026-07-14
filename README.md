@@ -7,7 +7,7 @@ SaaS de e-commerce para supermercados com aplicativo Android, operacao web, pain
 - `android-customer-app`: catalogo, busca, carrinho e checkout do consumidor.
 - `supermarket-dashboard`: pedidos, separacao, estoque e entregas da loja.
 - `saas-admin`: clientes, planos, receita recorrente e assinaturas da plataforma.
-- `backend`: API autenticada, persistencia SQLite local e migracao segura para PostgreSQL.
+- `backend`: API autenticada, PostgreSQL central para imagens e SQLite apenas como cache temporario do catalogo legado.
 - `sync-worker`: sincronizacao de produtos, precos, imagens e estoque.
 
 ## Iniciar localmente
@@ -96,4 +96,4 @@ $env:DATABASE_URL="postgres://USUARIO:SENHA@HOST:PORTA/BANCO?sslmode=disable"
 npm run migrate:postgres
 ```
 
-A senha real nunca deve ser salva no GitHub. Ate a troca completa do driver principal para PostgreSQL ser validada, o backend precisa do volume persistente `/app/data` e deve executar com apenas uma replica.
+A senha real nunca deve ser salva no GitHub. Com `DATABASE_URL` configurada, as imagens dos produtos ficam na tabela `product_images` do PostgreSQL e sobrevivem a reinicios e novas implantacoes. Ate a conversao das demais consultas para o driver PostgreSQL ser concluida, o backend ainda precisa do volume persistente `/app/data` e deve executar com apenas uma replica.
