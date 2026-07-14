@@ -7,7 +7,7 @@ SaaS de e-commerce para supermercados com aplicativo Android, operacao web, pain
 - `android-customer-app`: catalogo, busca, carrinho e checkout do consumidor.
 - `supermarket-dashboard`: pedidos, separacao, estoque e entregas da loja.
 - `saas-admin`: clientes, planos, receita recorrente e assinaturas da plataforma.
-- `backend`: API autenticada e persistencia SQLite isolada por supermercado.
+- `backend`: API autenticada, persistencia SQLite local e migracao segura para PostgreSQL.
 - `sync-worker`: sincronizacao de produtos, precos, imagens e estoque.
 
 ## Iniciar localmente
@@ -71,3 +71,29 @@ C:\Users\Samuel Wildary\Desktop\aimerc\android-customer-app\app\build\outputs\ap
 ## Producao
 
 Antes de publicar, configure HTTPS, `AIMERC_TOKEN_SECRET`, `AIMERC_ALLOWED_ORIGINS`, URL de producao do Android e credenciais/webhooks do Asaas. Os pagamentos do consumidor permanecem na entrega ou retirada.
+
+### EasyPanel
+
+O repositorio possui Dockerfiles independentes para:
+
+- API: `backend/Dockerfile`, porta interna `3000`.
+- Painel do supermercado: `supermarket-dashboard/Dockerfile`, porta interna `80`.
+- Administracao SaaS: `saas-admin/Dockerfile`, porta interna `80`.
+
+Consulte [docs/EASYPANEL_DEPLOY.md](docs/EASYPANEL_DEPLOY.md) para configurar servicos, volumes, Firebase e variaveis secretas. O arquivo `easypanel-compose.yml` pode ser usado como referencia no modo Docker Compose.
+
+URL publica planejada para a API:
+
+```text
+http://31.97.252.6:3000/api
+```
+
+Os dados locais podem ser enviados ao PostgreSQL com:
+
+```powershell
+cd backend
+$env:DATABASE_URL="postgres://USUARIO:SENHA@HOST:PORTA/BANCO?sslmode=disable"
+npm run migrate:postgres
+```
+
+A senha real nunca deve ser salva no GitHub. Ate a troca completa do driver principal para PostgreSQL ser validada, o backend precisa do volume persistente `/app/data` e deve executar com apenas uma replica.

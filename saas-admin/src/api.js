@@ -26,6 +26,7 @@ class AdminApi {
   subscriptions() { return this.request('/admin/subscriptions'); }
   createStore(data) { return this.request('/admin/stores', { method: 'POST', body: JSON.stringify(data) }); }
   updateStatus(id, status) { return this.request(`/admin/stores/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }); }
+  updateBranding(id, colors) { return this.request(`/admin/stores/${id}/branding`, { method: 'PATCH', body: JSON.stringify(colors) }); }
 }
 
 export const api = new AdminApi();

@@ -4,6 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "sync:sample": "node src/index.js samples/products.csv"
+    "sync:sample": "node src/index.js samples/products.csv",
+    "sync:queiroz": "node src/sync-queiroz.js",
+    "watch:queiroz": "node src/watch-queiroz.js"
+  },
+  "dependencies": {
+    "pg": "^8.16.3"
   }
 }

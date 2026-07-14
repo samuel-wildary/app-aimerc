@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "705294919415",
+    "project_id": "aimerc-33702",
+    "storage_bucket": "aimerc-33702.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:705294919415:android:c8be98bcef9fb3ba1b55f2",
+        "android_client_info": {
+          "package_name": "com.aimerc.customer"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA0zicay3AHlitMkNBNknlg6V1ZivAoDH8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

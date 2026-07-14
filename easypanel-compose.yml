@@ -1,0 +1,43 @@
+services:
+  backend:
+    build:
+      context: ./backend
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      AIMERC_TOKEN_SECRET: ${AIMERC_TOKEN_SECRET}
+      AIMERC_ALLOWED_ORIGINS: ${AIMERC_ALLOWED_ORIGINS}
+      FIREBASE_SERVICE_ACCOUNT_PATH: /app/secrets/firebase-service-account.json
+    ports:
+      - "3000:3000"
+    volumes:
+      - aimerc_data:/app/data
+      - aimerc_secrets:/app/secrets:ro
+    restart: unless-stopped
+
+  dashboard:
+    build:
+      context: ./supermarket-dashboard
+      args:
+        VITE_API_URL: ${PUBLIC_API_URL:-http://31.97.252.6:3000/api}
+    ports:
+      - "4201:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  saas-admin:
+    build:
+      context: ./saas-admin
+      args:
+        VITE_API_URL: ${PUBLIC_API_URL:-http://31.97.252.6:3000/api}
+    ports:
+      - "4202:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  aimerc_data:
+  aimerc_secrets:
+

@@ -6,6 +6,17 @@
 **/local.properties
 backend/data/*.sqlite*
 backend/data/stores/*.sqlite*
+backend/secrets/
 *.log
 *.png
 !android-customer-app/app/src/main/res/**
+!apps-clientes/**/app/src/main/res/**/*.png
+*.jks
+*.keystore
+**/CREDENCIAIS.txt
+window.xml
+queiroz-*.png
+.env
+.env.*
+!.env.example
+!.env.production.example

@@ -36,6 +36,22 @@ export class ApiClient {
   summary() { return this.request('/dashboard/summary'); }
   orders() { return this.request('/orders'); }
   products(query = '') { return this.request(`/products${query ? `?q=${encodeURIComponent(query)}` : ''}`); }
+  customers(query = '') { return this.request(`/customers${query ? `?q=${encodeURIComponent(query)}` : ''}`); }
+  reports() { return this.request('/reports/overview'); }
+  banners() { return this.request('/banners'); }
+  updateSettings(settings) { return this.request('/store/settings', { method: 'PATCH', body: JSON.stringify(settings) }); }
+  createBanner(banner) { return this.request('/banners', { method: 'POST', body: JSON.stringify(banner) }); }
+  updateBanner(id, banner) { return this.request(`/banners/${id}`, { method: 'PATCH', body: JSON.stringify(banner) }); }
+  deleteBanner(id) { return this.request(`/banners/${id}`, { method: 'DELETE' }); }
+  pushCampaigns() { return this.request('/push-campaigns'); }
+  createPushCampaign(campaign) { return this.request('/push-campaigns', { method: 'POST', body: JSON.stringify(campaign) }); }
+  sendPushCampaign(id) { return this.request(`/push-campaigns/${id}/send`, { method: 'POST' }); }
+  deletePushCampaign(id) { return this.request(`/push-campaigns/${id}`, { method: 'DELETE' }); }
+  pushAutomations() { return this.request('/push-automations'); }
+  createPushAutomation(automation) { return this.request('/push-automations', { method: 'POST', body: JSON.stringify(automation) }); }
+  updatePushAutomation(id, automation) { return this.request(`/push-automations/${id}`, { method: 'PATCH', body: JSON.stringify(automation) }); }
+  runPushAutomation(id) { return this.request(`/push-automations/${id}/run`, { method: 'POST' }); }
+  deletePushAutomation(id) { return this.request(`/push-automations/${id}`, { method: 'DELETE' }); }
   updateStatus(id, status) { return this.request(`/orders/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }); }
   createDemoOrder(items) {
     return this.request('/public/stores/aimerc-demo/orders', {

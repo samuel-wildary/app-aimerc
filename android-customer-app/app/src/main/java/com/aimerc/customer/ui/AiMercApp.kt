@@ -1,6 +1,9 @@
 package com.aimerc.customer.ui
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -21,6 +24,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -31,12 +36,16 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.HeadsetMic
+import androidx.compose.material.icons.filled.LocalShipping
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.ShoppingBag
+import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material.icons.outlined.LocalOffer
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -72,6 +81,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextDecoration
@@ -81,8 +91,11 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.aimerc.customer.model.CartLine
+import com.aimerc.customer.model.Banner
 import com.aimerc.customer.model.CheckoutData
+import com.aimerc.customer.model.CustomerOrder
 import com.aimerc.customer.model.Product
+import kotlinx.coroutines.delay
 import java.text.NumberFormat
 import java.util.Locale
 
@@ -106,6 +119,9 @@ fun AiMercApp(viewModel: AiMercViewModel = viewModel()) {
     val snackbar = remember { SnackbarHostState() }
     LaunchedEffect(viewModel.error) {
         viewModel.error?.let { snackbar.showSnackbar(it); viewModel.clearError() }
+    }
+    LaunchedEffect(screen) {
+        if (screen == Screen.ORDERS) viewModel.refreshOrders()
     }
     MaterialTheme(
         colorScheme = MaterialTheme.colorScheme.copy(primary = Mint, secondary = Forest, background = Canvas, surface = Color.White, onPrimary = Forest, onBackground = Ink),
@@ -134,10 +150,10 @@ fun AiMercApp(viewModel: AiMercViewModel = viewModel()) {
                 Screen.HOME -> HomeScreen(viewModel, Modifier.padding(padding), openSearch = { screen = Screen.SEARCH })
                 Screen.SEARCH -> SearchScreen(viewModel, Modifier.padding(padding))
                 Screen.CART -> CartScreen(viewModel, back = { screen = Screen.HOME }, checkout = { screen = Screen.CHECKOUT })
-                Screen.CHECKOUT -> CheckoutScreen(viewModel, back = { screen = Screen.CART }) { screen = Screen.SUCCESS }
+                Screen.CHECKOUT -> CheckoutScreenV2(viewModel, back = { screen = Screen.CART }) { screen = Screen.SUCCESS }
                 Screen.SUCCESS -> SuccessScreen(viewModel.confirmedOrderId.orEmpty()) { viewModel.resetOrder(); screen = Screen.HOME }
-                Screen.ORDERS -> PlaceholderScreen("Seus pedidos", "Acompanhe pedidos anteriores e compre novamente.", Icons.AutoMirrored.Filled.ReceiptLong, Modifier.padding(padding))
-                Screen.PROFILE -> PlaceholderScreen("Sua conta", "Enderecos, preferencias e atendimento em um lugar so.", Icons.Default.Person, Modifier.padding(padding))
+                Screen.ORDERS -> OrdersScreen(viewModel, Modifier.padding(padding))
+                Screen.PROFILE -> ProfileScreenV2(viewModel, Modifier.padding(padding))
             }
         }
     }
@@ -151,8 +167,8 @@ private fun HomeScreen(viewModel: AiMercViewModel, modifier: Modifier, openSearc
         else -> {
             val catalog = viewModel.catalog ?: return
             LazyColumn(modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
-                item { HomeHeader(catalog.store.name, catalog.store.open, openSearch) }
-                item { PromoHero(catalog.banners.firstOrNull()?.title ?: "Compra completa, sem complicacao", catalog.banners.firstOrNull()?.subtitle.orEmpty()) }
+                item { HomeHeader(catalog.store.name, catalog.store.open, viewModel.customerAddressLabel, openSearch) }
+                item { PromoHero(catalog.banners) }
                 item { CategoryRail(listOf("Todos") + catalog.categories, viewModel.selectedCategory) { viewModel.selectedCategory = it } }
                 val featured = viewModel.products.filter { it.promo }
                 if (featured.isNotEmpty()) item { ProductShelf("Ofertas que valem a pena", "Economize nos favoritos", featured, viewModel) }
@@ -167,7 +183,7 @@ private fun HomeScreen(viewModel: AiMercViewModel, modifier: Modifier, openSearc
 }
 
 @Composable
-private fun HomeHeader(storeName: String, open: Boolean, openSearch: () -> Unit) {
+private fun HomeHeader(storeName: String, open: Boolean, deliveryAddress: String, openSearch: () -> Unit) {
     Column(
         Modifier.fillMaxWidth().background(Forest).statusBarsPadding().padding(horizontal = 18.dp, vertical = 14.dp)
     ) {
@@ -181,19 +197,38 @@ private fun HomeHeader(storeName: String, open: Boolean, openSearch: () -> Unit)
         Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Color.White).clickable(onClick = openSearch).padding(horizontal = 14.dp, vertical = 13.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Default.Search, null, tint = Muted, modifier = Modifier.size(20.dp)); Spacer(Modifier.width(9.dp)); Text("O que esta faltando em casa?", color = Muted, fontSize = 14.sp)
         }
-        Row(Modifier.padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Default.LocationOn, null, tint = Mint, modifier = Modifier.size(17.dp)); Spacer(Modifier.width(5.dp)); Text("Entregar em Avenida Manuel Lucas, 123", color = Color(0xFFC4DDD4), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis); Icon(Icons.Default.ChevronRight, null, tint = Color(0xFF88AA9E), modifier = Modifier.size(17.dp)) }
+        Row(Modifier.padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Default.LocationOn, null, tint = Mint, modifier = Modifier.size(17.dp)); Spacer(Modifier.width(5.dp)); Text(deliveryAddress, color = Color(0xFFC4DDD4), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis); Icon(Icons.Default.ChevronRight, null, tint = Color(0xFF88AA9E), modifier = Modifier.size(17.dp)) }
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun PromoHero(title: String, subtitle: String) {
-    Box(Modifier.padding(18.dp).fillMaxWidth().height(172.dp).clip(RoundedCornerShape(24.dp)).background(Brush.linearGradient(listOf(Color(0xFF0C6B4F), Forest)))) {
-        Box(Modifier.align(Alignment.TopEnd).size(150.dp).clip(CircleShape).background(Color(0x2218D394)))
-        Column(Modifier.align(Alignment.CenterStart).padding(22.dp).fillMaxWidth(.72f)) {
-            Text("OFERTA DA SEMANA", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Black, letterSpacing = 1.sp)
-            Spacer(Modifier.height(8.dp)); Text(title, color = Color.White, fontSize = 27.sp, lineHeight = 29.sp, fontWeight = FontWeight.Black); Spacer(Modifier.height(7.dp)); Text(subtitle, color = Color(0xFFC8DED6), fontSize = 12.sp, lineHeight = 16.sp)
+private fun PromoHero(banners: List<Banner>) {
+    if (banners.isEmpty()) return
+    val pagerState = rememberPagerState(pageCount = { banners.size })
+    LaunchedEffect(banners.size) {
+        if (banners.size <= 1) return@LaunchedEffect
+        while (true) {
+            delay(4_500)
+            pagerState.animateScrollToPage((pagerState.currentPage + 1) % banners.size)
         }
-        Box(Modifier.align(Alignment.BottomEnd).padding(18.dp).size(58.dp).clip(CircleShape).background(Mint), contentAlignment = Alignment.Center) { Icon(Icons.Outlined.LocalOffer, null, tint = Forest, modifier = Modifier.size(28.dp)) }
+    }
+    Column(Modifier.padding(top = 18.dp)) {
+        HorizontalPager(state = pagerState, contentPadding = PaddingValues(horizontal = 18.dp), pageSpacing = 10.dp) { page ->
+            val banner = banners[page]
+            Box(Modifier.fillMaxWidth().height(180.dp).clip(RoundedCornerShape(24.dp)).background(Forest)) {
+                if (banner.image.isNotBlank()) AsyncImage(model = banner.image, contentDescription = banner.title, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(listOf(Color(0xEE073829), Color(0x99115442), Color(0x22082F24)))))
+                Column(Modifier.align(Alignment.CenterStart).padding(22.dp).fillMaxWidth(.74f)) {
+                    Text(banner.eyebrow.uppercase(), color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Black, letterSpacing = 1.sp)
+                    Spacer(Modifier.height(8.dp)); Text(banner.title, color = Color.White, fontSize = 26.sp, lineHeight = 28.sp, fontWeight = FontWeight.Black); Spacer(Modifier.height(7.dp)); Text(banner.subtitle, color = Color(0xFFD5E8E1), fontSize = 12.sp, lineHeight = 16.sp)
+                }
+                Box(Modifier.align(Alignment.BottomEnd).padding(16.dp).size(48.dp).clip(CircleShape).background(Mint), contentAlignment = Alignment.Center) { Icon(Icons.Outlined.LocalOffer, null, tint = Forest, modifier = Modifier.size(24.dp)) }
+            }
+        }
+        Row(Modifier.fillMaxWidth().padding(top = 9.dp), horizontalArrangement = Arrangement.Center) {
+            banners.indices.forEach { index -> Box(Modifier.padding(horizontal = 3.dp).width(if (pagerState.currentPage == index) 20.dp else 6.dp).height(6.dp).clip(CircleShape).background(if (pagerState.currentPage == index) Forest else Line)) }
+        }
     }
 }
 
@@ -269,6 +304,116 @@ private fun MainNavigation(screen: Screen, onChange: (Screen) -> Unit) {
     NavigationBar(containerColor = Color.White, modifier = Modifier.navigationBarsPadding()) { items.forEach { (target, data) -> NavigationBarItem(selected = screen == target, onClick = { onChange(target) }, icon = { Icon(data.first, data.second) }, label = { Text(data.second, fontSize = 10.sp) }, colors = NavigationBarItemDefaults.colors(selectedIconColor = Forest, selectedTextColor = Forest, indicatorColor = MintSoft, unselectedIconColor = Muted, unselectedTextColor = Muted)) } }
 }
 
+private val orderStatusLabels = mapOf(
+    "RECEIVED" to "Pedido recebido",
+    "PICKING" to "Separando produtos",
+    "READY" to "Pedido pronto",
+    "OUT_FOR_DELIVERY" to "Saiu para entrega",
+    "DONE" to "Pedido entregue",
+    "CANCELLED" to "Pedido cancelado"
+)
+
+@Composable
+private fun OrdersScreen(viewModel: AiMercViewModel, modifier: Modifier) {
+    Column(modifier.fillMaxSize().background(Canvas)) {
+        Row(Modifier.fillMaxWidth().background(Forest).statusBarsPadding().padding(horizontal = 18.dp, vertical = 17.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) { Text("Seus pedidos", color = Color.White, fontSize = 25.sp, fontWeight = FontWeight.Black); Text("Acompanhe cada etapa em tempo real", color = Color(0xFFACCCC0), fontSize = 11.sp) }
+            IconButton(onClick = viewModel::refreshOrders) { Icon(Icons.Default.Refresh, "Atualizar pedidos", tint = Mint) }
+        }
+        when {
+            viewModel.ordersLoading && viewModel.orders.isEmpty() -> LoadingScreen()
+            viewModel.orders.isEmpty() -> PlaceholderScreen("Nenhum pedido neste aparelho", "Depois de confirmar uma compra, o acompanhamento aparece automaticamente aqui.", Icons.AutoMirrored.Filled.ReceiptLong, Modifier.fillMaxSize())
+            else -> LazyColumn(contentPadding = PaddingValues(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                items(viewModel.orders, key = { it.id }) { order -> CustomerOrderCard(order) { viewModel.cancelOrder(order) } }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CustomerOrderCard(order: CustomerOrder, onCancel: () -> Unit) {
+    val context = LocalContext.current
+    var confirmCancel by rememberSaveable(order.id) { mutableStateOf(false) }
+    val cancelled = order.status == "CANCELLED"
+    Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = Color.White), elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)) {
+        Column(Modifier.padding(16.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
+                Column { Text("#${order.id}", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold); Text(orderStatusLabels[order.status] ?: order.status, color = if (cancelled) Color(0xFFC64A4A) else Forest, fontWeight = FontWeight.Black, fontSize = 18.sp, modifier = Modifier.padding(top = 3.dp)) }
+                Column(horizontalAlignment = Alignment.End) { Text(currency.format(order.total), fontWeight = FontWeight.Black, color = Ink); Text(formatOrderDate(order.createdAt), color = Muted, fontSize = 10.sp) }
+            }
+            if (!cancelled) { Spacer(Modifier.height(17.dp)); OrderProgress(order.status) }
+            Spacer(Modifier.height(16.dp)); order.items.take(3).forEach { item -> Row(Modifier.fillMaxWidth().padding(vertical = 3.dp)) { Text("${formatQuantity(item.quantity)} ${item.unit}", color = Color(0xFF0A9066), fontSize = 11.sp, fontWeight = FontWeight.Black, modifier = Modifier.width(58.dp)); Text(item.name, color = Ink, fontSize = 12.sp, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis) } }
+            if (order.items.size > 3) Text("+ ${order.items.size - 3} itens", color = Muted, fontSize = 10.sp, modifier = Modifier.padding(top = 4.dp))
+            if (!cancelled && order.cancellation != null) {
+                Spacer(Modifier.height(12.dp))
+                if (order.cancellation.eligible) {
+                    if (confirmCancel) {
+                        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Color(0xFFFFF0F0)).padding(12.dp)) {
+                            Text("Cancelar este pedido?", color = Color(0xFF9A3535), fontWeight = FontWeight.Black)
+                            Text("Os itens voltarao ao estoque da loja.", color = Color(0xFF8B5A5A), fontSize = 11.sp, modifier = Modifier.padding(top = 3.dp))
+                            Row(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                TextButton(onClick = { confirmCancel = false }, modifier = Modifier.weight(1f)) { Text("Manter pedido") }
+                                Button(onClick = onCancel, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD94B4B), contentColor = Color.White)) { Text("Confirmar") }
+                            }
+                        }
+                    } else {
+                        TextButton(onClick = { confirmCancel = true }, modifier = Modifier.fillMaxWidth()) { Text("Cancelar pedido", color = Color(0xFFC24242), fontWeight = FontWeight.Bold) }
+                    }
+                } else {
+                    TextButton(onClick = {
+                        val number = order.cancellation.supportPhone.filter { it.isDigit() }
+                        if (number.isNotBlank()) context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$number")))
+                    }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.Phone, null, tint = Forest, modifier = Modifier.size(16.dp)); Spacer(Modifier.width(6.dp)); Text("Precisa cancelar? Ligar para a central", color = Forest, fontWeight = FontWeight.Bold) }
+                    Text(order.cancellation.message, color = Muted, fontSize = 10.sp, lineHeight = 13.sp)
+                }
+            }
+            Spacer(Modifier.height(12.dp)); Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(11.dp)).background(Color(0xFFF3F7F4)).padding(11.dp), verticalAlignment = Alignment.CenterVertically) { Icon(if (order.fulfillmentType == "DELIVERY") Icons.Default.LocalShipping else Icons.Default.Storefront, null, tint = Forest, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(if (order.fulfillmentType == "DELIVERY") "Entrega · taxa ${currency.format(order.deliveryFee)}" else "Retirada no supermercado", color = Color(0xFF52615A), fontSize = 11.sp, fontWeight = FontWeight.Bold) }
+        }
+    }
+}
+
+@Composable
+private fun OrderProgress(status: String) {
+    val steps = listOf("RECEIVED", "PICKING", "READY", "OUT_FOR_DELIVERY", "DONE")
+    val current = steps.indexOf(status).coerceAtLeast(0)
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        steps.forEachIndexed { index, _ ->
+            Box(Modifier.size(if (index == current) 15.dp else 10.dp).clip(CircleShape).background(if (index <= current) Mint else Line), contentAlignment = Alignment.Center) { if (index == current) Box(Modifier.size(5.dp).clip(CircleShape).background(Forest)) }
+            if (index < steps.lastIndex) Box(Modifier.weight(1f).height(3.dp).background(if (index < current) Mint else Line))
+        }
+    }
+}
+
+@Composable
+private fun ProfileScreen(viewModel: AiMercViewModel, modifier: Modifier) {
+    var name by rememberSaveable(viewModel.customerName) { mutableStateOf(viewModel.customerName) }
+    var phone by rememberSaveable(viewModel.customerPhone) { mutableStateOf(viewModel.customerPhone) }
+    var address by rememberSaveable(viewModel.customerAddress) { mutableStateOf(viewModel.customerAddress) }
+    var saved by remember { mutableStateOf(false) }
+    LazyColumn(modifier.fillMaxSize().background(Canvas), contentPadding = PaddingValues(bottom = 24.dp)) {
+        item { Column(Modifier.fillMaxWidth().background(Forest).statusBarsPadding().padding(20.dp)) { Box(Modifier.size(58.dp).clip(CircleShape).background(Mint), contentAlignment = Alignment.Center) { Icon(Icons.Default.Person, null, tint = Forest, modifier = Modifier.size(30.dp)) }; Spacer(Modifier.height(13.dp)); Text(if (name.isBlank()) "Sua conta" else name, color = Color.White, fontSize = 25.sp, fontWeight = FontWeight.Black); Text("Dados usados para agilizar suas compras", color = Color(0xFFACCCC0), fontSize = 11.sp) } }
+        item { Column(Modifier.padding(16.dp).fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Color.White).padding(16.dp)) { Text("Dados pessoais", fontSize = 18.sp, fontWeight = FontWeight.Black); Text("Voce pode alterar quando quiser.", color = Muted, fontSize = 11.sp, modifier = Modifier.padding(bottom = 14.dp)); AppField(name, { name = it; saved = false }, "Nome completo"); Spacer(Modifier.height(9.dp)); AppField(phone, { phone = it; saved = false }, "WhatsApp", KeyboardType.Phone); Spacer(Modifier.height(9.dp)); AppField(address, { address = it; saved = false }, "Endereco principal"); Button(onClick = { viewModel.saveProfile(name, phone, address); saved = true }, enabled = name.isNotBlank() && phone.isNotBlank(), modifier = Modifier.fillMaxWidth().height(50.dp).padding(top = 8.dp), shape = RoundedCornerShape(13.dp), colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Forest)) { Icon(Icons.Default.Check, null); Spacer(Modifier.width(6.dp)); Text(if (saved) "Dados salvos" else "Salvar meus dados", fontWeight = FontWeight.Black) } } }
+        item { Row(Modifier.padding(horizontal = 16.dp).fillMaxWidth().clip(RoundedCornerShape(17.dp)).background(MintSoft).padding(16.dp), verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Default.HeadsetMic, null, tint = Forest, modifier = Modifier.size(26.dp)); Spacer(Modifier.width(12.dp)); Column(Modifier.weight(1f)) { Text("Precisa de ajuda?", fontWeight = FontWeight.Black, color = Forest); Text("Fale diretamente com o supermercado.", color = Color(0xFF587268), fontSize = 11.sp) }; Icon(Icons.Default.ChevronRight, null, tint = Forest) } }
+        item { Row(Modifier.padding(16.dp).fillMaxWidth(), horizontalArrangement = Arrangement.Center) { Text("AiMerc · compra local, simples e segura", color = Muted, fontSize = 10.sp) } }
+    }
+}
+
+@Composable
+private fun ProfileScreenV2(viewModel: AiMercViewModel, modifier: Modifier) {
+    var name by rememberSaveable { mutableStateOf(viewModel.customerName) }; var phone by rememberSaveable { mutableStateOf(viewModel.customerPhone) }; var cep by rememberSaveable { mutableStateOf(viewModel.customerCep) }; var street by rememberSaveable { mutableStateOf(viewModel.customerStreet) }; var number by rememberSaveable { mutableStateOf(viewModel.customerNumber) }; var complement by rememberSaveable { mutableStateOf(viewModel.customerComplement) }; var neighborhood by rememberSaveable { mutableStateOf(viewModel.customerNeighborhood) }; var city by rememberSaveable { mutableStateOf(viewModel.customerCity) }; var state by rememberSaveable { mutableStateOf(viewModel.customerState) }; var reference by rememberSaveable { mutableStateOf(viewModel.customerReference) }; var saved by remember { mutableStateOf(false) }
+    LazyColumn(modifier.fillMaxSize().background(Canvas), contentPadding = PaddingValues(bottom = 24.dp)) {
+        item { Column(Modifier.fillMaxWidth().background(Forest).statusBarsPadding().padding(20.dp)) { Box(Modifier.size(58.dp).clip(CircleShape).background(Mint), contentAlignment = Alignment.Center) { Icon(Icons.Default.Person, null, tint = Forest, modifier = Modifier.size(30.dp)) }; Spacer(Modifier.height(13.dp)); Text(if (name.isBlank()) "Seus dados" else name, color = Color.White, fontSize = 25.sp, fontWeight = FontWeight.Black); Text("Salvos neste aparelho para agilizar sua proxima compra", color = Color(0xFFACCCC0), fontSize = 11.sp) } }
+        item { Column(Modifier.padding(16.dp).fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Color.White).padding(16.dp)) { Text("Cadastro de entrega", fontSize = 18.sp, fontWeight = FontWeight.Black); Text("Preencha uma vez. Nas proximas compras, apenas confirme.", color = Muted, fontSize = 11.sp, modifier = Modifier.padding(bottom = 14.dp)); AppField(name, { name = it; saved = false }, "Nome completo"); Spacer(Modifier.height(9.dp)); AppField(phone, { phone = it; saved = false }, "WhatsApp", KeyboardType.Phone); Spacer(Modifier.height(9.dp)); AppField(cep, { cep = it.filter(Char::isDigit).take(8); saved = false }, "CEP (somente numeros)", KeyboardType.Number); Spacer(Modifier.height(9.dp)); AppField(street, { street = it; saved = false }, "Rua ou avenida"); Spacer(Modifier.height(9.dp)); AppField(number, { number = it; saved = false }, "Numero da casa"); Spacer(Modifier.height(9.dp)); AppField(complement, { complement = it; saved = false }, "Complemento (opcional)"); Spacer(Modifier.height(9.dp)); AppField(neighborhood, { neighborhood = it; saved = false }, "Bairro"); Spacer(Modifier.height(9.dp)); AppField(city, { city = it; saved = false }, "Cidade"); Spacer(Modifier.height(9.dp)); AppField(state, { state = it.uppercase().take(2); saved = false }, "UF"); Spacer(Modifier.height(9.dp)); AppField(reference, { reference = it; saved = false }, "Ponto de referencia (opcional)"); Button(onClick = { viewModel.saveProfile(name, phone, cep, street, number, complement, neighborhood, city, state, reference); saved = true }, enabled = name.isNotBlank() && phone.isNotBlank() && cep.length == 8 && street.isNotBlank() && number.isNotBlank() && neighborhood.isNotBlank() && city.isNotBlank() && state.length == 2, modifier = Modifier.fillMaxWidth().height(50.dp).padding(top = 8.dp), shape = RoundedCornerShape(13.dp), colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Forest)) { Icon(Icons.Default.Check, null); Spacer(Modifier.width(6.dp)); Text(if (saved) "Dados salvos" else "Salvar dados", fontWeight = FontWeight.Black) } } }
+    }
+}
+
+private fun formatQuantity(value: Double) = if (value % 1.0 == 0.0) value.toInt().toString() else String.format(Locale.forLanguageTag("pt-BR"), "%.2f", value)
+private fun formatOrderDate(value: String): String {
+    if (value.length < 16) return value
+    val date = value.substring(0, 10).split('-')
+    return "${date.getOrElse(2) { "" }}/${date.getOrElse(1) { "" }} · ${value.substring(11, 16)}"
+}
+
 @Composable
 private fun CartScreen(viewModel: AiMercViewModel, back: () -> Unit, checkout: () -> Unit) {
     val store = viewModel.catalog?.store
@@ -285,8 +430,27 @@ private fun CartLineCard(line: CartLine, add: () -> Unit, remove: () -> Unit) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
+private fun CheckoutScreenV2(viewModel: AiMercViewModel, back: () -> Unit, success: () -> Unit) {
+    var name by rememberSaveable { mutableStateOf(viewModel.customerName) }; var phone by rememberSaveable { mutableStateOf(viewModel.customerPhone) }; var cep by rememberSaveable { mutableStateOf(viewModel.customerCep) }; var street by rememberSaveable { mutableStateOf(viewModel.customerStreet) }; var number by rememberSaveable { mutableStateOf(viewModel.customerNumber) }; var complement by rememberSaveable { mutableStateOf(viewModel.customerComplement) }; var neighborhood by rememberSaveable { mutableStateOf(viewModel.customerNeighborhood) }; var city by rememberSaveable { mutableStateOf(viewModel.customerCity) }; var state by rememberSaveable { mutableStateOf(viewModel.customerState) }; var reference by rememberSaveable { mutableStateOf(viewModel.customerReference) }; var notes by rememberSaveable { mutableStateOf("") }; var fulfillment by rememberSaveable { mutableStateOf("DELIVERY") }; var payment by rememberSaveable { mutableStateOf("CARD_ON_DELIVERY") }
+    val store = viewModel.catalog?.store; val deliveryFee = if (fulfillment == "DELIVERY" && !(store?.freeDeliveryAbove ?: 0.0 > 0 && viewModel.subtotal >= (store?.freeDeliveryAbove ?: 0.0))) store?.deliveryFee ?: 0.0 else 0.0
+    val validAddress = fulfillment == "PICKUP" || (cep.length == 8 && street.isNotBlank() && number.isNotBlank() && neighborhood.isNotBlank() && city.isNotBlank() && state.length == 2)
+    val valid = name.isNotBlank() && phone.isNotBlank() && validAddress
+    Scaffold(containerColor = Canvas, topBar = { SimpleTopBar("Finalizar compra", back) }, bottomBar = { Column(Modifier.background(Color.White).navigationBarsPadding().padding(16.dp)) { Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("Total", color = Muted); Text(currency.format(viewModel.subtotal + deliveryFee), fontWeight = FontWeight.Black, fontSize = 21.sp) }; Button(onClick = { viewModel.submit(CheckoutData(name, phone, cep, street, number, complement, neighborhood, city, state, reference, fulfillment, payment, null, notes), success) }, enabled = valid && !viewModel.submitting, modifier = Modifier.fillMaxWidth().height(52.dp).padding(top = 7.dp), shape = RoundedCornerShape(14.dp), colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Forest)) { Text(if (viewModel.submitting) "Enviando pedido..." else "Confirmar pedido", fontWeight = FontWeight.Black) } } }) { padding ->
+        LazyColumn(Modifier.padding(padding), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(13.dp)) {
+            item { CheckoutSection("Como voce quer receber?") { Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { ChoiceChip("Entrega", fulfillment == "DELIVERY") { fulfillment = "DELIVERY" }; ChoiceChip("Retirada", fulfillment == "PICKUP") { fulfillment = "PICKUP" } } } }
+            item { CheckoutSection("Quem vai receber") { AppField(name, { name = it }, "Nome completo"); Spacer(Modifier.height(9.dp)); AppField(phone, { phone = it }, "WhatsApp", KeyboardType.Phone) } }
+            if (fulfillment == "DELIVERY") item { CheckoutSection("Endereco de entrega") { AppField(cep, { cep = it.filter(Char::isDigit).take(8) }, "CEP", KeyboardType.Number); Spacer(Modifier.height(9.dp)); AppField(street, { street = it }, "Rua ou avenida"); Spacer(Modifier.height(9.dp)); AppField(number, { number = it }, "Numero da casa"); Spacer(Modifier.height(9.dp)); AppField(complement, { complement = it }, "Complemento (opcional)"); Spacer(Modifier.height(9.dp)); AppField(neighborhood, { neighborhood = it }, "Bairro"); Spacer(Modifier.height(9.dp)); AppField(city, { city = it }, "Cidade"); Spacer(Modifier.height(9.dp)); AppField(state, { state = it.uppercase().take(2) }, "UF"); Spacer(Modifier.height(9.dp)); AppField(reference, { reference = it }, "Ponto de referencia (opcional)") } }
+            item { CheckoutSection("Pagamento na ${if (fulfillment == "DELIVERY") "entrega" else "retirada"}") { Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { ChoiceChip("Cartao", payment == "CARD_ON_DELIVERY") { payment = "CARD_ON_DELIVERY" }; ChoiceChip("Dinheiro", payment == "CASH") { payment = "CASH" } } } }
+            item { CheckoutSection("Observacoes") { AppField(notes, { notes = it }, "Ex.: substituir somente por marca similar") } }
+            item { CheckoutSection("Resumo") { SummaryRow("Produtos", viewModel.subtotal); SummaryRow("Taxa de entrega", deliveryFee); if (deliveryFee == 0.0 && fulfillment == "DELIVERY" && (store?.freeDeliveryAbove ?: 0.0) > 0) Text("Frete gratis aplicado", color = Color(0xFF07845C), fontWeight = FontWeight.Bold, fontSize = 11.sp) } }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
 private fun CheckoutScreen(viewModel: AiMercViewModel, back: () -> Unit, success: () -> Unit) {
-    var name by rememberSaveable { mutableStateOf("") }; var phone by rememberSaveable { mutableStateOf("") }; var address by rememberSaveable { mutableStateOf("") }; var notes by rememberSaveable { mutableStateOf("") }; var fulfillment by rememberSaveable { mutableStateOf("DELIVERY") }; var payment by rememberSaveable { mutableStateOf("CARD_ON_DELIVERY") }
+    var name by rememberSaveable { mutableStateOf(viewModel.customerName) }; var phone by rememberSaveable { mutableStateOf(viewModel.customerPhone) }; var address by rememberSaveable { mutableStateOf(viewModel.customerAddress) }; var notes by rememberSaveable { mutableStateOf("") }; var fulfillment by rememberSaveable { mutableStateOf("DELIVERY") }; var payment by rememberSaveable { mutableStateOf("CARD_ON_DELIVERY") }
     val store = viewModel.catalog?.store
     val deliveryFee = if (fulfillment == "DELIVERY") store?.deliveryFee ?: 0.0 else 0.0
     val valid = name.isNotBlank() && phone.isNotBlank() && (fulfillment == "PICKUP" || address.isNotBlank())

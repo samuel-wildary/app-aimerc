@@ -5,6 +5,9 @@ import com.aimerc.customer.model.Banner
 import com.aimerc.customer.model.CartLine
 import com.aimerc.customer.model.Catalog
 import com.aimerc.customer.model.CheckoutData
+import com.aimerc.customer.model.CustomerOrder
+import com.aimerc.customer.model.OrderItem
+import com.aimerc.customer.model.OrderReceipt
 import com.aimerc.customer.model.Product
 import com.aimerc.customer.model.StoreInfo
 import kotlinx.coroutines.Dispatchers
@@ -30,11 +33,12 @@ object AiMercApi {
             state = storeJson.optString("state"),
             minimumOrder = storeJson.optDouble("minimumOrder", 0.0),
             deliveryFee = storeJson.optDouble("deliveryFee", 0.0),
+            freeDeliveryAbove = storeJson.optDouble("freeDeliveryAbove", 0.0),
             open = storeJson.optBoolean("open", false)
         )
         val categories = json.getJSONArray("categories").toStringList()
         val banners = json.getJSONArray("banners").mapObjects { item ->
-            Banner(item.getString("id"), item.optString("eyebrow"), item.getString("title"), item.optString("subtitle"))
+            Banner(item.getString("id"), item.optString("eyebrow"), item.getString("title"), item.optString("subtitle"), item.optString("image"), item.optInt("position"))
         }
         val productMap = linkedMapOf<String, Product>()
         val promotions = json.getJSONArray("promotions")
@@ -56,12 +60,19 @@ object AiMercApi {
         Catalog(store, categories, banners, productMap.values.toList())
     }
 
-    suspend fun createOrder(checkout: CheckoutData, lines: List<CartLine>): String = withContext(Dispatchers.IO) {
+    suspend fun createOrder(checkout: CheckoutData, lines: List<CartLine>): OrderReceipt = withContext(Dispatchers.IO) {
         val body = JSONObject().apply {
             put("customer", JSONObject().apply {
                 put("name", checkout.name)
                 put("phone", checkout.phone)
-                put("address", checkout.address)
+                put("cep", checkout.cep)
+                put("street", checkout.street)
+                put("number", checkout.number)
+                put("complement", checkout.complement)
+                put("neighborhood", checkout.neighborhood)
+                put("city", checkout.city)
+                put("state", checkout.state)
+                put("reference", checkout.reference)
             })
             put("fulfillmentType", checkout.fulfillmentType)
             put("paymentMethod", checkout.paymentMethod)
@@ -71,7 +82,23 @@ object AiMercApi {
                 lines.forEach { line -> put(JSONObject().apply { put("productId", line.product.id); put("quantity", line.quantity) }) }
             })
         }
-        request("/public/stores/$STORE_SLUG/orders", "POST", body).getString("id")
+        val result = request("/public/stores/$STORE_SLUG/orders", "POST", body)
+        OrderReceipt(result.getString("id"), result.getString("trackingToken"), result.toCustomerOrder())
+    }
+
+    suspend fun order(id: String, trackingToken: String): CustomerOrder = withContext(Dispatchers.IO) {
+        request("/public/stores/$STORE_SLUG/orders/$id?token=${java.net.URLEncoder.encode(trackingToken, "UTF-8")}").toCustomerOrder()
+    }
+
+    suspend fun cancelOrder(id: String, trackingToken: String): CustomerOrder = withContext(Dispatchers.IO) {
+        request("/public/stores/$STORE_SLUG/orders/$id/cancel", "POST", JSONObject().put("token", trackingToken)).toCustomerOrder()
+    }
+
+    suspend fun registerPushDevice(token: String, customerPhone: String = "") = withContext(Dispatchers.IO) {
+        request("/public/stores/$STORE_SLUG/push/devices", "POST", JSONObject().apply {
+            put("token", token)
+            put("customerPhone", customerPhone)
+        })
     }
 
     private fun requestArray(path: String): JSONArray {
@@ -119,6 +146,35 @@ private fun JSONObject.toProduct() = Product(
     unit = optString("unit", "UN"),
     image = optString("image"),
     promo = optBoolean("promo")
+)
+
+private fun JSONObject.toCustomerOrder() = CustomerOrder(
+    id = getString("id"),
+    status = getString("status"),
+    fulfillmentType = getString("fulfillmentType"),
+    paymentMethod = getString("paymentMethod"),
+    subtotal = getDouble("subtotal"),
+    deliveryFee = getDouble("deliveryFee"),
+    total = getDouble("total"),
+    createdAt = getString("createdAt"),
+    items = getJSONArray("items").mapObjects { item ->
+        OrderItem(
+            productId = item.getString("productId"),
+            name = item.getString("name"),
+            unit = item.getString("unit"),
+            quantity = item.getDouble("quantity"),
+            price = item.getDouble("price"),
+            total = item.getDouble("total")
+        )
+    },
+    cancellation = optJSONObject("cancellation")?.let { cancellation ->
+        com.aimerc.customer.model.CancellationInfo(
+            eligible = cancellation.optBoolean("eligible"),
+            windowEndsAt = cancellation.optString("windowEndsAt"),
+            supportPhone = cancellation.optString("supportPhone"),
+            message = cancellation.optString("message")
+        )
+    }
 )
 
 private fun JSONArray.toStringList() = List(length()) { index -> getString(index) }
