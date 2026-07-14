@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -139,6 +140,7 @@ fun AiMercApp(viewModel: AiMercViewModel = viewModel()) {
     ) {
         Scaffold(
             containerColor = Canvas,
+            contentWindowInsets = WindowInsets(0, 0, 0, 0),
             snackbarHost = { SnackbarHost(snackbar) },
             bottomBar = {
                 if (screen in listOf(Screen.HOME, Screen.SEARCH, Screen.ORDERS, Screen.PROFILE)) {
@@ -195,10 +197,10 @@ private fun HomeHeader(storeName: String, open: Boolean, deliveryAddress: String
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Image(
-                painter = painterResource(R.drawable.queiroz_splash_transparent),
+                painter = painterResource(R.drawable.queiroz_menu_logo),
                 contentDescription = "Mercadinho Queiroz",
                 contentScale = ContentScale.Fit,
-                modifier = Modifier.size(92.dp)
+                modifier = Modifier.width(86.dp).height(66.dp)
             )
             Spacer(Modifier.width(11.dp))
             Column(Modifier.weight(1f)) { Text(storeName, color = Color.White, fontWeight = FontWeight.ExtraBold, maxLines = 1, overflow = TextOverflow.Ellipsis); Text(if (open) "Aberto agora" else "Fechado", color = if (open) Mint else Orange, fontSize = 11.sp, fontWeight = FontWeight.Bold) }

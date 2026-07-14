@@ -5,7 +5,11 @@
             <solid android:color="@color/queiroz_logo_blue" />
         </shape>
     </item>
-    <item>
+    <item
+        android:top="8dp"
+        android:bottom="8dp"
+        android:left="8dp"
+        android:right="8dp">
         <bitmap
             android:gravity="fill"
             android:src="@drawable/queiroz_logo_square" />
