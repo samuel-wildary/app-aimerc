@@ -7,9 +7,11 @@
     "sync:sample": "node src/index.js samples/products.csv",
     "sync:queiroz": "node src/sync-queiroz.js",
     "images:queiroz": "node src/publish-queiroz-images.js",
+    "images:queiroz:postgres": "node src/publish-queiroz-images-to-postgres.js",
     "watch:queiroz": "node src/watch-queiroz.js"
   },
   "dependencies": {
-    "pg": "^8.16.3"
+    "pg": "^8.16.3",
+    "sharp": "^0.34.5"
   }
 }
