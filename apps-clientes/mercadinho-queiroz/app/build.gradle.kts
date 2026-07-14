@@ -5,7 +5,7 @@ plugins {
 }
 
 val aimercApiBaseUrl = providers.gradleProperty("AIMERC_API_BASE_URL")
-    .orElse("http://10.0.2.2:4100/api")
+    .orElse("https://wildhub-aimerc-backend-app.5mos1l.easypanel.host/api")
     .get()
 
 android {

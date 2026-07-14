@@ -14,6 +14,7 @@ import {
   deletePushAutomation,
   findUserByEmail,
   getTrackedOrder,
+  getProduct,
   getPushCampaign,
   getStore,
   getStoreBySlug,
@@ -42,6 +43,7 @@ import {
   upsertProducts
 } from './lib/database.js';
 import { firebaseStatus, sendFirebaseNotification } from './lib/firebase.js';
+import { productImage } from './lib/product-images.js';
 import { createToken, requireAuth, verifyPassword } from './lib/auth.js';
 import { ApiError, normalizeEmail, oneOf, optionalText, positiveNumber, requiredText, slugify } from './lib/validation.js';
 
@@ -90,6 +92,23 @@ function managerStore(req) {
   const store = getStore(req.user.storeId);
   if (!store) throw new ApiError(404, 'Supermercado nao encontrado');
   return store;
+}
+
+function publicApiBase(req) {
+  const configured = String(process.env.AIMERC_PUBLIC_API_URL || '').replace(/\/$/, '');
+  if (configured) return configured;
+  const forwardedProtocol = String(req.headers['x-forwarded-proto'] || req.protocol).split(',')[0].trim();
+  const forwardedHost = String(req.headers['x-forwarded-host'] || req.headers.host).split(',')[0].trim();
+  return `${forwardedProtocol}://${forwardedHost}/api`;
+}
+
+function publicProduct(req, store, product) {
+  if (!product.image) return product;
+  const version = encodeURIComponent(product.updatedAt || '1');
+  return {
+    ...product,
+    image: `${publicApiBase(req)}/public/stores/${encodeURIComponent(store.slug)}/products/${encodeURIComponent(product.id)}/image?v=${version}`
+  };
 }
 
 function normalizeProduct(item) {
@@ -197,7 +216,7 @@ app.post('/api/auth/login', asyncRoute((req, res) => {
 
 app.get('/api/public/stores/:slug/catalog', asyncRoute((req, res) => {
   const store = publicStore(req);
-  const products = listProducts(store.id, { q: req.query.q, category: req.query.category });
+  const products = listProducts(store.id, { q: req.query.q, category: req.query.category }).map(product => publicProduct(req, store, product));
   const categories = [...new Set(products.map(product => product.category))];
   const categoryPriority = ['Mercearia', 'Bebidas', 'Hortifruti', 'Laticinios', 'Frios e Embutidos', 'Padaria', 'Frigorifico', 'Peixaria', 'Congelados', 'Biscoitos', 'Doces e Snacks', 'Limpeza', 'Higiene e Beleza', 'Casa e Bazar'];
   categories.sort((left, right) => {
@@ -216,7 +235,22 @@ app.get('/api/public/stores/:slug/catalog', asyncRoute((req, res) => {
 
 app.get('/api/public/stores/:slug/products', asyncRoute((req, res) => {
   const store = publicStore(req);
-  res.json(listProducts(store.id, { q: req.query.q, category: req.query.category }));
+  res.json(listProducts(store.id, { q: req.query.q, category: req.query.category }).map(product => publicProduct(req, store, product)));
+}));
+
+app.get('/api/public/stores/:slug/products/:productId/image', asyncRoute(async (req, res) => {
+  const store = publicStore(req);
+  const product = getProduct(store.id, req.params.productId);
+  if (!product?.image) throw new ApiError(404, 'Imagem do produto nao encontrada');
+  try {
+    const image = await productImage(store.id, product);
+    res.setHeader('Content-Type', image.contentType);
+    res.setHeader('Cache-Control', 'public, max-age=86400, stale-while-revalidate=604800');
+    res.send(image.data);
+  } catch (error) {
+    console.error(`Falha ao carregar imagem ${product.barcode || product.id}:`, error.message);
+    throw new ApiError(502, 'Imagem temporariamente indisponivel');
+  }
 }));
 
 app.post('/api/public/stores/:slug/push/devices', asyncRoute((req, res) => {

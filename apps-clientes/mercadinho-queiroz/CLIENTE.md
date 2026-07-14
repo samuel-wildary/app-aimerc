@@ -6,7 +6,7 @@
 - Cor principal: `#1B2950`
 - Cor de destaque: `#FF7D18`
 - Fundo: `#F7F8FC`
-- API local no emulador: `http://10.0.2.2:4100/api`
+- API de producao: `https://wildhub-aimerc-backend-app.5mos1l.easypanel.host/api`
 
 ## APK de teste
 
@@ -18,4 +18,4 @@ Antes da publicacao, registre o pacote `com.mercadinhoqueiroz.app` no projeto Fi
 
 ## Catalogo automatico
 
-O worker `sync-worker` consulta o PostgreSQL do Queiroz, cruza os EANs com a API de imagens e atualiza o catalogo AiMerc. Em producao, execute `npm run watch:queiroz` com `QUEIROZ_DATABASE_URL`, `CATALOG_API_URL` e `CATALOG_PUBLIC_URL` configurados como variaveis seguras do servidor.
+O worker `sync-worker` consulta o PostgreSQL do Queiroz, cruza os EANs com a API de imagens e envia o catalogo para o backend AiMerc. O Android recebe somente URLs do backend. Execute `npm run watch:queiroz` com `QUEIROZ_DATABASE_URL`, `CATALOG_API_URL`, `AIMERC_API_URL`, `AIMERC_SYNC_EMAIL` e `AIMERC_SYNC_PASSWORD` configurados como variaveis seguras.

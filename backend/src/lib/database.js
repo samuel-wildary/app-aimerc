@@ -685,6 +685,13 @@ export function listProducts(storeId, filters = {}) {
   return db.prepare(`SELECT * FROM products WHERE ${terms.join(' AND ')} ORDER BY promo DESC, CASE WHEN image != '' THEN 0 ELSE 1 END, name`).all(...values).map(mapProduct);
 }
 
+export function getProduct(storeId, productId) {
+  const db = getStoreDb(storeId);
+  if (!db) return null;
+  const row = db.prepare('SELECT * FROM products WHERE id = ? AND active = 1').get(productId);
+  return row ? mapProduct(row) : null;
+}
+
 export function upsertProducts(storeId, items) {
   const db = getStoreDb(storeId);
   let created = 0;

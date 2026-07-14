@@ -1,14 +1,19 @@
 import { Client } from 'pg';
-import { upsertProducts } from '../../backend/src/lib/database.js';
 import { classifyProductCategory } from './category-queiroz.js';
 
-const STORE_ID = 'store_85176df6';
 const databaseUrl = process.env.QUEIROZ_DATABASE_URL;
 const catalogApiUrl = (process.env.CATALOG_API_URL || 'http://127.0.0.1:4300').replace(/\/$/, '');
-const catalogPublicUrl = (process.env.CATALOG_PUBLIC_URL || catalogApiUrl).replace(/\/$/, '');
+const aimercApiUrl = (process.env.AIMERC_API_URL || 'http://127.0.0.1:4100/api').replace(/\/$/, '');
+const syncEmail = process.env.AIMERC_SYNC_EMAIL;
+const syncPassword = process.env.AIMERC_SYNC_PASSWORD;
 
 if (!databaseUrl) {
   console.error('Defina QUEIROZ_DATABASE_URL com a conexao PostgreSQL do Mercadinho Queiroz.');
+  process.exit(1);
+}
+
+if (!syncEmail || !syncPassword) {
+  console.error('Defina AIMERC_SYNC_EMAIL e AIMERC_SYNC_PASSWORD com o acesso do gestor do Mercadinho Queiroz.');
   process.exit(1);
 }
 
@@ -73,6 +78,13 @@ async function loadCatalogImages() {
   return new Map(items.map(item => [eanKey(item.ean), item]));
 }
 
+async function jsonRequest(path, options = {}) {
+  const response = await fetch(`${aimercApiUrl}${path}`, options);
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || `API AiMerc respondeu HTTP ${response.status}`);
+  return data;
+}
+
 const client = new Client({ connectionString: databaseUrl });
 await client.connect();
 
@@ -125,13 +137,29 @@ try {
       oldPrice: promotionPrice ? normalPrice : null,
       stock,
       unit: row.unit.trim().toUpperCase(),
-      image: catalog ? `${catalogPublicUrl}/api/catalog/${catalog.ean}/image` : '',
+      image: catalog?.image_url || '',
       promo: Boolean(promotionPrice),
       active
     };
   });
 
-  const result = upsertProducts(STORE_ID, items);
+  const login = await jsonRequest('/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: syncEmail, password: syncPassword })
+  });
+  const result = { created: 0, updated: 0, total: 0 };
+  const batchSize = 500;
+  for (let offset = 0; offset < items.length; offset += batchSize) {
+    const batchResult = await jsonRequest('/sync/products', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${login.token}` },
+      body: JSON.stringify({ items: items.slice(offset, offset + batchSize) })
+    });
+    result.created += batchResult.created;
+    result.updated += batchResult.updated;
+    result.total = batchResult.total;
+  }
   console.log(JSON.stringify({
     success: true,
     sourceProducts: source.rowCount,

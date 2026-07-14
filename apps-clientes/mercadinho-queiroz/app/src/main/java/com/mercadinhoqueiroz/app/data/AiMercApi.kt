@@ -179,8 +179,6 @@ private fun JSONObject.toCustomerOrder() = CustomerOrder(
 )
 
 private fun normalizeImageUrl(value: String): String = value
-    .replace("http://127.0.0.1:4300", "http://10.0.2.2:4300")
-    .replace("http://localhost:4300", "http://10.0.2.2:4300")
 
 private fun JSONArray.toStringList() = List(length()) { index -> getString(index) }
 private fun <T> JSONArray.mapObjects(transform: (JSONObject) -> T) = List(length()) { index -> transform(getJSONObject(index)) }
