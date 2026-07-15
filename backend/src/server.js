@@ -44,6 +44,7 @@ import {
 } from './lib/database.js';
 import { firebaseStatus, sendFirebaseNotification } from './lib/firebase.js';
 import { productImage, storeProductImage } from './lib/product-images.js';
+import { getBannerImage, storeBannerImage } from './lib/banner-images.js';
 import { createToken, requireAuth, verifyPassword } from './lib/auth.js';
 import { ApiError, normalizeEmail, oneOf, optionalText, positiveNumber, requiredText, slugify } from './lib/validation.js';
 
@@ -260,6 +261,32 @@ app.get('/api/public/stores/:slug/products/:productId/image', asyncRoute(async (
   }
 }));
 
+app.get('/api/public/stores/:slug/banners/images/:imageId', asyncRoute(async (req, res) => {
+  const store = publicStore(req);
+  const image = await getBannerImage(store.id, req.params.imageId);
+  if (!image) throw new ApiError(404, 'Imagem do banner nao encontrada');
+  res.setHeader('Content-Type', image.contentType);
+  res.setHeader('Cache-Control', 'public, max-age=86400, stale-while-revalidate=604800');
+  res.send(image.data);
+}));
+
+app.get('/api/public/cep/:cep', asyncRoute(async (req, res) => {
+  const cep = String(req.params.cep || '').replace(/\D/g, '');
+  if (cep.length !== 8) throw new ApiError(400, 'CEP deve ter 8 digitos');
+  const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`, { signal: AbortSignal.timeout(8_000) });
+  if (!response.ok) throw new ApiError(502, 'Servico de CEP temporariamente indisponivel');
+  const address = await response.json();
+  if (address.erro) throw new ApiError(404, 'CEP nao encontrado');
+  res.json({
+    cep,
+    street: address.logradouro || '',
+    complement: address.complemento || '',
+    neighborhood: address.bairro || '',
+    city: address.localidade || '',
+    state: address.uf || ''
+  });
+}));
+
 app.post('/api/public/stores/:slug/push/devices', asyncRoute((req, res) => {
   const store = publicStore(req);
   const token = requiredText(req.body.token, 'Token do dispositivo', 4_096);
@@ -362,6 +389,21 @@ app.get('/api/banners', requireAuth('STORE_MANAGER'), asyncRoute((req, res) => {
   managerStore(req);
   res.json(listBanners(req.user.storeId, true));
 }));
+
+app.post(
+  '/api/banners/images',
+  requireAuth('STORE_MANAGER'),
+  express.raw({ type: ['image/jpeg', 'image/png', 'image/webp'], limit: '3mb' }),
+  asyncRoute(async (req, res) => {
+    const store = managerStore(req);
+    if (!Buffer.isBuffer(req.body)) throw new ApiError(400, 'Arquivo de imagem invalido');
+    const stored = await storeBannerImage(store.id, req.body, req.headers['content-type']);
+    res.status(201).json({
+      ...stored,
+      image: `${publicApiBase(req)}/public/stores/${encodeURIComponent(store.slug)}/banners/images/${encodeURIComponent(stored.id)}`
+    });
+  })
+);
 
 app.post('/api/banners', requireAuth('STORE_MANAGER'), asyncRoute((req, res) => {
   managerStore(req);

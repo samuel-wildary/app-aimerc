@@ -9,6 +9,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.mercadinhoqueiroz.app.data.AiMercApi
 import com.mercadinhoqueiroz.app.model.CartLine
+import com.mercadinhoqueiroz.app.model.CepAddress
 import com.mercadinhoqueiroz.app.model.Catalog
 import com.mercadinhoqueiroz.app.model.CheckoutData
 import com.mercadinhoqueiroz.app.model.CustomerOrder
@@ -21,6 +22,7 @@ import org.json.JSONObject
 
 class AiMercViewModel(application: Application) : AndroidViewModel(application) {
     private val preferences = application.getSharedPreferences("aimerc_customer", 0)
+    private val storedProfileActive = preferences.getBoolean("profile_active", preferences.getString("profile_phone", "").orEmpty().isNotBlank())
 
     var catalog by mutableStateOf<Catalog?>(null)
         private set
@@ -38,27 +40,34 @@ class AiMercViewModel(application: Application) : AndroidViewModel(application) 
         private set
     var ordersLoading by mutableStateOf(false)
         private set
+    var cepLoading by mutableStateOf(false)
+        private set
+    var cepError by mutableStateOf<String?>(null)
+        private set
+    var profileActive by mutableStateOf(storedProfileActive)
+        private set
+    private var refreshingOrders = false
     private var fullProducts by mutableStateOf<List<Product>>(emptyList())
 
-    var customerName by mutableStateOf(preferences.getString("profile_name", "").orEmpty())
+    var customerName by mutableStateOf(if (storedProfileActive) preferences.getString("profile_name", "").orEmpty() else "")
         private set
-    var customerPhone by mutableStateOf(preferences.getString("profile_phone", "").orEmpty())
+    var customerPhone by mutableStateOf(if (storedProfileActive) preferences.getString("profile_phone", "").orEmpty() else "")
         private set
-    var customerCep by mutableStateOf(preferences.getString("profile_cep", "").orEmpty())
+    var customerCep by mutableStateOf(if (storedProfileActive) preferences.getString("profile_cep", "").orEmpty() else "")
         private set
-    var customerStreet by mutableStateOf(preferences.getString("profile_street", "").orEmpty())
+    var customerStreet by mutableStateOf(if (storedProfileActive) preferences.getString("profile_street", "").orEmpty() else "")
         private set
-    var customerNumber by mutableStateOf(preferences.getString("profile_number", "").orEmpty())
+    var customerNumber by mutableStateOf(if (storedProfileActive) preferences.getString("profile_number", "").orEmpty() else "")
         private set
-    var customerComplement by mutableStateOf(preferences.getString("profile_complement", "").orEmpty())
+    var customerComplement by mutableStateOf(if (storedProfileActive) preferences.getString("profile_complement", "").orEmpty() else "")
         private set
-    var customerNeighborhood by mutableStateOf(preferences.getString("profile_neighborhood", "").orEmpty())
+    var customerNeighborhood by mutableStateOf(if (storedProfileActive) preferences.getString("profile_neighborhood", "").orEmpty() else "")
         private set
-    var customerCity by mutableStateOf(preferences.getString("profile_city", "").orEmpty())
+    var customerCity by mutableStateOf(if (storedProfileActive) preferences.getString("profile_city", "").orEmpty() else "")
         private set
-    var customerState by mutableStateOf(preferences.getString("profile_state", "").orEmpty())
+    var customerState by mutableStateOf(if (storedProfileActive) preferences.getString("profile_state", "").orEmpty() else "")
         private set
-    var customerReference by mutableStateOf(preferences.getString("profile_reference", "").orEmpty())
+    var customerReference by mutableStateOf(if (storedProfileActive) preferences.getString("profile_reference", "").orEmpty() else "")
         private set
 
     private val quantities = mutableStateMapOf<String, Int>()
@@ -66,6 +75,12 @@ class AiMercViewModel(application: Application) : AndroidViewModel(application) 
     init {
         loadCatalog()
         refreshOrders()
+        viewModelScope.launch {
+            while (true) {
+                delay(8_000L)
+                if (trackingReferences().isNotEmpty()) refreshOrders(showLoading = false)
+            }
+        }
         viewModelScope.launch {
             while (true) {
                 delay(5 * 60 * 1_000L)
@@ -119,7 +134,9 @@ class AiMercViewModel(application: Application) : AndroidViewModel(application) 
         customerCity = city.trim()
         customerState = state.trim().uppercase()
         customerReference = reference.trim()
+        profileActive = true
         preferences.edit()
+            .putBoolean("profile_active", true)
             .putString("profile_name", customerName)
             .putString("profile_phone", customerPhone)
             .putString("profile_cep", customerCep)
@@ -131,6 +148,60 @@ class AiMercViewModel(application: Application) : AndroidViewModel(application) 
             .putString("profile_state", customerState)
             .putString("profile_reference", customerReference)
             .apply()
+    }
+
+    fun loginWithPhone(phone: String): Boolean {
+        val normalized = phone.filter(Char::isDigit)
+        val storedPhone = preferences.getString("profile_phone", "").orEmpty()
+        if (normalized.isBlank() || storedPhone.filter(Char::isDigit) != normalized) {
+            clearVisibleProfile()
+            customerPhone = phone.trim()
+            return false
+        }
+        customerName = preferences.getString("profile_name", "").orEmpty()
+        customerPhone = storedPhone
+        customerCep = preferences.getString("profile_cep", "").orEmpty()
+        customerStreet = preferences.getString("profile_street", "").orEmpty()
+        customerNumber = preferences.getString("profile_number", "").orEmpty()
+        customerComplement = preferences.getString("profile_complement", "").orEmpty()
+        customerNeighborhood = preferences.getString("profile_neighborhood", "").orEmpty()
+        customerCity = preferences.getString("profile_city", "").orEmpty()
+        customerState = preferences.getString("profile_state", "").orEmpty()
+        customerReference = preferences.getString("profile_reference", "").orEmpty()
+        profileActive = true
+        preferences.edit().putBoolean("profile_active", true).apply()
+        return true
+    }
+
+    fun logoutProfile() {
+        profileActive = false
+        preferences.edit().putBoolean("profile_active", false).apply()
+        clearVisibleProfile()
+    }
+
+    private fun clearVisibleProfile() {
+        customerName = ""
+        customerPhone = ""
+        customerCep = ""
+        customerStreet = ""
+        customerNumber = ""
+        customerComplement = ""
+        customerNeighborhood = ""
+        customerCity = ""
+        customerState = ""
+        customerReference = ""
+    }
+
+    fun lookupCep(cep: String, onFound: (CepAddress) -> Unit) {
+        val normalized = cep.filter(Char::isDigit)
+        if (normalized.length != 8 || cepLoading) return
+        viewModelScope.launch {
+            cepLoading = true
+            cepError = null
+            try { onFound(AiMercApi.lookupCep(normalized)) }
+            catch (exception: Exception) { cepError = exception.message ?: "CEP nao encontrado" }
+            finally { cepLoading = false }
+        }
     }
 
     @Suppress("unused")
@@ -154,14 +225,20 @@ class AiMercViewModel(application: Application) : AndroidViewModel(application) 
 
     private fun productSource(): List<Product> = fullProducts.ifEmpty { catalog?.products.orEmpty() }
 
-    fun refreshOrders() {
+    fun refreshOrders(showLoading: Boolean = true) {
+        if (refreshingOrders) return
         viewModelScope.launch {
-            ordersLoading = true
-            val refreshed = trackingReferences().mapNotNull { reference ->
-                runCatching { AiMercApi.order(reference.id, reference.token) }.getOrNull()
+            refreshingOrders = true
+            if (showLoading) ordersLoading = true
+            try {
+                val refreshed = trackingReferences().mapNotNull { reference ->
+                    runCatching { AiMercApi.order(reference.id, reference.token) }.getOrNull()
+                }
+                orders = refreshed.sortedByDescending { it.createdAt }
+            } finally {
+                ordersLoading = false
+                refreshingOrders = false
             }
-            orders = refreshed.sortedByDescending { it.createdAt }
-            ordersLoading = false
         }
     }
 

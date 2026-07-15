@@ -119,9 +119,15 @@ CREATE TABLE IF NOT EXISTS product_images (
   source TEXT NOT NULL DEFAULT 'catalog-import', updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   PRIMARY KEY (store_id,product_id)
 );
+CREATE TABLE IF NOT EXISTS banner_images (
+  store_id TEXT NOT NULL, id TEXT NOT NULL, content_type TEXT NOT NULL,
+  image_data BYTEA NOT NULL, byte_size INTEGER NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), PRIMARY KEY (store_id,id)
+);
 CREATE INDEX IF NOT EXISTS products_store_active_category_idx ON products(store_id,active,category);
 CREATE INDEX IF NOT EXISTS orders_store_created_idx ON orders(store_id,created_at DESC);
 CREATE INDEX IF NOT EXISTS product_images_store_idx ON product_images(store_id);
+CREATE INDEX IF NOT EXISTS banner_images_store_idx ON banner_images(store_id);
 `;
 
 const master = new DatabaseSync(masterPath);

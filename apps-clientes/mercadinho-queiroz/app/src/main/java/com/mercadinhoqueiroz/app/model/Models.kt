@@ -34,6 +34,15 @@ data class Banner(
     val position: Int
 )
 
+data class CepAddress(
+    val cep: String,
+    val street: String,
+    val complement: String,
+    val neighborhood: String,
+    val city: String,
+    val state: String
+)
+
 data class Catalog(
     val store: StoreInfo,
     val categories: List<String>,

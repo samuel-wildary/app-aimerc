@@ -3,6 +3,7 @@ package com.mercadinhoqueiroz.app.data
 import com.mercadinhoqueiroz.app.BuildConfig
 import com.mercadinhoqueiroz.app.model.Banner
 import com.mercadinhoqueiroz.app.model.CartLine
+import com.mercadinhoqueiroz.app.model.CepAddress
 import com.mercadinhoqueiroz.app.model.Catalog
 import com.mercadinhoqueiroz.app.model.CheckoutData
 import com.mercadinhoqueiroz.app.model.CustomerOrder
@@ -59,6 +60,18 @@ object AiMercApi {
 
     suspend fun products(): List<Product> = withContext(Dispatchers.IO) {
         requestArray("/public/stores/$STORE_SLUG/products").mapObjects { it.toProduct() }
+    }
+
+    suspend fun lookupCep(cep: String): CepAddress = withContext(Dispatchers.IO) {
+        val result = request("/public/cep/${cep.filter(Char::isDigit)}")
+        CepAddress(
+            cep = result.getString("cep"),
+            street = result.optString("street"),
+            complement = result.optString("complement"),
+            neighborhood = result.optString("neighborhood"),
+            city = result.optString("city"),
+            state = result.optString("state")
+        )
     }
 
     suspend fun createOrder(checkout: CheckoutData, lines: List<CartLine>): OrderReceipt = withContext(Dispatchers.IO) {

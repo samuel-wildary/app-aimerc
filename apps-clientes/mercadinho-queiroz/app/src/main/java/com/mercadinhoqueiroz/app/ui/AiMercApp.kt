@@ -97,6 +97,7 @@ import coil.compose.AsyncImage
 import com.mercadinhoqueiroz.app.R
 import com.mercadinhoqueiroz.app.model.CartLine
 import com.mercadinhoqueiroz.app.model.Banner
+import com.mercadinhoqueiroz.app.model.CepAddress
 import com.mercadinhoqueiroz.app.model.CheckoutData
 import com.mercadinhoqueiroz.app.model.CustomerOrder
 import com.mercadinhoqueiroz.app.model.Product
@@ -288,8 +289,8 @@ private fun ProductCard(product: Product, quantity: Int, add: () -> Unit, remove
 
 @Composable
 private fun QuantityControl(quantity: Int, add: () -> Unit, remove: () -> Unit) {
-    if (quantity == 0) IconButton(onClick = add, modifier = Modifier.size(36.dp).clip(CircleShape).background(Mint)) { Icon(Icons.Default.Add, "Adicionar", tint = Forest, modifier = Modifier.size(19.dp)) }
-    else Row(Modifier.clip(RoundedCornerShape(999.dp)).background(Forest), verticalAlignment = Alignment.CenterVertically) { IconButton(onClick = remove, modifier = Modifier.size(32.dp)) { Icon(Icons.Default.Remove, "Remover", tint = Color.White, modifier = Modifier.size(15.dp)) }; Text(quantity.toString(), color = Color.White, fontWeight = FontWeight.Black, fontSize = 12.sp); IconButton(onClick = add, modifier = Modifier.size(32.dp)) { Icon(Icons.Default.Add, "Adicionar", tint = Mint, modifier = Modifier.size(15.dp)) } }
+    if (quantity == 0) IconButton(onClick = add, modifier = Modifier.size(42.dp).clip(CircleShape).background(Mint)) { Icon(Icons.Default.Add, "Adicionar", tint = Forest, modifier = Modifier.size(22.dp)) }
+    else Row(Modifier.clip(RoundedCornerShape(999.dp)).background(Forest), verticalAlignment = Alignment.CenterVertically) { IconButton(onClick = remove, modifier = Modifier.size(38.dp)) { Icon(Icons.Default.Remove, "Remover", tint = Color.White, modifier = Modifier.size(18.dp)) }; Text(quantity.toString(), color = Color.White, fontWeight = FontWeight.Black, fontSize = 14.sp); IconButton(onClick = add, modifier = Modifier.size(38.dp)) { Icon(Icons.Default.Add, "Adicionar", tint = Mint, modifier = Modifier.size(18.dp)) } }
 }
 
 @Composable
@@ -384,8 +385,8 @@ private val orderStatusLabels = mapOf(
 private fun OrdersScreen(viewModel: AiMercViewModel, modifier: Modifier) {
     Column(modifier.fillMaxSize().background(Canvas)) {
         Row(Modifier.fillMaxWidth().background(Forest).statusBarsPadding().padding(horizontal = 18.dp, vertical = 17.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) { Text("Seus pedidos", color = Color.White, fontSize = 25.sp, fontWeight = FontWeight.Black); Text("Acompanhe cada etapa em tempo real", color = Color(0xFFACCCC0), fontSize = 11.sp) }
-            IconButton(onClick = viewModel::refreshOrders) { Icon(Icons.Default.Refresh, "Atualizar pedidos", tint = Mint) }
+            Column(Modifier.weight(1f)) { Text("Seus pedidos", color = Color.White, fontSize = 25.sp, fontWeight = FontWeight.Black); Text("Atualizacao automatica em tempo real", color = Color(0xFFACCCC0), fontSize = 11.sp) }
+            IconButton(onClick = { viewModel.refreshOrders() }) { Icon(Icons.Default.Refresh, "Atualizar pedidos", tint = Mint) }
         }
         when {
             viewModel.ordersLoading && viewModel.orders.isEmpty() -> LoadingScreen()
@@ -467,10 +468,17 @@ private fun ProfileScreen(viewModel: AiMercViewModel, modifier: Modifier) {
 
 @Composable
 private fun ProfileScreenV2(viewModel: AiMercViewModel, modifier: Modifier) {
-    var name by rememberSaveable { mutableStateOf(viewModel.customerName) }; var phone by rememberSaveable { mutableStateOf(viewModel.customerPhone) }; var cep by rememberSaveable { mutableStateOf(viewModel.customerCep) }; var street by rememberSaveable { mutableStateOf(viewModel.customerStreet) }; var number by rememberSaveable { mutableStateOf(viewModel.customerNumber) }; var complement by rememberSaveable { mutableStateOf(viewModel.customerComplement) }; var neighborhood by rememberSaveable { mutableStateOf(viewModel.customerNeighborhood) }; var city by rememberSaveable { mutableStateOf(viewModel.customerCity) }; var state by rememberSaveable { mutableStateOf(viewModel.customerState) }; var reference by rememberSaveable { mutableStateOf(viewModel.customerReference) }; var saved by remember { mutableStateOf(false) }
+    var loginPhone by rememberSaveable { mutableStateOf("") }
+    var registering by rememberSaveable { mutableStateOf(false) }
+    var name by rememberSaveable(viewModel.profileActive, registering) { mutableStateOf(viewModel.customerName) }; var phone by rememberSaveable(viewModel.profileActive, registering) { mutableStateOf(if (registering) loginPhone else viewModel.customerPhone) }; var cep by rememberSaveable(viewModel.profileActive, registering) { mutableStateOf(viewModel.customerCep) }; var street by rememberSaveable(viewModel.profileActive, registering) { mutableStateOf(viewModel.customerStreet) }; var number by rememberSaveable(viewModel.profileActive, registering) { mutableStateOf(viewModel.customerNumber) }; var complement by rememberSaveable(viewModel.profileActive, registering) { mutableStateOf(viewModel.customerComplement) }; var neighborhood by rememberSaveable(viewModel.profileActive, registering) { mutableStateOf(viewModel.customerNeighborhood) }; var city by rememberSaveable(viewModel.profileActive, registering) { mutableStateOf(viewModel.customerCity) }; var state by rememberSaveable(viewModel.profileActive, registering) { mutableStateOf(viewModel.customerState) }; var reference by rememberSaveable(viewModel.profileActive, registering) { mutableStateOf(viewModel.customerReference) }; var saved by remember { mutableStateOf(false) }
+    CepAutoFill(cep, viewModel) { address -> street = address.street; if (complement.isBlank()) complement = address.complement; neighborhood = address.neighborhood; city = address.city; state = address.state }
     LazyColumn(modifier.fillMaxSize().background(Canvas), contentPadding = PaddingValues(bottom = 24.dp)) {
-        item { Column(Modifier.fillMaxWidth().background(Forest).statusBarsPadding().padding(20.dp)) { Box(Modifier.size(58.dp).clip(CircleShape).background(Mint), contentAlignment = Alignment.Center) { Icon(Icons.Default.Person, null, tint = Forest, modifier = Modifier.size(30.dp)) }; Spacer(Modifier.height(13.dp)); Text(if (name.isBlank()) "Seus dados" else name, color = Color.White, fontSize = 25.sp, fontWeight = FontWeight.Black); Text("Salvos neste aparelho para agilizar sua proxima compra", color = Color(0xFFACCCC0), fontSize = 11.sp) } }
-        item { Column(Modifier.padding(16.dp).fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Color.White).padding(16.dp)) { Text("Cadastro de entrega", fontSize = 18.sp, fontWeight = FontWeight.Black); Text("Preencha uma vez. Nas proximas compras, apenas confirme.", color = Muted, fontSize = 11.sp, modifier = Modifier.padding(bottom = 14.dp)); AppField(name, { name = it; saved = false }, "Nome completo"); Spacer(Modifier.height(9.dp)); AppField(phone, { phone = it; saved = false }, "WhatsApp", KeyboardType.Phone); Spacer(Modifier.height(9.dp)); AppField(cep, { cep = it.filter(Char::isDigit).take(8); saved = false }, "CEP (somente numeros)", KeyboardType.Number); Spacer(Modifier.height(9.dp)); AppField(street, { street = it; saved = false }, "Rua ou avenida"); Spacer(Modifier.height(9.dp)); AppField(number, { number = it; saved = false }, "Numero da casa"); Spacer(Modifier.height(9.dp)); AppField(complement, { complement = it; saved = false }, "Complemento (opcional)"); Spacer(Modifier.height(9.dp)); AppField(neighborhood, { neighborhood = it; saved = false }, "Bairro"); Spacer(Modifier.height(9.dp)); AppField(city, { city = it; saved = false }, "Cidade"); Spacer(Modifier.height(9.dp)); AppField(state, { state = it.uppercase().take(2); saved = false }, "UF"); Spacer(Modifier.height(9.dp)); AppField(reference, { reference = it; saved = false }, "Ponto de referencia (opcional)"); Button(onClick = { viewModel.saveProfile(name, phone, cep, street, number, complement, neighborhood, city, state, reference); saved = true }, enabled = name.isNotBlank() && phone.isNotBlank() && cep.length == 8 && street.isNotBlank() && number.isNotBlank() && neighborhood.isNotBlank() && city.isNotBlank() && state.length == 2, modifier = Modifier.fillMaxWidth().height(50.dp).padding(top = 8.dp), shape = RoundedCornerShape(13.dp), colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Forest)) { Icon(Icons.Default.Check, null); Spacer(Modifier.width(6.dp)); Text(if (saved) "Dados salvos" else "Salvar dados", fontWeight = FontWeight.Black) } } }
+        item { Column(Modifier.fillMaxWidth().background(Forest).statusBarsPadding().padding(20.dp)) { Box(Modifier.size(58.dp).clip(CircleShape).background(Mint), contentAlignment = Alignment.Center) { Icon(Icons.Default.Person, null, tint = Forest, modifier = Modifier.size(30.dp)) }; Spacer(Modifier.height(13.dp)); Text(if (!viewModel.profileActive && !registering) "Entrar ou cadastrar" else name.ifBlank { "Seus dados" }, color = Color.White, fontSize = 25.sp, fontWeight = FontWeight.Black); Text(if (viewModel.profileActive) "Seu cadastro esta salvo neste aparelho" else "Use seu WhatsApp para continuar", color = Color(0xFFACCCC0), fontSize = 11.sp) } }
+        if (!viewModel.profileActive && !registering) {
+            item { Column(Modifier.padding(16.dp).fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Color.White).padding(16.dp)) { Text("Continuar com WhatsApp", fontSize = 18.sp, fontWeight = FontWeight.Black); Text("Se este numero ja foi usado neste aparelho, seus dados voltam automaticamente.", color = Muted, fontSize = 11.sp, modifier = Modifier.padding(bottom = 14.dp)); AppField(loginPhone, { loginPhone = it }, "Numero do WhatsApp", KeyboardType.Phone); Button(onClick = { if (!viewModel.loginWithPhone(loginPhone)) registering = true }, enabled = loginPhone.filter(Char::isDigit).length >= 10, modifier = Modifier.fillMaxWidth().height(52.dp).padding(top = 8.dp), shape = RoundedCornerShape(13.dp), colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Forest)) { Text("Entrar ou fazer cadastro", fontWeight = FontWeight.Black) } } }
+        } else {
+            item { Column(Modifier.padding(16.dp).fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Color.White).padding(16.dp)) { Text("Cadastro de entrega", fontSize = 18.sp, fontWeight = FontWeight.Black); Text("Preencha uma vez. Nas proximas compras, apenas confirme.", color = Muted, fontSize = 11.sp, modifier = Modifier.padding(bottom = 14.dp)); AppField(name, { name = it; saved = false }, "Nome completo"); Spacer(Modifier.height(9.dp)); AppField(phone, { phone = it; saved = false }, "WhatsApp", KeyboardType.Phone); Spacer(Modifier.height(9.dp)); AppField(cep, { cep = it.filter(Char::isDigit).take(8); saved = false }, "CEP (preenchimento automatico)", KeyboardType.Number); CepLookupStatus(viewModel); Spacer(Modifier.height(9.dp)); AppField(street, { street = it; saved = false }, "Rua ou avenida"); Spacer(Modifier.height(9.dp)); AppField(number, { number = it; saved = false }, "Numero da casa"); Spacer(Modifier.height(9.dp)); AppField(complement, { complement = it; saved = false }, "Complemento (opcional)"); Spacer(Modifier.height(9.dp)); AppField(neighborhood, { neighborhood = it; saved = false }, "Bairro"); Spacer(Modifier.height(9.dp)); AppField(city, { city = it; saved = false }, "Cidade"); Spacer(Modifier.height(9.dp)); AppField(state, { state = it.uppercase().take(2); saved = false }, "UF"); Spacer(Modifier.height(9.dp)); AppField(reference, { reference = it; saved = false }, "Ponto de referencia (opcional)"); Button(onClick = { viewModel.saveProfile(name, phone, cep, street, number, complement, neighborhood, city, state, reference); registering = false; saved = true }, enabled = name.isNotBlank() && phone.isNotBlank() && cep.length == 8 && street.isNotBlank() && number.isNotBlank() && neighborhood.isNotBlank() && city.isNotBlank() && state.length == 2, modifier = Modifier.fillMaxWidth().height(50.dp).padding(top = 8.dp), shape = RoundedCornerShape(13.dp), colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Forest)) { Icon(Icons.Default.Check, null); Spacer(Modifier.width(6.dp)); Text(if (saved) "Dados salvos" else "Salvar dados", fontWeight = FontWeight.Black) }; if (viewModel.profileActive) TextButton(onClick = { viewModel.logoutProfile(); registering = false; loginPhone = "" }, modifier = Modifier.fillMaxWidth()) { Text("Sair deste cadastro", color = Color(0xFFC24242), fontWeight = FontWeight.Bold) } } }
+        }
     }
 }
 
@@ -499,6 +507,13 @@ private fun CartLineCard(line: CartLine, add: () -> Unit, remove: () -> Unit) {
 @Composable
 private fun CheckoutScreenV2(viewModel: AiMercViewModel, back: () -> Unit, success: () -> Unit) {
     var name by rememberSaveable { mutableStateOf(viewModel.customerName) }; var phone by rememberSaveable { mutableStateOf(viewModel.customerPhone) }; var cep by rememberSaveable { mutableStateOf(viewModel.customerCep) }; var street by rememberSaveable { mutableStateOf(viewModel.customerStreet) }; var number by rememberSaveable { mutableStateOf(viewModel.customerNumber) }; var complement by rememberSaveable { mutableStateOf(viewModel.customerComplement) }; var neighborhood by rememberSaveable { mutableStateOf(viewModel.customerNeighborhood) }; var city by rememberSaveable { mutableStateOf(viewModel.customerCity) }; var state by rememberSaveable { mutableStateOf(viewModel.customerState) }; var reference by rememberSaveable { mutableStateOf(viewModel.customerReference) }; var notes by rememberSaveable { mutableStateOf("") }; var fulfillment by rememberSaveable { mutableStateOf("DELIVERY") }; var payment by rememberSaveable { mutableStateOf("CARD_ON_DELIVERY") }
+    CepAutoFill(cep, viewModel) { address ->
+        street = address.street
+        if (complement.isBlank()) complement = address.complement
+        neighborhood = address.neighborhood
+        city = address.city
+        state = address.state
+    }
     val store = viewModel.catalog?.store; val deliveryFee = if (fulfillment == "DELIVERY" && !(store?.freeDeliveryAbove ?: 0.0 > 0 && viewModel.subtotal >= (store?.freeDeliveryAbove ?: 0.0))) store?.deliveryFee ?: 0.0 else 0.0
     val validAddress = fulfillment == "PICKUP" || (cep.length == 8 && street.isNotBlank() && number.isNotBlank() && neighborhood.isNotBlank() && city.isNotBlank() && state.length == 2)
     val valid = name.isNotBlank() && phone.isNotBlank() && validAddress
@@ -506,7 +521,7 @@ private fun CheckoutScreenV2(viewModel: AiMercViewModel, back: () -> Unit, succe
         LazyColumn(Modifier.padding(padding), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(13.dp)) {
             item { CheckoutSection("Como voce quer receber?") { Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { ChoiceChip("Entrega", fulfillment == "DELIVERY") { fulfillment = "DELIVERY" }; ChoiceChip("Retirada", fulfillment == "PICKUP") { fulfillment = "PICKUP" } } } }
             item { CheckoutSection("Quem vai receber") { AppField(name, { name = it }, "Nome completo"); Spacer(Modifier.height(9.dp)); AppField(phone, { phone = it }, "WhatsApp", KeyboardType.Phone) } }
-            if (fulfillment == "DELIVERY") item { CheckoutSection("Endereco de entrega") { AppField(cep, { cep = it.filter(Char::isDigit).take(8) }, "CEP", KeyboardType.Number); Spacer(Modifier.height(9.dp)); AppField(street, { street = it }, "Rua ou avenida"); Spacer(Modifier.height(9.dp)); AppField(number, { number = it }, "Numero da casa"); Spacer(Modifier.height(9.dp)); AppField(complement, { complement = it }, "Complemento (opcional)"); Spacer(Modifier.height(9.dp)); AppField(neighborhood, { neighborhood = it }, "Bairro"); Spacer(Modifier.height(9.dp)); AppField(city, { city = it }, "Cidade"); Spacer(Modifier.height(9.dp)); AppField(state, { state = it.uppercase().take(2) }, "UF"); Spacer(Modifier.height(9.dp)); AppField(reference, { reference = it }, "Ponto de referencia (opcional)") } }
+            if (fulfillment == "DELIVERY") item { CheckoutSection("Endereco de entrega") { AppField(cep, { cep = it.filter(Char::isDigit).take(8) }, "CEP (preenchimento automatico)", KeyboardType.Number); CepLookupStatus(viewModel); Spacer(Modifier.height(9.dp)); AppField(street, { street = it }, "Rua ou avenida"); Spacer(Modifier.height(9.dp)); AppField(number, { number = it }, "Numero da casa"); Spacer(Modifier.height(9.dp)); AppField(complement, { complement = it }, "Complemento (opcional)"); Spacer(Modifier.height(9.dp)); AppField(neighborhood, { neighborhood = it }, "Bairro"); Spacer(Modifier.height(9.dp)); AppField(city, { city = it }, "Cidade"); Spacer(Modifier.height(9.dp)); AppField(state, { state = it.uppercase().take(2) }, "UF"); Spacer(Modifier.height(9.dp)); AppField(reference, { reference = it }, "Ponto de referencia (opcional)") } }
             item { CheckoutSection("Pagamento na ${if (fulfillment == "DELIVERY") "entrega" else "retirada"}") { Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { ChoiceChip("Cartao", payment == "CARD_ON_DELIVERY") { payment = "CARD_ON_DELIVERY" }; ChoiceChip("Dinheiro", payment == "CASH") { payment = "CASH" } } } }
             item { CheckoutSection("Observacoes") { AppField(notes, { notes = it }, "Ex.: substituir somente por marca similar") } }
             item { CheckoutSection("Resumo") { SummaryRow("Produtos", viewModel.subtotal); SummaryRow("Taxa de entrega", deliveryFee); if (deliveryFee == 0.0 && fulfillment == "DELIVERY" && (store?.freeDeliveryAbove ?: 0.0) > 0) Text("Frete gratis aplicado", color = Color(0xFF07845C), fontWeight = FontWeight.Bold, fontSize = 11.sp) } }
@@ -538,6 +553,32 @@ private fun CheckoutSection(title: String, content: @Composable () -> Unit) { Co
 private fun ChoiceChip(label: String, selected: Boolean, onClick: () -> Unit) { FilterChip(selected = selected, onClick = onClick, label = { Text(label, fontWeight = FontWeight.Bold) }, leadingIcon = if (selected) {{ Icon(Icons.Default.Check, null, Modifier.size(16.dp)) }} else null, colors = FilterChipDefaults.filterChipColors(selectedContainerColor = MintSoft, selectedLabelColor = Forest), border = FilterChipDefaults.filterChipBorder(enabled = true, selected = selected, borderColor = Line, selectedBorderColor = Mint)) }
 @Composable
 private fun AppField(value: String, change: (String) -> Unit, label: String, keyboard: KeyboardType = KeyboardType.Text) { OutlinedTextField(value = value, onValueChange = change, label = { Text(label) }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = keyboard), shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth(), colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(focusedBorderColor = Forest, cursorColor = Forest)) }
+
+@Composable
+private fun CepAutoFill(cep: String, viewModel: AiMercViewModel, onFound: (CepAddress) -> Unit) {
+    var lastLookup by rememberSaveable {
+        mutableStateOf(cep.filter(Char::isDigit).takeIf { it.length == 8 }.orEmpty())
+    }
+    LaunchedEffect(cep) {
+        val normalized = cep.filter(Char::isDigit)
+        if (normalized.length != 8) {
+            lastLookup = ""
+            return@LaunchedEffect
+        }
+        if (normalized == lastLookup) return@LaunchedEffect
+        delay(350)
+        lastLookup = normalized
+        viewModel.lookupCep(normalized, onFound)
+    }
+}
+
+@Composable
+private fun CepLookupStatus(viewModel: AiMercViewModel) {
+    when {
+        viewModel.cepLoading -> Text("Buscando endereco...", color = Muted, fontSize = 10.sp, modifier = Modifier.padding(top = 6.dp))
+        viewModel.cepError != null -> Text(viewModel.cepError.orEmpty(), color = Color(0xFFC24242), fontSize = 10.sp, modifier = Modifier.padding(top = 6.dp))
+    }
+}
 @Composable
 private fun SummaryRow(label: String, value: Double) { Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) { Text(label, color = Muted); Text(currency.format(value), fontWeight = FontWeight.Bold) } }
 

@@ -39,6 +39,19 @@ export class ApiClient {
   customers(query = '') { return this.request(`/customers${query ? `?q=${encodeURIComponent(query)}` : ''}`); }
   reports() { return this.request('/reports/overview'); }
   banners() { return this.request('/banners'); }
+  async uploadBannerImage(file) {
+    const response = await fetch(`${API_URL}/banners/images`, {
+      method: 'POST',
+      headers: {
+        ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}),
+        'Content-Type': file.type || 'image/webp'
+      },
+      body: file
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || 'Nao foi possivel enviar a imagem do banner');
+    return data;
+  }
   updateSettings(settings) { return this.request('/store/settings', { method: 'PATCH', body: JSON.stringify(settings) }); }
   createBanner(banner) { return this.request('/banners', { method: 'POST', body: JSON.stringify(banner) }); }
   updateBanner(id, banner) { return this.request(`/banners/${id}`, { method: 'PATCH', body: JSON.stringify(banner) }); }

@@ -184,6 +184,10 @@ code { color: #53625b; background: #f0f3f1; padding: 5px 7px; border-radius: 7px
 .settings-form label > span, .banner-form label > span { color: var(--muted); font-size: 10px; font-weight: 500; }
 .settings-form input, .banner-form input, .banner-form textarea, .banner-form select { width: 100%; min-height: 44px; border: 1px solid var(--line); border-radius: 11px; background: #f9fbf8; padding: 0 12px; color: var(--ink); }
 .banner-form textarea { min-height: 82px; padding-block: 11px; resize: vertical; }
+.banner-file-input { padding: 10px 12px !important; cursor: pointer; }
+.banner-upload-preview { aspect-ratio: 2/1; min-height: 180px; border-radius: 14px; background-position: center; background-size: cover; position: relative; overflow: hidden; border: 1px solid var(--line); }
+.banner-upload-preview span { position: absolute; left: 12px; bottom: 12px; padding: 6px 9px; border-radius: 8px; background: rgba(5,36,26,.82); color: white; font-size: 10px; font-weight: 800; }
+.field-error { margin: -6px 0 0; color: #b33c3c; font-size: 11px; font-weight: 700; }
 .money-input { display: grid; grid-template-columns: 42px minmax(0,1fr); align-items: center; border: 1px solid var(--line); border-radius: 11px; overflow: hidden; background: #f9fbf8; }
 .money-input b { height: 100%; display: grid; place-items: center; color: #0c805a; background: var(--mint-soft); font-size: 11px; }
 .money-input input { border: 0; border-radius: 0; }

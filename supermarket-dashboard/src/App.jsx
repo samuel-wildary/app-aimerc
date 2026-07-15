@@ -308,6 +308,25 @@ function printOrderSlip(order, store) {
 
 const emptyBanner = { eyebrow: '', title: '', subtitle: '', image: '', active: true, position: 0 };
 
+async function prepareBannerImage(file) {
+  if (!file?.type?.startsWith('image/')) throw new Error('Selecione uma imagem valida');
+  const bitmap = await createImageBitmap(file);
+  const canvas = document.createElement('canvas');
+  canvas.width = 1200;
+  canvas.height = 600;
+  const context = canvas.getContext('2d');
+  const scale = Math.max(canvas.width / bitmap.width, canvas.height / bitmap.height);
+  const width = bitmap.width * scale;
+  const height = bitmap.height * scale;
+  context.drawImage(bitmap, (canvas.width - width) / 2, (canvas.height - height) / 2, width, height);
+  bitmap.close();
+  return new Promise((resolve, reject) => canvas.toBlob(
+    blob => blob ? resolve(new File([blob], 'banner.webp', { type: 'image/webp' })) : reject(new Error('Nao foi possivel preparar a imagem')),
+    'image/webp',
+    0.82
+  ));
+}
+
 function PushCampaigns({ campaigns, onCreate, onSend, onDelete }) {
   const [form, setForm] = useState({ title: '', body: '', audience: 'ALL_CUSTOMERS', status: 'DRAFT', scheduledAt: '' });
   const [saving, setSaving] = useState(false);
@@ -382,6 +401,9 @@ function Storefront({ store, banners, campaigns, automations, onSaveSettings, on
   const [editingId, setEditingId] = useState(null);
   const [savingSettings, setSavingSettings] = useState(false);
   const [savingBanner, setSavingBanner] = useState(false);
+  const [bannerFile, setBannerFile] = useState(null);
+  const [bannerPreview, setBannerPreview] = useState('');
+  const [bannerFileError, setBannerFileError] = useState('');
 
   useEffect(() => {
     setSettings({ minimumOrder: store?.minimumOrder ?? 0, deliveryFee: store?.deliveryFee ?? 0, freeDeliveryAbove: store?.freeDeliveryAbove ?? 0, supportPhone: store?.supportPhone ?? '', cancellationWindowMinutes: store?.cancellationWindowMinutes ?? 5, open: store?.open ?? true });
@@ -390,12 +412,32 @@ function Storefront({ store, banners, campaigns, automations, onSaveSettings, on
   function editBanner(banner) {
     setEditingId(banner.id);
     setBannerForm({ eyebrow: banner.eyebrow, title: banner.title, subtitle: banner.subtitle, image: banner.image, active: banner.active, position: banner.position });
+    setBannerFile(null);
+    setBannerPreview(banner.image);
+    setBannerFileError('');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   function resetBanner() {
     setEditingId(null);
     setBannerForm(emptyBanner);
+    setBannerFile(null);
+    setBannerPreview('');
+    setBannerFileError('');
+  }
+
+  async function chooseBannerImage(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setBannerFileError('');
+    try {
+      const prepared = await prepareBannerImage(file);
+      setBannerFile(prepared);
+      setBannerPreview(URL.createObjectURL(prepared));
+    } catch (error) {
+      setBannerFile(null);
+      setBannerFileError(error.message);
+    }
   }
 
   async function submitSettings(event) {
@@ -409,10 +451,15 @@ function Storefront({ store, banners, campaigns, automations, onSaveSettings, on
     event.preventDefault();
     setSavingBanner(true);
     try {
-      const payload = { ...bannerForm, position: Number(bannerForm.position) };
+      let image = bannerForm.image;
+      if (bannerFile) image = (await api.uploadBannerImage(bannerFile)).image;
+      if (!image) throw new Error('Selecione a imagem do banner');
+      const payload = { ...bannerForm, image, position: Number(bannerForm.position) };
       if (editingId) await onUpdateBanner(editingId, payload);
       else await onCreateBanner(payload);
       resetBanner();
+    } catch (error) {
+      setBannerFileError(error.message || 'Nao foi possivel enviar a imagem');
     } finally { setSavingBanner(false); }
   }
 
@@ -437,7 +484,9 @@ function Storefront({ store, banners, campaigns, automations, onSaveSettings, on
           <label>Chamada curta<input value={bannerForm.eyebrow} onChange={event => setBannerForm({ ...bannerForm, eyebrow: event.target.value })} placeholder="Ex.: Feira da semana" /></label>
           <label>Titulo principal<input required maxLength="120" value={bannerForm.title} onChange={event => setBannerForm({ ...bannerForm, title: event.target.value })} placeholder="Ex.: Frescor que cabe no carrinho" /></label>
           <label>Descricao<textarea value={bannerForm.subtitle} onChange={event => setBannerForm({ ...bannerForm, subtitle: event.target.value })} placeholder="Explique a promocao em uma frase." /></label>
-          <label>URL da imagem<input value={bannerForm.image} onChange={event => setBannerForm({ ...bannerForm, image: event.target.value })} placeholder="https://..." /></label>
+          <label>Imagem do banner<span>Use uma imagem horizontal. Ela sera ajustada automaticamente para 1200 x 600 px em WebP.</span><input className="banner-file-input" type="file" accept="image/jpeg,image/png,image/webp" onChange={chooseBannerImage} required={!bannerForm.image} /></label>
+          {bannerFileError && <p className="field-error">{bannerFileError}</p>}
+          {bannerPreview && <div className="banner-upload-preview" style={{ backgroundImage: `url(${bannerPreview})` }}><span>Previa 1200 x 600</span></div>}
           <div className="banner-form-row"><label>Ordem<input type="number" min="0" max="99" value={bannerForm.position} onChange={event => setBannerForm({ ...bannerForm, position: event.target.value })} /></label><label className="active-checkbox"><input type="checkbox" checked={bannerForm.active} onChange={event => setBannerForm({ ...bannerForm, active: event.target.checked })} /> Exibir no app</label></div>
           <button className="primary large" disabled={savingBanner}>{editingId ? <Pencil size={17} /> : <Plus size={17} />}{savingBanner ? 'Salvando...' : editingId ? 'Atualizar banner' : 'Adicionar banner'}</button>
         </form>
