@@ -307,7 +307,7 @@ app.post('/api/public/stores/:slug/orders', asyncRoute((req, res) => {
   const order = createOrder(store, {
     customer,
     fulfillmentType,
-    paymentMethod: oneOf(req.body.paymentMethod, ['CASH', 'CARD_ON_DELIVERY'], 'Pagamento'),
+    paymentMethod: oneOf(req.body.paymentMethod, ['CASH', 'CARD_ON_DELIVERY', 'PIX'], 'Pagamento'),
     changeFor: req.body.changeFor ? positiveNumber(req.body.changeFor, 'Troco') : null,
     notes: optionalText(req.body.notes, 500),
     scheduledTo: req.body.scheduledTo || null,

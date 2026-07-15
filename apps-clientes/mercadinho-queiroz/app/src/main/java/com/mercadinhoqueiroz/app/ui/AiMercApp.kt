@@ -160,7 +160,7 @@ fun AiMercApp(viewModel: AiMercViewModel = viewModel()) {
                 Screen.HOME -> HomeScreen(viewModel, Modifier.padding(padding), openSearch = { screen = Screen.SEARCH }, openCategory = { category -> browseCategory = category; screen = Screen.CATEGORY }) { product -> selectedProductId = product.id; productBackTarget = Screen.HOME; screen = Screen.PRODUCT }
                 Screen.SEARCH -> SearchScreen(viewModel, Modifier.padding(padding)) { product -> selectedProductId = product.id; productBackTarget = Screen.SEARCH; screen = Screen.PRODUCT }
                 Screen.CATEGORY -> CategoryProductsScreen(browseCategory, viewModel, Modifier.padding(padding), back = { screen = Screen.HOME }) { product -> selectedProductId = product.id; productBackTarget = Screen.CATEGORY; screen = Screen.PRODUCT }
-                Screen.PRODUCT -> viewModel.product(selectedProductId.orEmpty())?.let { product -> ProductDetailScreen(product, viewModel, back = { screen = productBackTarget }) { related -> selectedProductId = related.id } } ?: ErrorScreen { screen = productBackTarget }
+                Screen.PRODUCT -> viewModel.product(selectedProductId.orEmpty())?.let { product -> ProductDetailScreen(product, viewModel, back = { screen = productBackTarget }, openCart = { screen = Screen.CART }) { related -> selectedProductId = related.id } } ?: ErrorScreen { screen = productBackTarget }
                 Screen.CART -> CartScreen(viewModel, back = { screen = Screen.HOME }, checkout = { screen = Screen.CHECKOUT })
                 Screen.CHECKOUT -> CheckoutScreenV2(viewModel, back = { screen = Screen.CART }) { screen = Screen.SUCCESS }
                 Screen.SUCCESS -> SuccessScreen(viewModel.confirmedOrderId.orEmpty()) { viewModel.resetOrder(); screen = Screen.HOME }
@@ -360,29 +360,44 @@ private fun SearchProductRow(product: Product, quantity: Int, add: () -> Unit, r
 }
 
 @Composable
-private fun ProductDetailScreen(product: Product, viewModel: AiMercViewModel, back: () -> Unit, openProduct: (Product) -> Unit) {
+private fun ProductDetailScreen(product: Product, viewModel: AiMercViewModel, back: () -> Unit, openCart: () -> Unit, openProduct: (Product) -> Unit) {
     val quantity = viewModel.quantity(product.id)
     val related = viewModel.relatedProducts(product)
     Scaffold(
         containerColor = Canvas,
         topBar = { SimpleTopBar("Detalhes do produto", back) },
         bottomBar = {
-            Row(
+            Column(
                 Modifier.fillMaxWidth().background(Color.White).navigationBarsPadding().padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                Column(Modifier.weight(1f)) {
-                    Text("Total do item", color = Muted, fontSize = 11.sp)
-                    Text(currency.format(product.price * quantity.coerceAtLeast(1)), color = Ink, fontSize = 21.sp, fontWeight = FontWeight.Black)
-                }
-                if (quantity == 0) {
-                    Button(onClick = { viewModel.add(product) }, modifier = Modifier.height(50.dp), shape = RoundedCornerShape(14.dp), colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Forest)) {
-                        Icon(Icons.Default.Add, null)
-                        Spacer(Modifier.width(6.dp))
-                        Text("Adicionar", fontWeight = FontWeight.Black)
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Total do item", color = Muted, fontSize = 11.sp)
+                        Text(currency.format(product.price * quantity.coerceAtLeast(1)), color = Ink, fontSize = 21.sp, fontWeight = FontWeight.Black)
                     }
-                } else QuantityControl(quantity, { viewModel.add(product) }, { viewModel.remove(product) })
+                    if (quantity == 0) {
+                        Button(onClick = { viewModel.add(product) }, modifier = Modifier.height(50.dp), shape = RoundedCornerShape(14.dp), colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Forest)) {
+                            Icon(Icons.Default.Add, null)
+                            Spacer(Modifier.width(6.dp))
+                            Text("Adicionar", fontWeight = FontWeight.Black)
+                        }
+                    } else QuantityControl(quantity, { viewModel.add(product) }, { viewModel.remove(product) })
+                }
+                if (viewModel.cartCount > 0) {
+                    Spacer(Modifier.height(12.dp))
+                    Row(
+                        Modifier.fillMaxWidth().height(50.dp).clip(RoundedCornerShape(14.dp)).background(Forest).clickable(onClick = openCart).padding(horizontal = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(Modifier.size(32.dp).clip(CircleShape).background(Mint), contentAlignment = Alignment.Center) {
+                            Text(viewModel.cartCount.toString(), color = Forest, fontWeight = FontWeight.Black)
+                        }
+                        Spacer(Modifier.width(10.dp))
+                        Text("Ver carrinho", color = Color.White, fontWeight = FontWeight.ExtraBold, modifier = Modifier.weight(1f))
+                        Text(currency.format(viewModel.subtotal), color = Mint, fontWeight = FontWeight.Black)
+                        Icon(Icons.Default.ChevronRight, null, tint = Mint)
+                    }
+                }
             }
         }
     ) { padding ->
@@ -654,7 +669,7 @@ private fun CheckoutScreenV2(viewModel: AiMercViewModel, back: () -> Unit, succe
             item { CheckoutSection("Como voce quer receber?") { Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { ChoiceChip("Entrega", fulfillment == "DELIVERY") { fulfillment = "DELIVERY" }; ChoiceChip("Retirada", fulfillment == "PICKUP") { fulfillment = "PICKUP" } } } }
             item { CheckoutSection("Quem vai receber") { AppField(name, { name = it }, "Nome completo"); Spacer(Modifier.height(9.dp)); AppField(phone, { phone = it }, "WhatsApp", KeyboardType.Phone) } }
             if (fulfillment == "DELIVERY") item { CheckoutSection("Endereco de entrega") { AppField(cep, { cep = it.filter(Char::isDigit).take(8) }, "CEP (preenchimento automatico)", KeyboardType.Number); CepLookupStatus(viewModel); Spacer(Modifier.height(9.dp)); AppField(street, { street = it }, "Rua ou avenida"); Spacer(Modifier.height(9.dp)); AppField(number, { number = it }, "Numero da casa"); Spacer(Modifier.height(9.dp)); AppField(complement, { complement = it }, "Complemento (opcional)"); Spacer(Modifier.height(9.dp)); AppField(neighborhood, { neighborhood = it }, "Bairro"); Spacer(Modifier.height(9.dp)); AppField(city, { city = it }, "Cidade"); Spacer(Modifier.height(9.dp)); AppField(state, { state = it.uppercase().take(2) }, "UF"); Spacer(Modifier.height(9.dp)); AppField(reference, { reference = it }, "Ponto de referencia (opcional)") } }
-            item { CheckoutSection("Pagamento na ${if (fulfillment == "DELIVERY") "entrega" else "retirada"}") { Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { ChoiceChip("Cartao", payment == "CARD_ON_DELIVERY") { payment = "CARD_ON_DELIVERY" }; ChoiceChip("Dinheiro", payment == "CASH") { payment = "CASH" } } } }
+            item { CheckoutSection("Pagamento na ${if (fulfillment == "DELIVERY") "entrega" else "retirada"}") { Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { ChoiceChip("Cartao", payment == "CARD_ON_DELIVERY") { payment = "CARD_ON_DELIVERY" }; ChoiceChip("Dinheiro", payment == "CASH") { payment = "CASH" }; ChoiceChip("Pix", payment == "PIX") { payment = "PIX" } } } }
             item { CheckoutSection("Observacoes") { AppField(notes, { notes = it }, "Ex.: substituir somente por marca similar") } }
             item { CheckoutSection("Resumo") { SummaryRow("Produtos", viewModel.subtotal); SummaryRow("Taxa de entrega", deliveryFee); if (deliveryFee == 0.0 && fulfillment == "DELIVERY" && (store?.freeDeliveryAbove ?: 0.0) > 0) Text("Frete gratis aplicado", color = Color(0xFF07845C), fontWeight = FontWeight.Bold, fontSize = 11.sp) } }
         }
@@ -672,9 +687,9 @@ private fun CheckoutScreen(viewModel: AiMercViewModel, back: () -> Unit, success
         LazyColumn(Modifier.padding(padding), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(13.dp)) {
             item { CheckoutSection("Como voce quer receber?") { Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { ChoiceChip("Entrega", fulfillment == "DELIVERY") { fulfillment = "DELIVERY" }; ChoiceChip("Retirada", fulfillment == "PICKUP") { fulfillment = "PICKUP" } } } }
             item { CheckoutSection("Seus dados") { AppField(name, { name = it }, "Nome completo"); Spacer(Modifier.height(9.dp)); AppField(phone, { phone = it }, "WhatsApp", KeyboardType.Phone); if (fulfillment == "DELIVERY") { Spacer(Modifier.height(9.dp)); AppField(address, { address = it }, "Endereco completo") } } }
-            item { CheckoutSection("Pagamento na ${if (fulfillment == "DELIVERY") "entrega" else "retirada"}") { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { ChoiceChip("Cartao", payment == "CARD_ON_DELIVERY") { payment = "CARD_ON_DELIVERY" }; ChoiceChip("Dinheiro", payment == "CASH") { payment = "CASH" } } } }
+            item { CheckoutSection("Pagamento na ${if (fulfillment == "DELIVERY") "entrega" else "retirada"}") { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { ChoiceChip("Cartao", payment == "CARD_ON_DELIVERY") { payment = "CARD_ON_DELIVERY" }; ChoiceChip("Dinheiro", payment == "CASH") { payment = "CASH" }; ChoiceChip("Pix", payment == "PIX") { payment = "PIX" } } } }
             item { CheckoutSection("Observacoes") { AppField(notes, { notes = it }, "Ex.: substituir somente por marca similar") } }
-            item { CheckoutSection("Resumo") { SummaryRow("Produtos", viewModel.subtotal); SummaryRow("Taxa de entrega", deliveryFee); Row(Modifier.fillMaxWidth().padding(top = 9.dp), horizontalArrangement = Arrangement.SpaceBetween) { Text("Pagamento", color = Muted); Text(if (payment == "CASH") "Dinheiro" else "Cartao na entrega", fontWeight = FontWeight.Bold) } } }
+            item { CheckoutSection("Resumo") { SummaryRow("Produtos", viewModel.subtotal); SummaryRow("Taxa de entrega", deliveryFee); Row(Modifier.fillMaxWidth().padding(top = 9.dp), horizontalArrangement = Arrangement.SpaceBetween) { Text("Pagamento", color = Muted); Text(when (payment) { "CASH" -> "Dinheiro"; "PIX" -> "Pix"; else -> "Cartao na entrega" }, fontWeight = FontWeight.Bold) } } }
         }
     }
 }
