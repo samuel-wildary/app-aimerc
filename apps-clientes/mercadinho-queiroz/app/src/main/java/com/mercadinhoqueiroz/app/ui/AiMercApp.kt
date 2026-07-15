@@ -470,14 +470,79 @@ private fun ProfileScreen(viewModel: AiMercViewModel, modifier: Modifier) {
 private fun ProfileScreenV2(viewModel: AiMercViewModel, modifier: Modifier) {
     var loginPhone by rememberSaveable { mutableStateOf("") }
     var registering by rememberSaveable { mutableStateOf(false) }
-    var name by rememberSaveable(viewModel.profileActive, registering) { mutableStateOf(viewModel.customerName) }; var phone by rememberSaveable(viewModel.profileActive, registering) { mutableStateOf(if (registering) loginPhone else viewModel.customerPhone) }; var cep by rememberSaveable(viewModel.profileActive, registering) { mutableStateOf(viewModel.customerCep) }; var street by rememberSaveable(viewModel.profileActive, registering) { mutableStateOf(viewModel.customerStreet) }; var number by rememberSaveable(viewModel.profileActive, registering) { mutableStateOf(viewModel.customerNumber) }; var complement by rememberSaveable(viewModel.profileActive, registering) { mutableStateOf(viewModel.customerComplement) }; var neighborhood by rememberSaveable(viewModel.profileActive, registering) { mutableStateOf(viewModel.customerNeighborhood) }; var city by rememberSaveable(viewModel.profileActive, registering) { mutableStateOf(viewModel.customerCity) }; var state by rememberSaveable(viewModel.profileActive, registering) { mutableStateOf(viewModel.customerState) }; var reference by rememberSaveable(viewModel.profileActive, registering) { mutableStateOf(viewModel.customerReference) }; var saved by remember { mutableStateOf(false) }
+    var editing by rememberSaveable { mutableStateOf(false) }
+    var name by rememberSaveable(viewModel.profileActive, registering, editing) { mutableStateOf(viewModel.customerName) }
+    var phone by rememberSaveable(viewModel.profileActive, registering, editing) { mutableStateOf(if (registering) loginPhone else viewModel.customerPhone) }
+    var cep by rememberSaveable(viewModel.profileActive, registering, editing) { mutableStateOf(viewModel.customerCep) }
+    var street by rememberSaveable(viewModel.profileActive, registering, editing) { mutableStateOf(viewModel.customerStreet) }
+    var number by rememberSaveable(viewModel.profileActive, registering, editing) { mutableStateOf(viewModel.customerNumber) }
+    var complement by rememberSaveable(viewModel.profileActive, registering, editing) { mutableStateOf(viewModel.customerComplement) }
+    var neighborhood by rememberSaveable(viewModel.profileActive, registering, editing) { mutableStateOf(viewModel.customerNeighborhood) }
+    var city by rememberSaveable(viewModel.profileActive, registering, editing) { mutableStateOf(viewModel.customerCity) }
+    var state by rememberSaveable(viewModel.profileActive, registering, editing) { mutableStateOf(viewModel.customerState) }
+    var reference by rememberSaveable(viewModel.profileActive, registering, editing) { mutableStateOf(viewModel.customerReference) }
     CepAutoFill(cep, viewModel) { address -> street = address.street; if (complement.isBlank()) complement = address.complement; neighborhood = address.neighborhood; city = address.city; state = address.state }
     LazyColumn(modifier.fillMaxSize().background(Canvas), contentPadding = PaddingValues(bottom = 24.dp)) {
-        item { Column(Modifier.fillMaxWidth().background(Forest).statusBarsPadding().padding(20.dp)) { Box(Modifier.size(58.dp).clip(CircleShape).background(Mint), contentAlignment = Alignment.Center) { Icon(Icons.Default.Person, null, tint = Forest, modifier = Modifier.size(30.dp)) }; Spacer(Modifier.height(13.dp)); Text(if (!viewModel.profileActive && !registering) "Entrar ou cadastrar" else name.ifBlank { "Seus dados" }, color = Color.White, fontSize = 25.sp, fontWeight = FontWeight.Black); Text(if (viewModel.profileActive) "Seu cadastro esta salvo neste aparelho" else "Use seu WhatsApp para continuar", color = Color(0xFFACCCC0), fontSize = 11.sp) } }
+        item {
+            Column(Modifier.fillMaxWidth().background(Forest).statusBarsPadding().padding(20.dp)) {
+                Box(Modifier.size(58.dp).clip(CircleShape).background(Mint), contentAlignment = Alignment.Center) { Icon(Icons.Default.Person, null, tint = Forest, modifier = Modifier.size(30.dp)) }
+                Spacer(Modifier.height(13.dp))
+                Text(if (!viewModel.profileActive && !registering) "Entrar ou cadastrar" else name.ifBlank { "Seus dados" }, color = Color.White, fontSize = 25.sp, fontWeight = FontWeight.Black)
+                Text(if (viewModel.profileActive) "Seu cadastro esta salvo neste aparelho" else "Use seu WhatsApp para continuar", color = Color(0xFFACCCC0), fontSize = 11.sp)
+            }
+        }
         if (!viewModel.profileActive && !registering) {
-            item { Column(Modifier.padding(16.dp).fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Color.White).padding(16.dp)) { Text("Continuar com WhatsApp", fontSize = 18.sp, fontWeight = FontWeight.Black); Text("Se este numero ja foi usado neste aparelho, seus dados voltam automaticamente.", color = Muted, fontSize = 11.sp, modifier = Modifier.padding(bottom = 14.dp)); AppField(loginPhone, { loginPhone = it }, "Numero do WhatsApp", KeyboardType.Phone); Button(onClick = { if (!viewModel.loginWithPhone(loginPhone)) registering = true }, enabled = loginPhone.filter(Char::isDigit).length >= 10, modifier = Modifier.fillMaxWidth().height(52.dp).padding(top = 8.dp), shape = RoundedCornerShape(13.dp), colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Forest)) { Text("Entrar ou fazer cadastro", fontWeight = FontWeight.Black) } } }
+            item {
+                Column(Modifier.padding(16.dp).fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Color.White).padding(16.dp)) {
+                    Text("Continuar com WhatsApp", fontSize = 18.sp, fontWeight = FontWeight.Black)
+                    Text("Se este numero ja foi usado neste aparelho, seus dados voltam automaticamente.", color = Muted, fontSize = 11.sp, modifier = Modifier.padding(bottom = 14.dp))
+                    AppField(loginPhone, { loginPhone = it }, "Numero do WhatsApp", KeyboardType.Phone)
+                    Button(onClick = { if (!viewModel.loginWithPhone(loginPhone)) registering = true }, enabled = loginPhone.filter(Char::isDigit).length >= 10, modifier = Modifier.fillMaxWidth().height(52.dp).padding(top = 8.dp), shape = RoundedCornerShape(13.dp), colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Forest)) { Text("Entrar ou fazer cadastro", fontWeight = FontWeight.Black) }
+                }
+            }
+        } else if (viewModel.profileActive && !editing) {
+            item {
+                Column(Modifier.padding(16.dp).fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Color.White).padding(18.dp)) {
+                    Text("Dados de entrega", fontSize = 18.sp, fontWeight = FontWeight.Black)
+                    Text(viewModel.customerPhone, color = Muted, fontSize = 12.sp, modifier = Modifier.padding(top = 7.dp))
+                    Text("${viewModel.customerStreet}, ${viewModel.customerNumber}", color = Ink, fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 14.dp))
+                    Text("${viewModel.customerNeighborhood} - ${viewModel.customerCity}/${viewModel.customerState}", color = Muted, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
+                    Row(Modifier.fillMaxWidth().padding(top = 18.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(onClick = { editing = true }, modifier = Modifier.weight(1f).height(48.dp), shape = RoundedCornerShape(13.dp), colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Forest)) { Text("Editar cadastro", fontWeight = FontWeight.Black) }
+                        TextButton(onClick = { viewModel.logoutProfile(); registering = false; editing = false; loginPhone = "" }, modifier = Modifier.height(48.dp)) { Text("Sair", color = Color(0xFFC24242), fontWeight = FontWeight.Bold) }
+                    }
+                }
+            }
         } else {
-            item { Column(Modifier.padding(16.dp).fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Color.White).padding(16.dp)) { Text("Cadastro de entrega", fontSize = 18.sp, fontWeight = FontWeight.Black); Text("Preencha uma vez. Nas proximas compras, apenas confirme.", color = Muted, fontSize = 11.sp, modifier = Modifier.padding(bottom = 14.dp)); AppField(name, { name = it; saved = false }, "Nome completo"); Spacer(Modifier.height(9.dp)); AppField(phone, { phone = it; saved = false }, "WhatsApp", KeyboardType.Phone); Spacer(Modifier.height(9.dp)); AppField(cep, { cep = it.filter(Char::isDigit).take(8); saved = false }, "CEP (preenchimento automatico)", KeyboardType.Number); CepLookupStatus(viewModel); Spacer(Modifier.height(9.dp)); AppField(street, { street = it; saved = false }, "Rua ou avenida"); Spacer(Modifier.height(9.dp)); AppField(number, { number = it; saved = false }, "Numero da casa"); Spacer(Modifier.height(9.dp)); AppField(complement, { complement = it; saved = false }, "Complemento (opcional)"); Spacer(Modifier.height(9.dp)); AppField(neighborhood, { neighborhood = it; saved = false }, "Bairro"); Spacer(Modifier.height(9.dp)); AppField(city, { city = it; saved = false }, "Cidade"); Spacer(Modifier.height(9.dp)); AppField(state, { state = it.uppercase().take(2); saved = false }, "UF"); Spacer(Modifier.height(9.dp)); AppField(reference, { reference = it; saved = false }, "Ponto de referencia (opcional)"); Button(onClick = { viewModel.saveProfile(name, phone, cep, street, number, complement, neighborhood, city, state, reference); registering = false; saved = true }, enabled = name.isNotBlank() && phone.isNotBlank() && cep.length == 8 && street.isNotBlank() && number.isNotBlank() && neighborhood.isNotBlank() && city.isNotBlank() && state.length == 2, modifier = Modifier.fillMaxWidth().height(50.dp).padding(top = 8.dp), shape = RoundedCornerShape(13.dp), colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Forest)) { Icon(Icons.Default.Check, null); Spacer(Modifier.width(6.dp)); Text(if (saved) "Dados salvos" else "Salvar dados", fontWeight = FontWeight.Black) }; if (viewModel.profileActive) TextButton(onClick = { viewModel.logoutProfile(); registering = false; loginPhone = "" }, modifier = Modifier.fillMaxWidth()) { Text("Sair deste cadastro", color = Color(0xFFC24242), fontWeight = FontWeight.Bold) } } }
+            item {
+                Column(Modifier.padding(16.dp).fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Color.White).padding(16.dp)) {
+                    Text(if (registering) "Cadastro de entrega" else "Editar cadastro", fontSize = 18.sp, fontWeight = FontWeight.Black)
+                    Text("Preencha uma vez. Nas proximas compras, apenas confirme.", color = Muted, fontSize = 11.sp, modifier = Modifier.padding(bottom = 14.dp))
+                    AppField(name, { name = it }, "Nome completo"); Spacer(Modifier.height(9.dp))
+                    AppField(phone, { phone = it }, "WhatsApp", KeyboardType.Phone); Spacer(Modifier.height(9.dp))
+                    AppField(cep, { cep = it.filter(Char::isDigit).take(8) }, "CEP (preenchimento automatico)", KeyboardType.Number)
+                    CepLookupStatus(viewModel); Spacer(Modifier.height(9.dp))
+                    AppField(street, { street = it }, "Rua ou avenida"); Spacer(Modifier.height(9.dp))
+                    AppField(number, { number = it }, "Numero da casa"); Spacer(Modifier.height(9.dp))
+                    AppField(complement, { complement = it }, "Complemento (opcional)"); Spacer(Modifier.height(9.dp))
+                    AppField(neighborhood, { neighborhood = it }, "Bairro"); Spacer(Modifier.height(9.dp))
+                    AppField(city, { city = it }, "Cidade"); Spacer(Modifier.height(9.dp))
+                    AppField(state, { state = it.uppercase().take(2) }, "UF"); Spacer(Modifier.height(9.dp))
+                    AppField(reference, { reference = it }, "Ponto de referencia (opcional)")
+                    Button(
+                        onClick = {
+                            viewModel.saveProfile(name, phone, cep, street, number, complement, neighborhood, city, state, reference)
+                            registering = false
+                            editing = false
+                        },
+                        enabled = name.isNotBlank() && phone.isNotBlank() && cep.length == 8 && street.isNotBlank() && number.isNotBlank() && neighborhood.isNotBlank() && city.isNotBlank() && state.length == 2,
+                        modifier = Modifier.fillMaxWidth().height(50.dp).padding(top = 8.dp),
+                        shape = RoundedCornerShape(13.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Forest)
+                    ) { Icon(Icons.Default.Check, null); Spacer(Modifier.width(6.dp)); Text("Salvar alteracoes", fontWeight = FontWeight.Black) }
+                    if (editing) TextButton(onClick = { editing = false }, modifier = Modifier.fillMaxWidth()) { Text("Cancelar edicao", color = Muted, fontWeight = FontWeight.Bold) }
+                }
+            }
         }
     }
 }
