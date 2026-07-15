@@ -565,7 +565,26 @@ private fun CartScreen(viewModel: AiMercViewModel, back: () -> Unit, checkout: (
 
 @Composable
 private fun CartLineCard(line: CartLine, add: () -> Unit, remove: () -> Unit) {
-    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color.White).padding(11.dp), verticalAlignment = Alignment.CenterVertically) { Box(Modifier.size(72.dp).clip(RoundedCornerShape(11.dp)).background(Color.White).padding(6.dp)) { AsyncImage(line.product.image, line.product.name, Modifier.fillMaxSize(), contentScale = ContentScale.Fit) }; Spacer(Modifier.width(12.dp)); Column(Modifier.weight(1f)) { Text(line.product.name, fontWeight = FontWeight.ExtraBold, maxLines = 2); Text(currency.format(line.total), color = Forest, fontWeight = FontWeight.Black, modifier = Modifier.padding(top = 6.dp)) }; QuantityControl(line.quantity, add, remove) }
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Color.White).padding(14.dp)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(76.dp).clip(RoundedCornerShape(13.dp)).background(Canvas).padding(7.dp)) {
+                AsyncImage(line.product.image, line.product.name, Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+            }
+            Spacer(Modifier.width(13.dp))
+            Column(Modifier.weight(1f)) {
+                Text(line.product.name, color = Ink, fontWeight = FontWeight.ExtraBold, fontSize = 15.sp, lineHeight = 19.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text("${line.product.category}  |  ${currency.format(line.product.price)} por ${line.product.unit.lowercase()}", color = Muted, fontSize = 10.sp, modifier = Modifier.padding(top = 5.dp))
+            }
+        }
+        Spacer(Modifier.height(13.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Column {
+                Text("Total do item", color = Muted, fontSize = 10.sp)
+                Text(currency.format(line.total), color = Forest, fontWeight = FontWeight.Black, fontSize = 19.sp, modifier = Modifier.padding(top = 2.dp))
+            }
+            QuantityControl(line.quantity, add, remove)
+        }
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
