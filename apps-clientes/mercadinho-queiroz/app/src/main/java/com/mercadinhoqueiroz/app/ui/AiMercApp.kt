@@ -115,7 +115,7 @@ private val Muted = Color(0xFF68718A)
 private val Line = Color(0xFFE1E5EF)
 private val Orange = Color(0xFFFF7D18)
 
-private enum class Screen { HOME, SEARCH, PRODUCT, CART, CHECKOUT, SUCCESS, ORDERS, PROFILE }
+private enum class Screen { HOME, SEARCH, CATEGORY, PRODUCT, CART, CHECKOUT, SUCCESS, ORDERS, PROFILE }
 
 private val currency = NumberFormat.getCurrencyInstance(Locale.forLanguageTag("pt-BR"))
 
@@ -123,6 +123,7 @@ private val currency = NumberFormat.getCurrencyInstance(Locale.forLanguageTag("p
 fun AiMercApp(viewModel: AiMercViewModel = viewModel()) {
     var screen by rememberSaveable { mutableStateOf(Screen.HOME) }
     var selectedProductId by rememberSaveable { mutableStateOf<String?>(null) }
+    var browseCategory by rememberSaveable { mutableStateOf("") }
     var productBackTarget by remember { mutableStateOf(Screen.HOME) }
     val snackbar = remember { SnackbarHostState() }
     LaunchedEffect(viewModel.error) {
@@ -145,19 +146,20 @@ fun AiMercApp(viewModel: AiMercViewModel = viewModel()) {
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
             snackbarHost = { SnackbarHost(snackbar) },
             bottomBar = {
-                if (screen in listOf(Screen.HOME, Screen.SEARCH, Screen.ORDERS, Screen.PROFILE)) {
+                if (screen in listOf(Screen.HOME, Screen.SEARCH, Screen.CATEGORY, Screen.ORDERS, Screen.PROFILE)) {
                     Column {
                         AnimatedVisibility(viewModel.cartCount > 0) {
                             CartDock(viewModel.cartCount, viewModel.subtotal) { screen = Screen.CART }
                         }
-                        MainNavigation(screen) { screen = it }
+                        MainNavigation(if (screen == Screen.CATEGORY) Screen.HOME else screen) { screen = it }
                     }
                 }
             }
         ) { padding ->
             when (screen) {
-                Screen.HOME -> HomeScreen(viewModel, Modifier.padding(padding), openSearch = { screen = Screen.SEARCH }) { product -> selectedProductId = product.id; productBackTarget = Screen.HOME; screen = Screen.PRODUCT }
+                Screen.HOME -> HomeScreen(viewModel, Modifier.padding(padding), openSearch = { screen = Screen.SEARCH }, openCategory = { category -> browseCategory = category; screen = Screen.CATEGORY }) { product -> selectedProductId = product.id; productBackTarget = Screen.HOME; screen = Screen.PRODUCT }
                 Screen.SEARCH -> SearchScreen(viewModel, Modifier.padding(padding)) { product -> selectedProductId = product.id; productBackTarget = Screen.SEARCH; screen = Screen.PRODUCT }
+                Screen.CATEGORY -> CategoryProductsScreen(browseCategory, viewModel, Modifier.padding(padding), back = { screen = Screen.HOME }) { product -> selectedProductId = product.id; productBackTarget = Screen.CATEGORY; screen = Screen.PRODUCT }
                 Screen.PRODUCT -> viewModel.product(selectedProductId.orEmpty())?.let { product -> ProductDetailScreen(product, viewModel, back = { screen = productBackTarget }) { related -> selectedProductId = related.id } } ?: ErrorScreen { screen = productBackTarget }
                 Screen.CART -> CartScreen(viewModel, back = { screen = Screen.HOME }, checkout = { screen = Screen.CHECKOUT })
                 Screen.CHECKOUT -> CheckoutScreenV2(viewModel, back = { screen = Screen.CART }) { screen = Screen.SUCCESS }
@@ -170,7 +172,7 @@ fun AiMercApp(viewModel: AiMercViewModel = viewModel()) {
 }
 
 @Composable
-private fun HomeScreen(viewModel: AiMercViewModel, modifier: Modifier, openSearch: () -> Unit, openProduct: (Product) -> Unit) {
+private fun HomeScreen(viewModel: AiMercViewModel, modifier: Modifier, openSearch: () -> Unit, openCategory: (String) -> Unit, openProduct: (Product) -> Unit) {
     when {
         viewModel.loading && viewModel.catalog == null -> LoadingScreen(branded = true)
         viewModel.catalog == null -> ErrorScreen(viewModel::loadCatalog)
@@ -181,10 +183,10 @@ private fun HomeScreen(viewModel: AiMercViewModel, modifier: Modifier, openSearc
                 item { PromoHero(catalog.banners) }
                 item { CategoryRail(listOf("Todos") + catalog.categories, viewModel.selectedCategory) { viewModel.selectedCategory = it } }
                 val featured = viewModel.products.filter { it.promo }
-                if (featured.isNotEmpty()) item { ProductShelf("Ofertas que valem a pena", "Economize nos favoritos", featured, viewModel, openProduct) }
+                if (featured.isNotEmpty()) item { ProductShelf("Ofertas que valem a pena", "Economize nos favoritos", featured, viewModel, { openCategory("Ofertas") }, openProduct) }
                 catalog.categories.forEach { category ->
                     val categoryProducts = viewModel.products.filter { it.category == category }
-                    if (categoryProducts.isNotEmpty()) item { ProductShelf(category, "Selecionados para sua compra", categoryProducts, viewModel, openProduct) }
+                    if (categoryProducts.isNotEmpty()) item { ProductShelf(category, "Selecionados para sua compra", categoryProducts, viewModel, { openCategory(category) }, openProduct) }
                 }
                 item { StorePromise() }
             }
@@ -252,20 +254,20 @@ private fun PromoHero(banners: List<Banner>) {
 
 @Composable
 private fun CategoryRail(categories: List<String>, selected: String, onSelect: (String) -> Unit) {
-    Column { SectionHeading("Compre por categoria", null); Row(Modifier.horizontalScroll(androidx.compose.foundation.rememberScrollState()).padding(horizontal = 18.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) { categories.forEach { category -> FilterChip(selected = selected == category, onClick = { onSelect(category) }, label = { Text(category) }, colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Forest, selectedLabelColor = Color.White, containerColor = Color.White), border = FilterChipDefaults.filterChipBorder(enabled = true, selected = selected == category, borderColor = Line, selectedBorderColor = Forest)) } }; Spacer(Modifier.height(5.dp)) }
+    Column { SectionHeading("Compre por categoria", null, null); Row(Modifier.horizontalScroll(androidx.compose.foundation.rememberScrollState()).padding(horizontal = 18.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) { categories.forEach { category -> FilterChip(selected = selected == category, onClick = { onSelect(category) }, label = { Text(category) }, colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Forest, selectedLabelColor = Color.White, containerColor = Color.White), border = FilterChipDefaults.filterChipBorder(enabled = true, selected = selected == category, borderColor = Line, selectedBorderColor = Forest)) } }; Spacer(Modifier.height(5.dp)) }
 }
 
 @Composable
-private fun ProductShelf(title: String, subtitle: String, products: List<Product>, viewModel: AiMercViewModel, openProduct: (Product) -> Unit) {
+private fun ProductShelf(title: String, subtitle: String, products: List<Product>, viewModel: AiMercViewModel, openAll: (() -> Unit)?, openProduct: (Product) -> Unit) {
     Column(Modifier.padding(top = 22.dp)) {
-        SectionHeading(title, subtitle)
+        SectionHeading(title, subtitle, openAll)
         LazyRow(contentPadding = PaddingValues(horizontal = 18.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) { items(products, key = { it.id }) { product -> ProductCard(product, viewModel.quantity(product.id), { viewModel.add(product) }, { viewModel.remove(product) }, { openProduct(product) }) } }
     }
 }
 
 @Composable
-private fun SectionHeading(title: String, subtitle: String?) {
-    Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 11.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Bottom) { Column { Text(title, fontWeight = FontWeight.Black, fontSize = 20.sp, color = Ink); if (subtitle != null) Text(subtitle, color = Muted, fontSize = 11.sp) }; Text("Ver tudo", color = Color(0xFF0A9266), fontSize = 11.sp, fontWeight = FontWeight.Bold) }
+private fun SectionHeading(title: String, subtitle: String?, openAll: (() -> Unit)?) {
+    Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 11.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Bottom) { Column { Text(title, fontWeight = FontWeight.Black, fontSize = 20.sp, color = Ink); if (subtitle != null) Text(subtitle, color = Muted, fontSize = 11.sp) }; if (openAll != null) Text("Ver tudo", color = Color(0xFF0A9266), fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable(onClick = openAll).padding(horizontal = 8.dp, vertical = 6.dp)) }
 }
 
 @Composable
@@ -296,6 +298,48 @@ private fun QuantityControl(quantity: Int, add: () -> Unit, remove: () -> Unit) 
 @Composable
 private fun StorePromise() {
     Row(Modifier.padding(18.dp).fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(MintSoft).padding(18.dp), verticalAlignment = Alignment.CenterVertically) { Box(Modifier.size(44.dp).clip(CircleShape).background(Mint), contentAlignment = Alignment.Center) { Icon(Icons.Default.Check, null, tint = Forest) }; Spacer(Modifier.width(13.dp)); Column { Text("Compra segura e separada com cuidado", fontWeight = FontWeight.ExtraBold, color = Forest); Text("Voce confere tudo na entrega ou retirada.", color = Color(0xFF527266), fontSize = 11.sp) } }
+}
+
+@Composable
+private fun CategoryProductsScreen(category: String, viewModel: AiMercViewModel, modifier: Modifier, back: () -> Unit, openProduct: (Product) -> Unit) {
+    var search by rememberSaveable(category) { mutableStateOf("") }
+    val products = viewModel.productsForCategory(category, search)
+    Column(modifier.fillMaxSize().background(Canvas)) {
+        Column(Modifier.fillMaxWidth().background(Forest).statusBarsPadding().padding(horizontal = 12.dp, vertical = 12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = back) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Voltar", tint = Color.White) }
+                Column(Modifier.padding(start = 3.dp)) {
+                    Text(category, color = Color.White, fontSize = 23.sp, fontWeight = FontWeight.Black)
+                    Text("${products.size} produtos encontrados", color = Color(0xFFACCCC0), fontSize = 10.sp)
+                }
+            }
+            Spacer(Modifier.height(11.dp))
+            OutlinedTextField(
+                value = search,
+                onValueChange = { search = it },
+                placeholder = { Text("Buscar dentro de $category") },
+                leadingIcon = { Icon(Icons.Default.Search, null) },
+                singleLine = true,
+                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier.fillMaxWidth(),
+                colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+                    focusedContainerColor = Color.White,
+                    unfocusedContainerColor = Color.White,
+                    focusedBorderColor = Mint,
+                    unfocusedBorderColor = Color.Transparent
+                )
+            )
+        }
+        if (products.isEmpty()) {
+            PlaceholderScreen("Nenhum produto encontrado", "Tente buscar por outro nome dentro desta categoria.", Icons.Default.Search, Modifier.weight(1f))
+        } else {
+            LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                items(products, key = { it.id }) { product ->
+                    SearchProductRow(product, viewModel.quantity(product.id), { viewModel.add(product) }, { viewModel.remove(product) }, { openProduct(product) })
+                }
+            }
+        }
+    }
 }
 
 @Composable
@@ -356,7 +400,7 @@ private fun ProductDetailScreen(product: Product, viewModel: AiMercViewModel, ba
                     Text("Valor por ${product.unit.lowercase()} · produto disponivel", color = Muted, fontSize = 12.sp, modifier = Modifier.padding(top = 3.dp))
                 }
             }
-            if (related.isNotEmpty()) item { ProductShelf("Voce tambem pode gostar", "Itens relacionados para completar sua compra", related, viewModel, openProduct) }
+            if (related.isNotEmpty()) item { ProductShelf("Voce tambem pode gostar", "Itens relacionados para completar sua compra", related, viewModel, null, openProduct) }
         }
     }
 }
