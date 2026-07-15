@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -200,9 +201,12 @@ private fun HomeHeader(storeName: String, open: Boolean, deliveryAddress: String
                 painter = painterResource(R.drawable.queiroz_menu_logo),
                 contentDescription = "Mercadinho Queiroz",
                 contentScale = ContentScale.Fit,
-                modifier = Modifier.width(86.dp).height(66.dp)
+                modifier = Modifier
+                    .width(78.dp)
+                    .height(58.dp)
+                    .offset(y = (-6).dp)
             )
-            Spacer(Modifier.width(11.dp))
+            Spacer(Modifier.width(17.dp))
             Column(Modifier.weight(1f)) { Text(storeName, color = Color.White, fontWeight = FontWeight.ExtraBold, maxLines = 1, overflow = TextOverflow.Ellipsis); Text(if (open) "Aberto agora" else "Fechado", color = if (open) Mint else Orange, fontSize = 11.sp, fontWeight = FontWeight.Bold) }
             IconButton(onClick = {}) { Icon(Icons.Default.Person, null, tint = Color.White) }
         }
