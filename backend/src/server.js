@@ -132,7 +132,7 @@ function normalizeProduct(item) {
 function normalizeBanner(item) {
   return {
     eyebrow: optionalText(item.eyebrow, 80),
-    title: requiredText(item.title, 'Titulo do banner', 120),
+    title: optionalText(item.title, 120),
     subtitle: optionalText(item.subtitle, 220),
     image: optionalText(item.image, 1_500),
     active: item.active !== false,

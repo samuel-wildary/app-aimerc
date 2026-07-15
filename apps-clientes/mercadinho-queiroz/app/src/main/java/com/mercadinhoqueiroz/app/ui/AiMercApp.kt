@@ -236,14 +236,18 @@ private fun PromoHero(banners: List<Banner>) {
     Column(Modifier.padding(top = 18.dp)) {
         HorizontalPager(state = pagerState, contentPadding = PaddingValues(horizontal = 18.dp), pageSpacing = 10.dp) { page ->
             val banner = banners[page]
+            val hasCopy = banner.eyebrow.isNotBlank() || banner.title.isNotBlank() || banner.subtitle.isNotBlank()
             Box(Modifier.fillMaxWidth().height(180.dp).clip(RoundedCornerShape(24.dp)).background(Forest)) {
                 if (banner.image.isNotBlank()) AsyncImage(model = banner.image, contentDescription = banner.title, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-                Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(listOf(Color(0xF21B2950), Color(0xC42A407A), Color(0x331B2950)))))
-                Column(Modifier.align(Alignment.CenterStart).padding(22.dp).fillMaxWidth(.74f)) {
-                    Text(banner.eyebrow.uppercase(), color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Black, letterSpacing = 1.sp)
-                    Spacer(Modifier.height(8.dp)); Text(banner.title, color = Color.White, fontSize = 26.sp, lineHeight = 28.sp, fontWeight = FontWeight.Black); Spacer(Modifier.height(7.dp)); Text(banner.subtitle, color = Color(0xFFD5E8E1), fontSize = 12.sp, lineHeight = 16.sp)
+                if (hasCopy) {
+                    Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(listOf(Color(0xF21B2950), Color(0xC42A407A), Color(0x331B2950)))))
+                    Column(Modifier.align(Alignment.CenterStart).padding(22.dp).fillMaxWidth(.74f)) {
+                        if (banner.eyebrow.isNotBlank()) Text(banner.eyebrow.uppercase(), color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Black, letterSpacing = 1.sp)
+                        if (banner.title.isNotBlank()) Text(banner.title, color = Color.White, fontSize = 26.sp, lineHeight = 28.sp, fontWeight = FontWeight.Black, modifier = Modifier.padding(top = if (banner.eyebrow.isNotBlank()) 8.dp else 0.dp))
+                        if (banner.subtitle.isNotBlank()) Text(banner.subtitle, color = Color(0xFFD5E8E1), fontSize = 12.sp, lineHeight = 16.sp, modifier = Modifier.padding(top = if (banner.title.isNotBlank() || banner.eyebrow.isNotBlank()) 7.dp else 0.dp))
+                    }
+                    Box(Modifier.align(Alignment.BottomEnd).padding(16.dp).size(48.dp).clip(CircleShape).background(Mint), contentAlignment = Alignment.Center) { Icon(Icons.Outlined.LocalOffer, null, tint = Forest, modifier = Modifier.size(24.dp)) }
                 }
-                Box(Modifier.align(Alignment.BottomEnd).padding(16.dp).size(48.dp).clip(CircleShape).background(Mint), contentAlignment = Alignment.Center) { Icon(Icons.Outlined.LocalOffer, null, tint = Forest, modifier = Modifier.size(24.dp)) }
             }
         }
         Row(Modifier.fillMaxWidth().padding(top = 9.dp), horizontalArrangement = Arrangement.Center) {
@@ -601,7 +605,7 @@ private fun formatOrderDate(value: String): String {
 @Composable
 private fun CartScreen(viewModel: AiMercViewModel, back: () -> Unit, checkout: () -> Unit) {
     val store = viewModel.catalog?.store
-    Scaffold(containerColor = Canvas, topBar = { SimpleTopBar("Seu carrinho", back) }, bottomBar = { Column(Modifier.background(Color.White).navigationBarsPadding().padding(16.dp)) { Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("Subtotal", color = Muted); Text(currency.format(viewModel.subtotal), fontWeight = FontWeight.Black, fontSize = 20.sp) }; val remaining = (store?.minimumOrder ?: 0.0) - viewModel.subtotal; if (remaining > 0) Text("Faltam ${currency.format(remaining)} para o pedido minimo", color = Orange, fontSize = 11.sp, modifier = Modifier.padding(vertical = 7.dp)); Button(onClick = checkout, enabled = viewModel.cartLines.isNotEmpty() && remaining <= 0, modifier = Modifier.fillMaxWidth().height(52.dp), shape = RoundedCornerShape(14.dp), colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Forest)) { Text("Continuar", fontWeight = FontWeight.Black); Spacer(Modifier.width(5.dp)); Icon(Icons.Default.ChevronRight, null) } } }) { padding ->
+    Scaffold(containerColor = Canvas, topBar = { SimpleTopBar("Seu carrinho", back) }, bottomBar = { Column(Modifier.background(Color.White).navigationBarsPadding().padding(horizontal = 16.dp, vertical = 18.dp)) { Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) { Text("Subtotal", color = Muted, fontSize = 14.sp); Text(currency.format(viewModel.subtotal), fontWeight = FontWeight.Black, fontSize = 22.sp, color = Ink) }; val remaining = (store?.minimumOrder ?: 0.0) - viewModel.subtotal; if (remaining > 0) Text("Faltam ${currency.format(remaining)} para o pedido minimo", color = Orange, fontSize = 11.sp, modifier = Modifier.padding(top = 7.dp)); Spacer(Modifier.height(16.dp)); Button(onClick = checkout, enabled = viewModel.cartLines.isNotEmpty() && remaining <= 0, modifier = Modifier.fillMaxWidth().height(54.dp), shape = RoundedCornerShape(14.dp), colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Forest)) { Text("Continuar", fontWeight = FontWeight.Black); Spacer(Modifier.width(5.dp)); Icon(Icons.Default.ChevronRight, null) } } }) { padding ->
         if (viewModel.cartLines.isEmpty()) PlaceholderScreen("Carrinho vazio", "Adicione produtos para continuar sua compra.", Icons.Default.ShoppingBag, Modifier.padding(padding))
         else LazyColumn(Modifier.padding(padding), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) { items(viewModel.cartLines, key = { it.product.id }) { line -> CartLineCard(line, { viewModel.add(line.product) }, { viewModel.remove(line.product) }) } }
     }

@@ -481,9 +481,9 @@ function Storefront({ store, banners, campaigns, automations, onSaveSettings, on
       <section className="panel banner-editor">
         <div className="panel-heading"><div><p className="overline">Vitrine do aplicativo</p><h2>{editingId ? 'Editar banner' : 'Novo banner'}</h2></div>{editingId && <button className="text-button" onClick={resetBanner}>Cancelar edicao</button>}</div>
         <form className="banner-form" onSubmit={submitBanner}>
-          <label>Chamada curta<input value={bannerForm.eyebrow} onChange={event => setBannerForm({ ...bannerForm, eyebrow: event.target.value })} placeholder="Ex.: Feira da semana" /></label>
-          <label>Titulo principal<input required maxLength="120" value={bannerForm.title} onChange={event => setBannerForm({ ...bannerForm, title: event.target.value })} placeholder="Ex.: Frescor que cabe no carrinho" /></label>
-          <label>Descricao<textarea value={bannerForm.subtitle} onChange={event => setBannerForm({ ...bannerForm, subtitle: event.target.value })} placeholder="Explique a promocao em uma frase." /></label>
+          <label>Chamada curta (opcional)<input value={bannerForm.eyebrow} onChange={event => setBannerForm({ ...bannerForm, eyebrow: event.target.value })} placeholder="Ex.: Feira da semana" /></label>
+          <label>Titulo principal (opcional)<input maxLength="120" value={bannerForm.title} onChange={event => setBannerForm({ ...bannerForm, title: event.target.value })} placeholder="Ex.: Frescor que cabe no carrinho" /></label>
+          <label>Descricao (opcional)<textarea value={bannerForm.subtitle} onChange={event => setBannerForm({ ...bannerForm, subtitle: event.target.value })} placeholder="Explique a promocao em uma frase." /></label>
           <label>Imagem do banner<span>Use uma imagem horizontal. Ela sera ajustada automaticamente para 1200 x 600 px em WebP.</span><input className="banner-file-input" type="file" accept="image/jpeg,image/png,image/webp" onChange={chooseBannerImage} required={!bannerForm.image} /></label>
           {bannerFileError && <p className="field-error">{bannerFileError}</p>}
           {bannerPreview && <div className="banner-upload-preview" style={{ backgroundImage: `url(${bannerPreview})` }}><span>Previa 1200 x 600</span></div>}
