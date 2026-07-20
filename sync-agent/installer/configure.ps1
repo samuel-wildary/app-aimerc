@@ -60,6 +60,7 @@ function Add-Field($form, $label, $top, $value = '', $password = $false) {
   $input.Size = New-Object System.Drawing.Size(430, 28)
   $input.Text = $value
   $input.UseSystemPasswordChar = $password
+  $input.Tag = $caption
   $form.Controls.Add($input)
   return $input
 }
@@ -114,7 +115,24 @@ $authType.DropDownStyle = 'DropDownList'
 $authType.SelectedItem = Config-Value $current 'ERP_AUTH_TYPE' 'NONE'
 $form.Controls.Add($authType)
 
-$erpToken = Add-Field $form 'Token/usuario e senha do ERP' 364 (Config-Value $current 'ERP_API_TOKEN' '') $true
+$erpToken = Add-Field $form 'Credencial do ERP' 364 (Config-Value $current 'ERP_API_TOKEN' '') $true
+
+function Update-ErpAuthenticationField {
+  $selectedAuth = [string]$authType.SelectedItem
+  $requiresCredential = $selectedAuth -ne 'NONE'
+  $erpToken.Enabled = $requiresCredential
+  $erpToken.BackColor = if ($requiresCredential) { [System.Drawing.SystemColors]::Window } else { [System.Drawing.SystemColors]::Control }
+  $erpToken.Tag.Text = switch ($selectedAuth) {
+    'BEARER' { 'Token Bearer do ERP' }
+    'API_KEY' { 'Chave da API do ERP' }
+    'BASIC' { 'Usuario e senha do ERP (usuario:senha)' }
+    default { 'Credencial do ERP (nao necessaria)' }
+  }
+}
+
+$authType.Add_SelectedIndexChanged({ Update-ErpAuthenticationField })
+Update-ErpAuthenticationField
+
 $itemsPath = Add-Field $form 'Caminho da lista no JSON (opcional)' 424 (Config-Value $current 'ERP_ITEMS_PATH' '')
 $interval = Add-Field $form 'Intervalo em segundos (minimo 30)' 484 (Config-Value $current 'SYNC_INTERVAL_SECONDS' '300')
 
@@ -151,6 +169,11 @@ $save.Add_Click({
     if ([string]::IsNullOrWhiteSpace($apiUrl.Text) -or [string]::IsNullOrWhiteSpace($agentToken.Text) -or [string]::IsNullOrWhiteSpace($erpUrl.Text)) {
       throw 'Preencha o backend, o token da loja e a URL do ERP.'
     }
+    $selectedAuth = [string]$authType.SelectedItem
+    if ($selectedAuth -ne 'NONE' -and [string]::IsNullOrWhiteSpace($erpToken.Text)) {
+      throw 'Preencha a credencial exigida pela autenticacao do ERP.'
+    }
+    $erpCredential = if ($selectedAuth -eq 'NONE') { '' } else { $erpToken.Text }
     if ([int]$interval.Text -lt 30) { throw 'O intervalo minimo e 30 segundos.' }
 
     if (-not $isAdministrator) {
@@ -160,8 +183,8 @@ $save.Add_Click({
         AIMERC_AGENT_TOKEN = $agentToken.Text
         ERP_PROVIDER = [string]$provider.SelectedItem
         ERP_API_URL = $erpUrl.Text
-        ERP_AUTH_TYPE = [string]$authType.SelectedItem
-        ERP_API_TOKEN = $erpToken.Text
+        ERP_AUTH_TYPE = $selectedAuth
+        ERP_API_TOKEN = $erpCredential
         ERP_ITEMS_PATH = $itemsPath.Text
         SYNC_INTERVAL_SECONDS = $interval.Text
         START_WITH_WINDOWS = $startWithWindows.Checked.ToString().ToLowerInvariant()
@@ -207,8 +230,8 @@ Write-Host 'AiMerc Sync Agent removido. A configuracao foi preservada em Program
       'AIMERC_AGENT_TOKEN=' + (& $clean $agentToken.Text)
       'ERP_PROVIDER=' + $provider.SelectedItem
       'ERP_API_URL=' + (& $clean $erpUrl.Text)
-      'ERP_AUTH_TYPE=' + $authType.SelectedItem
-      'ERP_API_TOKEN=' + (& $clean $erpToken.Text)
+      'ERP_AUTH_TYPE=' + $selectedAuth
+      'ERP_API_TOKEN=' + (& $clean $erpCredential)
       'ERP_AUTH_HEADER=X-API-Key'
       'ERP_ITEMS_PATH=' + (& $clean $itemsPath.Text)
       'SYNC_INTERVAL_SECONDS=' + [int]$interval.Text

@@ -16,6 +16,8 @@ Execute `npm install` e `npm run build:windows`. O arquivo pronto para distribui
 
 O mesmo instalador atende todos os supermercados. Durante a instalacao, informe o token gerado no SaaS, selecione o ERP e configure a URL local. A opcao `Iniciar automaticamente com o Windows` registra o agente como tarefa continua em segundo plano usando a conta `SYSTEM`; nenhuma porta da loja e exposta na internet. Mesmo sem essa opcao, o agente inicia ao concluir a instalacao, mas nao volta sozinho depois de reiniciar o computador.
 
+Quando a API local do ERP nao exige senha, selecione `NONE`: nenhuma credencial ou cabecalho de autenticacao sera enviado ao ERP. O token da loja continua necessario para autorizar o envio ao backend AiMerc.
+
 O perfil escolhido fornece apenas os campos padrao. O mapeamento avancado salvo no SaaS pode trocar caminho da lista, SKU, EAN, nome, categoria, precos, estoque, unidade e situacao ativa sem recompilar ou reinstalar o agente.
 
 Configuracao e logs ficam em `C:\ProgramData\AiMerc\SyncAgent`. O executavel fica em `C:\Program Files\AiMerc\Sync Agent`.

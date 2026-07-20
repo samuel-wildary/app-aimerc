@@ -113,7 +113,7 @@ Imagem e descricao personalizada pertencem ao catalogo AiMerc e nao sao apagadas
 
 O projeto gera um unico instalador configuravel com `npm run build:windows` dentro de `sync-agent`. O resultado fica em `sync-agent/dist/AiMerc-Agent-Setup.exe`.
 
-No ambiente local, o backend entrega esse arquivo diretamente pela rota autenticada do SaaS. Em producao, configure `AIMERC_AGENT_DOWNLOAD_URL` com uma URL HTTPS e monte um volume persistente do EasyPanel em `/app/data`. Ao iniciar, o backend baixa o EXE uma unica vez para `/app/data/downloads/AiMerc-Agent-Setup.exe`; os downloads seguintes usam a copia da VPS, mesmo se a origem for removida. O executavel nao deve ser incorporado ao banco PostgreSQL.
+No ambiente local, o backend entrega esse arquivo diretamente pela rota autenticada do SaaS. Em producao, configure `AIMERC_AGENT_DOWNLOAD_URL` com uma URL HTTPS e monte um volume persistente do EasyPanel em `/app/data`. Ao iniciar, o backend verifica a origem e guarda a versao mais recente em `/app/data/downloads/AiMerc-Agent-Setup.exe`. Se a origem for removida ou ficar indisponivel, ele preserva e entrega a copia da VPS. O executavel nao deve ser incorporado ao banco PostgreSQL.
 
 O instalador ainda nao possui assinatura de codigo. Antes de distribuir comercialmente, assine o EXE com certificado Code Signing para reduzir alertas do Microsoft Defender SmartScreen e permitir verificacao de autoria.
 

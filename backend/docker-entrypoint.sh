@@ -14,16 +14,25 @@ fi
 
 installer_path="${AIMERC_AGENT_INSTALLER_PATH:-/app/data/downloads/AiMerc-Agent-Setup.exe}"
 installer_url="${AIMERC_AGENT_DOWNLOAD_URL:-}"
-if [ ! -s "$installer_path" ] && [ -n "$installer_url" ]; then
-  echo "Armazenando instalador do agente na VPS..."
+if [ -n "$installer_url" ]; then
+  echo "Verificando o instalador do agente..."
   mkdir -p "$(dirname "$installer_path")"
   installer_tmp="${installer_path}.tmp"
   if wget -q -O "$installer_tmp" "$installer_url" && [ -s "$installer_tmp" ]; then
-    mv "$installer_tmp" "$installer_path"
-    echo "Instalador armazenado em $installer_path"
+    if [ -s "$installer_path" ] && cmp -s "$installer_tmp" "$installer_path"; then
+      rm -f "$installer_tmp"
+      echo "Instalador da VPS ja esta atualizado."
+    else
+      mv "$installer_tmp" "$installer_path"
+      echo "Instalador atualizado em $installer_path"
+    fi
   else
     rm -f "$installer_tmp"
-    echo "Aviso: nao foi possivel armazenar o instalador; o backend continuara iniciando." >&2
+    if [ -s "$installer_path" ]; then
+      echo "Aviso: origem indisponivel; mantendo o instalador armazenado na VPS." >&2
+    else
+      echo "Aviso: nao foi possivel armazenar o instalador; o backend continuara iniciando." >&2
+    fi
   fi
 fi
 
