@@ -687,14 +687,16 @@ app.get('/api/admin/integration-providers', requireAuth('PLATFORM_ADMIN'), async
 }));
 
 app.get('/api/admin/integration-agent/download', requireAuth('PLATFORM_ADMIN'), asyncRoute(async (req, res) => {
-  const remoteUrl = String(process.env.AIMERC_AGENT_DOWNLOAD_URL || '').trim();
-  if (remoteUrl) return res.redirect(302, remoteUrl);
   const installerPath = path.resolve(
     process.env.AIMERC_AGENT_INSTALLER_PATH
       || path.join(process.cwd(), '..', 'sync-agent', 'dist', 'AiMerc-Agent-Setup.exe')
   );
-  await fs.access(installerPath).catch(() => { throw new ApiError(404, 'Instalador do agente ainda nao foi publicado'); });
-  res.download(installerPath, 'AiMerc-Agent-Setup.exe');
+  const installerAvailable = await fs.access(installerPath).then(() => true).catch(() => false);
+  if (installerAvailable) return res.download(installerPath, 'AiMerc-Agent-Setup.exe');
+
+  const remoteUrl = String(process.env.AIMERC_AGENT_DOWNLOAD_URL || '').trim();
+  if (remoteUrl) return res.redirect(302, remoteUrl);
+  throw new ApiError(404, 'Instalador do agente ainda nao foi armazenado na VPS');
 }));
 
 app.get('/api/admin/integrations', requireAuth('PLATFORM_ADMIN'), asyncRoute(async (req, res) => {
