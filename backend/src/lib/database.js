@@ -595,8 +595,8 @@ export async function heartbeatIntegrationAgent(agentId, input) {
 }
 
 export async function listIntegrationOverview() {
-  const integrations = (await query(`SELECT s.id AS store_id,s.name AS store_name,s.slug,s.status AS store_status,
-    i.*,a.id AS agent_id,a.name AS agent_name,a.version AS agent_version,a.status AS agent_status,
+  const integrations = (await query(`SELECT i.*,s.id AS store_id,s.name AS store_name,s.slug,s.status AS store_status,
+    a.id AS agent_id,a.name AS agent_name,a.version AS agent_version,a.status AS agent_status,
     a.capabilities AS agent_capabilities,a.last_ip AS agent_last_ip,a.last_seen_at AS agent_last_seen_at,
     a.created_at AS agent_created_at
     FROM stores s LEFT JOIN store_integrations i ON i.store_id=s.id

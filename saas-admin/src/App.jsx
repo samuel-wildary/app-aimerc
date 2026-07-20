@@ -233,6 +233,7 @@ function CatalogLibrary() {
 
 function IntegrationModal({ item, providers, close, saved }) {
   const current = item.integration || {};
+  const storeId = item.store.id;
   const [form, setForm] = useState({
     providerCode: current.providerCode || 'SYSPDV', connectionMode: current.connectionMode || 'LOCAL_AGENT',
     endpointUrl: current.endpointUrl || '', authType: current.authType || 'NONE', authHeader: current.authHeader || 'X-API-Key',
@@ -249,15 +250,19 @@ function IntegrationModal({ item, providers, close, saved }) {
   }
   async function submit(event) {
     event.preventDefault(); setSaving(true); setError('');
-    try { await api.saveIntegration(item.store.id, form); await saved(); }
+    try {
+      if (!storeId) throw new Error('Identificador do supermercado nao foi carregado. Atualize a pagina.');
+      await api.saveIntegration(storeId, form); await saved();
+    }
     catch (requestError) { setError(requestError.message); }
     finally { setSaving(false); }
   }
   async function generateAgent() {
     setSaving(true); setError('');
     try {
-      await api.saveIntegration(item.store.id, form);
-      const result = await api.createIntegrationAgent(item.store.id, { name: `Agente ${item.store.name}` });
+      if (!storeId) throw new Error('Identificador do supermercado nao foi carregado. Atualize a pagina.');
+      await api.saveIntegration(storeId, form);
+      const result = await api.createIntegrationAgent(storeId, { name: `Agente ${item.store.name}` });
       setToken(result.token); await saved();
     } catch (requestError) { setError(requestError.message); }
     finally { setSaving(false); }
