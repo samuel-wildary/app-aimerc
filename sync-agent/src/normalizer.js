@@ -106,5 +106,5 @@ export function normalizeProducts(payload, providerCode, mapping = {}) {
       promo,
       active: booleanValue(read('active'))
     };
-  });
+  }).filter(product => product.price >= 0.001 && product.price <= 1_000_000);
 }

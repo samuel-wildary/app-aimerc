@@ -641,20 +641,45 @@ app.post('/api/agent/products', requireIntegrationAgent, asyncRoute(async (req, 
     throw new ApiError(400, 'Envie entre 1 e 10.000 produtos por lote');
   }
   try {
-    const products = req.body.items.map(normalizeProduct);
+    const products = [];
+    const rejected = [];
+    for (const [index, item] of req.body.items.entries()) {
+      try {
+        products.push(normalizeProduct(item));
+      } catch (error) {
+        rejected.push({
+          index,
+          sku: optionalText(item?.sku, 80),
+          barcode: optionalText(item?.barcode, 80),
+          message: String(error.message || 'Produto invalido').slice(0, 180)
+        });
+      }
+    }
     const result = await upsertProducts(agent.storeId, products);
     await heartbeatIntegrationAgent(agent.id, {
       version: optionalText(req.body.agentVersion, 40), capabilities: ['PRODUCT_SYNC'], ip: req.ip
     });
     await recordIntegrationRun(agent, result, {
-      status: 'COMPLETED', received: products.length, startedAt,
-      message: `${products.length} produtos processados pelo agente`
+      status: rejected.length ? 'COMPLETED_WITH_ERRORS' : 'COMPLETED',
+      received: req.body.items.length,
+      errors: rejected.length,
+      startedAt,
+      message: `${products.length} produtos processados; ${rejected.length} rejeitados`
     });
     await writeAuditLog({
       storeId: agent.storeId, actorId: agent.id, action: 'AGENT_PRODUCTS_SYNCHRONIZED',
-      entityType: 'INTEGRATION_AGENT', entityId: agent.id, metadata: { ...result, received: products.length }
+      entityType: 'INTEGRATION_AGENT', entityId: agent.id,
+      metadata: { ...result, received: req.body.items.length, accepted: products.length, rejected: rejected.length }
     });
-    res.json({ success: true, ...result, received: products.length, synchronizedAt: new Date().toISOString() });
+    res.json({
+      success: true,
+      ...result,
+      received: req.body.items.length,
+      accepted: products.length,
+      rejected: rejected.length,
+      rejectionDetails: rejected.slice(0, 20),
+      synchronizedAt: new Date().toISOString()
+    });
   } catch (error) {
     await recordIntegrationRun(agent, {}, {
       status: 'FAILED', received: Array.isArray(req.body.items) ? req.body.items.length : 0,
