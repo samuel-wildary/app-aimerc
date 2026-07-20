@@ -236,13 +236,17 @@ function IntegrationModal({ item, providers, close, saved }) {
   const [form, setForm] = useState({
     providerCode: current.providerCode || 'SYSPDV', connectionMode: current.connectionMode || 'LOCAL_AGENT',
     endpointUrl: current.endpointUrl || '', authType: current.authType || 'NONE', authHeader: current.authHeader || 'X-API-Key',
-    secret: '', syncIntervalSeconds: current.syncIntervalSeconds || 300, enabled: current.enabled !== false
+    secret: '', syncIntervalSeconds: current.syncIntervalSeconds || 300, enabled: current.enabled !== false,
+    fieldMapping: current.fieldMapping || {}
   });
   const [token, setToken] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const provider = providers.find(value => value.code === form.providerCode) || providers[0];
   function field(name, value) { setForm(valueNow => ({ ...valueNow, [name]: value })); }
+  function mappingField(name, value) {
+    setForm(valueNow => ({ ...valueNow, fieldMapping: { ...valueNow.fieldMapping, [name]: value } }));
+  }
   async function submit(event) {
     event.preventDefault(); setSaving(true); setError('');
     try { await api.saveIntegration(item.store.id, form); await saved(); }
@@ -262,7 +266,7 @@ function IntegrationModal({ item, providers, close, saved }) {
     <div className="modal-head"><div><p className="eyebrow">Conector da loja</p><h2>{item.store.name}</h2></div><button type="button" className="icon" onClick={close}><X size={20}/></button></div>
     <div className="integration-provider-note"><ServerCog size={21}/><div><strong>{provider?.name}</strong><span>{provider?.description}</span>{provider?.documentationStatus === 'AWAITING_VENDOR_DOCS' && <small>Exige o manual ou Swagger da versao instalada para homologacao final.</small>}</div></div>
     <div className="form-grid">
-      <label>Sistema do supermercado<select value={form.providerCode} onChange={event => { const code = event.target.value; const next = providers.find(value => value.code === code); setForm(value => ({ ...value, providerCode: code, connectionMode: next?.modes?.[0] || 'LOCAL_AGENT' })); }}>{providers.map(value => <option value={value.code} key={value.code}>{value.name}</option>)}</select></label>
+      <label>Sistema do supermercado<select value={form.providerCode} onChange={event => { const code = event.target.value; const next = providers.find(value => value.code === code); setForm(value => ({ ...value, providerCode: code, connectionMode: next?.modes?.[0] || 'LOCAL_AGENT', fieldMapping: code === value.providerCode ? value.fieldMapping : {} })); }}>{providers.map(value => <option value={value.code} key={value.code}>{value.name}</option>)}</select></label>
       <label>Modo de conexao<select value={form.connectionMode} onChange={event => field('connectionMode',event.target.value)}>{(provider?.modes || []).map(value => <option key={value} value={value}>{value === 'LOCAL_AGENT' ? 'Agente local (recomendado)' : value === 'CLOUD_API' ? 'API em nuvem' : 'Layout de arquivos'}</option>)}</select></label>
       {form.connectionMode !== 'LOCAL_AGENT' && <label className="wide">URL da API<input value={form.endpointUrl} onChange={event => field('endpointUrl',event.target.value)} placeholder="https://api.erp.com/produtos"/></label>}
       <label>Autenticacao<select value={form.authType} onChange={event => field('authType',event.target.value)}><option value="NONE">Sem autenticacao</option><option value="BEARER">Bearer token</option><option value="API_KEY">API Key</option></select></label>
@@ -270,6 +274,18 @@ function IntegrationModal({ item, providers, close, saved }) {
       {form.authType === 'API_KEY' && <label>Nome do cabecalho<input value={form.authHeader} onChange={event => field('authHeader',event.target.value)}/></label>}
       {form.authType !== 'NONE' && <label>Credencial {current.hasSecret && '(deixe vazio para manter)'}<input type="password" value={form.secret} onChange={event => field('secret',event.target.value)} autoComplete="new-password"/></label>}
       <label className="wide integration-toggle"><input type="checkbox" checked={form.enabled} onChange={event => field('enabled',event.target.checked)}/> Integracao habilitada</label>
+      <details className="wide integration-mapping">
+        <summary>Mapeamento avancado do JSON <small>opcional</small></summary>
+        <p>Deixe em branco para usar o modelo de {provider?.name}. Use caminhos como <code>resultado.produtos</code>. Para mais de um campo promocional, separe por virgula.</p>
+        <button type="button" className="mapping-reset" onClick={() => field('fieldMapping', {})}>Restaurar campos padrao</button>
+        <div className="mapping-grid">
+          {[
+            ['itemsPath','Caminho da lista'],['sku','SKU'],['ean','EAN / GTIN'],['primaryEan','Indicador de EAN principal'],
+            ['name','Nome'],['category','Categoria'],['price','Preco vigente'],['regularPrice','Preco normal'],
+            ['promoPrice','Preco promocional'],['stock','Estoque'],['unit','Unidade'],['active','Produto ativo']
+          ].map(([name,label]) => <label key={name}>{label}<input value={form.fieldMapping[name] || ''} onChange={event => mappingField(name,event.target.value)} placeholder="Usar padrao do conector"/></label>)}
+        </div>
+      </details>
     </div>
     {token && <div className="agent-token"><strong>Token gerado, copie agora</strong><code>{token}</code><button type="button" className="ghost" onClick={() => navigator.clipboard.writeText(token)}>Copiar token</button><small>Por seguranca, ele nao sera mostrado novamente.</small></div>}
     {error && <div className="error">{error}</div>}
@@ -306,7 +322,7 @@ function IntegrationsPage() {
     } catch (requestError) { setError(requestError.message); }
   }
   return <div className="integrations-page">
-    <section className="integration-hero"><div><p className="eyebrow">Conectividade operacional</p><h2>Um contrato para cada ERP.</h2><p>SysPDV, Varejo Facil, Solicom e APIs personalizadas entregam o mesmo catalogo normalizado ao AiMerc.</p></div><div className="integration-flow"><span>ERP local</span><ArrowRight/><span>Agente AiMerc</span><ArrowRight/><span>PostgreSQL</span></div></section>
+    <section className="integration-hero"><div><p className="eyebrow">Conectividade operacional</p><h2>Um contrato para cada ERP.</h2><p>SysPDV, Varejo Facil, Solidcon, Solicom e APIs personalizadas entregam o mesmo catalogo normalizado ao AiMerc.</p></div><div className="integration-flow"><span>ERP local</span><ArrowRight/><span>Agente AiMerc</span><ArrowRight/><span>PostgreSQL</span></div></section>
     <section className="metrics"><Metric label="Lojas cadastradas" value={items.length} detail="disponiveis para integrar" icon={Building2} tone="lime"/><Metric label="Integracoes configuradas" value={configured} detail="com provedor definido" icon={Cable} tone="cyan"/><Metric label="Agentes online" value={online} detail="vistos nos ultimos 3 minutos" icon={ServerCog} tone="blue"/><Metric label="Precisam de atencao" value={items.filter(item => item.integration && item.agent?.status !== 'ONLINE').length} detail="agente pendente ou offline" icon={CircleAlert} tone="orange"/></section>
     {error && <div className="global-error catalog-error">{error}<button onClick={() => setError('')}><X size={17}/></button></div>}
     <section className="panel integration-list"><div className="panel-head"><div><p className="eyebrow">Supermercados</p><h2>Conectores e agentes</h2></div><div className="integration-actions"><button className="refresh" onClick={downloadAgent}><Download size={16}/> Baixar agente Windows</button><button className="refresh" onClick={load}><RefreshCw size={16}/> Atualizar status</button></div></div>

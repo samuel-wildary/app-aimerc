@@ -5,7 +5,7 @@
 O AiMerc usa um contrato canonico de produtos e um agente instalado na rede do supermercado. Cada conector transforma o formato do ERP nesse contrato antes de enviar os dados ao backend.
 
 ```text
-SysPDV / Varejo Facil / Solicom / outro ERP
+SysPDV / Varejo Facil / Solidcon / Solicom / outro ERP
                     |
               API ou arquivo local
                     |
@@ -49,6 +49,25 @@ Modos suportados pelo AiMerc:
 ### Solicom
 
 Nao foi localizada documentacao publica oficial suficiente para fixar endpoints ou nomes de campos sem risco de inventar um contrato. Por isso, o perfil `SOLICOM` esta pronto, mas permanece configuravel. A homologacao final deve usar o Swagger, manual ou amostra JSON da versao instalada no supermercado.
+
+### Solidcon
+
+O perfil `SOLIDCON` foi validado com um retorno real contendo `19.977` registros e `16.875` produtos unicos. O agente consolida linhas repetidas pelo campo `id_produto`, prioriza o `ean_principal`, aceita somente GTIN valido para buscar imagens e ignora codigos internos curtos como `codigo_ean`.
+
+Mapeamento homologado:
+
+| AiMerc | Solidcon |
+| --- | --- |
+| SKU | `id_produto` |
+| EAN/GTIN | `codigo_ean` com prioridade para `ean_principal` |
+| Nome | `produto` |
+| Categoria | `classificacao01` |
+| Preco vigente | `vl_produto` |
+| Preco normal | `vl_produto_normal` |
+| Promocoes | `preco_fidelidade_promocao` e `preco_clube_promocao` |
+| Estoque | `qtd_produto` |
+| Unidade | `emb` ou `unid_medida` |
+| Disponibilidade | `ativo` |
 
 ## Contrato canonico AiMerc
 

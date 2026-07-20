@@ -31,6 +31,20 @@ export const integrationProviders = [
     aliases: commonAliases
   },
   {
+    code: 'SOLIDCON',
+    name: 'Solidcon',
+    vendor: 'Solidcon',
+    modes: ['LOCAL_AGENT', 'CLOUD_API'],
+    documentationStatus: 'VALIDATED_SAMPLE',
+    description: 'Conector homologado com o retorno de estoque, precos, categorias e EAN fornecido pelo supermercado.',
+    aliases: {
+      items: commonAliases.items,
+      sku: ['id_produto'], ean: ['codigo_ean'], name: ['produto'], category: ['classificacao01'],
+      price: ['vl_produto'], promoPrice: ['preco_fidelidade_promocao', 'preco_clube_promocao'],
+      stock: ['qtd_produto'], unit: ['emb', 'unid_medida'], active: ['ativo']
+    }
+  },
+  {
     code: 'SOLICOM',
     name: 'Solicom',
     vendor: 'A confirmar com o fornecedor',

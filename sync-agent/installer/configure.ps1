@@ -72,7 +72,7 @@ if (-not [string]::IsNullOrWhiteSpace($InstallConfigPath) -and (Test-Path $Insta
 $form = New-Object System.Windows.Forms.Form
 $form.Text = 'Configurar AiMerc Sync Agent'
 $form.StartPosition = 'CenterScreen'
-$form.ClientSize = New-Object System.Drawing.Size(480, 650)
+$form.ClientSize = New-Object System.Drawing.Size(480, 690)
 $form.FormBorderStyle = 'FixedDialog'
 $form.MaximizeBox = $false
 
@@ -95,7 +95,7 @@ $provider = New-Object System.Windows.Forms.ComboBox
 $provider.Location = New-Object System.Drawing.Point(24, 206)
 $provider.Size = New-Object System.Drawing.Size(430, 28)
 $provider.DropDownStyle = 'DropDownList'
-[void]$provider.Items.AddRange(@('SYSPDV', 'VAREJO_FACIL', 'SOLICOM', 'GENERIC_JSON'))
+[void]$provider.Items.AddRange(@('SYSPDV', 'VAREJO_FACIL', 'SOLIDCON', 'SOLICOM', 'GENERIC_JSON'))
 $provider.SelectedItem = Config-Value $current 'ERP_PROVIDER' 'SYSPDV'
 $form.Controls.Add($provider)
 
@@ -118,15 +118,22 @@ $erpToken = Add-Field $form 'Token/usuario e senha do ERP' 364 (Config-Value $cu
 $itemsPath = Add-Field $form 'Caminho da lista no JSON (opcional)' 424 (Config-Value $current 'ERP_ITEMS_PATH' '')
 $interval = Add-Field $form 'Intervalo em segundos (minimo 30)' 484 (Config-Value $current 'SYNC_INTERVAL_SECONDS' '300')
 
+$startWithWindows = New-Object System.Windows.Forms.CheckBox
+$startWithWindows.Text = 'Iniciar automaticamente com o Windows (recomendado)'
+$startWithWindows.Location = New-Object System.Drawing.Point(24, 544)
+$startWithWindows.Size = New-Object System.Drawing.Size(430, 28)
+$startWithWindows.Checked = (Config-Value $current 'START_WITH_WINDOWS' 'true') -ne 'false'
+$form.Controls.Add($startWithWindows)
+
 $status = New-Object System.Windows.Forms.Label
-$status.Location = New-Object System.Drawing.Point(24, 548)
+$status.Location = New-Object System.Drawing.Point(24, 578)
 $status.Size = New-Object System.Drawing.Size(430, 26)
 $status.ForeColor = [System.Drawing.Color]::Firebrick
 $form.Controls.Add($status)
 
 $save = New-Object System.Windows.Forms.Button
 $save.Text = if ($Install) { 'Instalar e conectar' } else { 'Salvar e reiniciar' }
-$save.Location = New-Object System.Drawing.Point(254, 584)
+$save.Location = New-Object System.Drawing.Point(254, 624)
 $save.Size = New-Object System.Drawing.Size(200, 42)
 $save.BackColor = [System.Drawing.Color]::FromArgb(18, 201, 138)
 $save.FlatStyle = 'Flat'
@@ -134,7 +141,7 @@ $form.Controls.Add($save)
 
 $cancel = New-Object System.Windows.Forms.Button
 $cancel.Text = 'Cancelar'
-$cancel.Location = New-Object System.Drawing.Point(24, 584)
+$cancel.Location = New-Object System.Drawing.Point(24, 624)
 $cancel.Size = New-Object System.Drawing.Size(120, 42)
 $cancel.Add_Click({ $form.Close() })
 $form.Controls.Add($cancel)
@@ -157,6 +164,7 @@ $save.Add_Click({
         ERP_API_TOKEN = $erpToken.Text
         ERP_ITEMS_PATH = $itemsPath.Text
         SYNC_INTERVAL_SECONDS = $interval.Text
+        START_WITH_WINDOWS = $startWithWindows.Checked.ToString().ToLowerInvariant()
       }
       $pendingConfig | ConvertTo-Json | Set-Content -Path $temporaryConfig -Encoding UTF8
       $acl = Get-Acl $temporaryConfig
@@ -204,6 +212,7 @@ Write-Host 'AiMerc Sync Agent removido. A configuracao foi preservada em Program
       'ERP_AUTH_HEADER=X-API-Key'
       'ERP_ITEMS_PATH=' + (& $clean $itemsPath.Text)
       'SYNC_INTERVAL_SECONDS=' + [int]$interval.Text
+      'START_WITH_WINDOWS=' + $startWithWindows.Checked.ToString().ToLowerInvariant()
       'SYNC_BATCH_SIZE=500'
       'AGENT_VERSION=1.0.0'
       'AIMERC_DATA_DIR=' + $dataDirectory
@@ -211,9 +220,10 @@ Write-Host 'AiMerc Sync Agent removido. A configuracao foi preservada em Program
     & icacls.exe $dataDirectory /inheritance:r /grant:r 'SYSTEM:(OI)(CI)F' 'Administrators:(OI)(CI)F' | Out-Null
     $executable = Join-Path $installDirectory 'AiMerc-Agent.exe'
     $action = New-ScheduledTaskAction -Execute $executable -Argument "--config `"$configPath`""
-    $trigger = New-ScheduledTaskTrigger -AtStartup
-    $settings = New-ScheduledTaskSettingsSet -RestartCount 10 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit (New-TimeSpan -Days 3650)
-    Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Settings $settings -User 'SYSTEM' -RunLevel Highest -Force | Out-Null
+    $settings = New-ScheduledTaskSettingsSet -RestartCount 10 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit (New-TimeSpan -Days 3650) -StartWhenAvailable -MultipleInstances IgnoreNew
+    $taskParameters = @{ TaskName=$taskName; Action=$action; Settings=$settings; User='SYSTEM'; RunLevel='Highest'; Force=$true }
+    if ($startWithWindows.Checked) { $taskParameters.Trigger = New-ScheduledTaskTrigger -AtStartup }
+    Register-ScheduledTask @taskParameters | Out-Null
     $startMenu = Join-Path $env:ProgramData 'Microsoft\Windows\Start Menu\Programs\AiMerc'
     New-Item -ItemType Directory -Force -Path $startMenu | Out-Null
     $shell = New-Object -ComObject WScript.Shell
@@ -228,7 +238,8 @@ Write-Host 'AiMerc Sync Agent removido. A configuracao foi preservada em Program
     $uninstallShortcut.WorkingDirectory = $installDirectory
     $uninstallShortcut.Save()
     Start-ScheduledTask -TaskName $taskName
-    [System.Windows.Forms.MessageBox]::Show('Agente instalado e conectado. O status aparecera no SaaS em instantes.', 'AiMerc', 'OK', 'Information') | Out-Null
+    $startupMessage = if ($startWithWindows.Checked) { ' e iniciara automaticamente com o Windows' } else { ', sem inicializacao automatica' }
+    [System.Windows.Forms.MessageBox]::Show("Agente instalado, conectado$startupMessage. O status aparecera no SaaS em instantes.", 'AiMerc', 'OK', 'Information') | Out-Null
     $form.Close()
   } catch {
     $status.Text = $_.Exception.Message

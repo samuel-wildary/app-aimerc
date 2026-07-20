@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { integrationProvider, integrationProviders, publicIntegrationProvider } from '../src/lib/integration-providers.js';
 
 test('oferece os tres provedores prioritarios e o conector generico', () => {
-  assert.deepEqual(integrationProviders.map(item => item.code), ['SYSPDV', 'VAREJO_FACIL', 'SOLICOM', 'GENERIC_JSON']);
+  assert.deepEqual(integrationProviders.map(item => item.code), ['SYSPDV', 'VAREJO_FACIL', 'SOLIDCON', 'SOLICOM', 'GENERIC_JSON']);
 });
 
 test('perfil publico nao expoe aliases internos', () => {
