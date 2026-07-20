@@ -101,11 +101,11 @@ object AiMercApi {
     }
 
     suspend fun order(id: String, trackingToken: String): CustomerOrder = withContext(Dispatchers.IO) {
-        request("/public/stores/$STORE_SLUG/orders/$id?token=${java.net.URLEncoder.encode(trackingToken, "UTF-8")}").toCustomerOrder()
+        request("/public/stores/$STORE_SLUG/orders/$id", headers = mapOf("X-Order-Token" to trackingToken)).toCustomerOrder()
     }
 
     suspend fun cancelOrder(id: String, trackingToken: String): CustomerOrder = withContext(Dispatchers.IO) {
-        request("/public/stores/$STORE_SLUG/orders/$id/cancel", "POST", JSONObject().put("token", trackingToken)).toCustomerOrder()
+        request("/public/stores/$STORE_SLUG/orders/$id/cancel", "POST", JSONObject(), mapOf("X-Order-Token" to trackingToken)).toCustomerOrder()
     }
 
     suspend fun registerPushDevice(token: String, customerPhone: String = "") = withContext(Dispatchers.IO) {
@@ -120,17 +120,28 @@ object AiMercApi {
         return JSONArray(result)
     }
 
-    private fun request(path: String, method: String = "GET", body: JSONObject? = null): JSONObject {
-        return JSONObject(rawRequest(path, method, body))
+    private fun request(
+        path: String,
+        method: String = "GET",
+        body: JSONObject? = null,
+        headers: Map<String, String> = emptyMap()
+    ): JSONObject {
+        return JSONObject(rawRequest(path, method, body, headers))
     }
 
-    private fun rawRequest(path: String, method: String, body: JSONObject?): String {
+    private fun rawRequest(
+        path: String,
+        method: String,
+        body: JSONObject?,
+        headers: Map<String, String> = emptyMap()
+    ): String {
         val connection = URL("${BuildConfig.API_BASE_URL}$path").openConnection() as HttpURLConnection
         return try {
             connection.requestMethod = method
             connection.connectTimeout = 8_000
             connection.readTimeout = 10_000
             connection.setRequestProperty("Accept", "application/json")
+            headers.forEach { (name, value) -> connection.setRequestProperty(name, value) }
             if (body != null) {
                 connection.doOutput = true
                 connection.setRequestProperty("Content-Type", "application/json")

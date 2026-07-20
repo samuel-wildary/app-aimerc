@@ -1,6 +1,16 @@
 @echo off
 set ROOT=C:\Users\Samuel Wildary\Desktop\aimerc
 
+if not exist "%ROOT%\backend\.env.local" (
+  echo.
+  echo Configuracao local ausente: backend\.env.local
+  echo Copie backend\.env.example para backend\.env.local e informe uma DATABASE_URL PostgreSQL de desenvolvimento.
+  echo O backend nao usa mais arquivos SQLite.
+  echo.
+  pause
+  exit /b 1
+)
+
 echo Starting AiMerc backend on http://127.0.0.1:4100
 start "AiMerc Backend" cmd /k "cd /d %ROOT%\backend && npm run dev"
 

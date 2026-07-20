@@ -12,7 +12,7 @@ C:\Users\Samuel Wildary\Desktop\aimerc
 
 ```text
 aimerc/
-  backend/                  API, autenticacao e bancos SQLite
+  backend/                  API, autenticacao e PostgreSQL
   supermarket-dashboard/    Painel do supermercado - porta 4201
   saas-admin/               Painel exclusivo do dono do SaaS - porta 4202
   sync-worker/              Integracao de produtos/precos/estoque
@@ -36,32 +36,13 @@ Para iniciar tudo:
 C:\Users\Samuel Wildary\Desktop\aimerc\run-aimerc-local.cmd
 ```
 
-## Logins locais
+## Configuracao local
 
-Dashboard do supermercado:
+Copie `backend\.env.example` para `backend\.env.local`. Configure uma base PostgreSQL de desenvolvimento, uma chave de token e suas proprias credenciais administrativas. Nao coloque credenciais de producao nesse arquivo.
 
-```text
-E-mail: gestor@aimerc.local
-Senha:  Aimerc@2026
-```
+## Banco de dados
 
-Painel SaaS Control:
-
-```text
-E-mail: admin@aimerc.local
-Senha:  Admin@2026
-```
-
-Essas credenciais sao somente para desenvolvimento local.
-
-## Bancos de dados
-
-```text
-backend\data\master.sqlite
-backend\data\stores\store_001.sqlite
-```
-
-Nao apague esses arquivos se quiser preservar pedidos, estoque, usuarios e clientes locais.
+PostgreSQL e a unica fonte de dados. O Android e os frontends nunca conectam diretamente ao banco: toda leitura e escrita passa pela API.
 
 ## Android
 
@@ -152,7 +133,7 @@ cd ..\android-customer-app
 
 ## Estado atual
 
-- Backend persistente e autenticado.
+- Backend PostgreSQL persistente e autenticado.
 - Dashboard integrada com pedidos, status, produtos e entregas.
 - Painel SaaS integrado com lojas e assinaturas locais.
 - Worker sincroniza CSV autenticado.

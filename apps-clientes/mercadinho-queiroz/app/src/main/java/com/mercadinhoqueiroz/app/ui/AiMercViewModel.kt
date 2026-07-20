@@ -7,6 +7,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKeys
 import com.mercadinhoqueiroz.app.data.AiMercApi
 import com.mercadinhoqueiroz.app.model.CartLine
 import com.mercadinhoqueiroz.app.model.CepAddress
@@ -21,7 +23,30 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 class AiMercViewModel(application: Application) : AndroidViewModel(application) {
-    private val preferences = application.getSharedPreferences("aimerc_customer", 0)
+    private val preferences = EncryptedSharedPreferences.create(
+        "aimerc_customer_secure",
+        MasterKeys.getOrCreate(MasterKeys.AES256_GCM_SPEC),
+        application,
+        EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+        EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+    )
+    init {
+        if (!preferences.getBoolean("legacy_migrated", false)) {
+            val legacy = application.getSharedPreferences("aimerc_customer", 0)
+            val editor = preferences.edit()
+            legacy.all.forEach { (key, value) ->
+                when (value) {
+                    is String -> editor.putString(key, value)
+                    is Boolean -> editor.putBoolean(key, value)
+                    is Int -> editor.putInt(key, value)
+                    is Long -> editor.putLong(key, value)
+                    is Float -> editor.putFloat(key, value)
+                }
+            }
+            editor.putBoolean("legacy_migrated", true).apply()
+            legacy.edit().clear().apply()
+        }
+    }
     private val storedProfileActive = preferences.getBoolean("profile_active", preferences.getString("profile_phone", "").orEmpty().isNotBlank())
 
     var catalog by mutableStateOf<Catalog?>(null)

@@ -1,81 +1,6 @@
-import fs from 'node:fs';
-import path from 'node:path';
 import crypto from 'node:crypto';
-import { fileURLToPath } from 'node:url';
-import { DatabaseSync } from 'node:sqlite';
 import { hashPassword } from './auth.js';
-
-const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-const dataDir = process.env.AIMERC_DATA_DIR
-  ? path.resolve(process.env.AIMERC_DATA_DIR)
-  : path.join(rootDir, 'data');
-const storesDir = path.join(dataDir, 'stores');
-fs.mkdirSync(storesDir, { recursive: true });
-
-const master = new DatabaseSync(path.join(dataDir, 'master.sqlite'));
-master.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;');
-master.exec(`
-  CREATE TABLE IF NOT EXISTS stores (
-    id TEXT PRIMARY KEY,
-    slug TEXT NOT NULL UNIQUE,
-    name TEXT NOT NULL,
-    owner TEXT NOT NULL,
-    email TEXT NOT NULL,
-    phone TEXT NOT NULL DEFAULT '',
-    city TEXT NOT NULL DEFAULT '',
-    state TEXT NOT NULL DEFAULT '',
-    status TEXT NOT NULL DEFAULT 'TRIAL',
-    plan TEXT NOT NULL DEFAULT 'PROFESSIONAL',
-    monthly_price REAL NOT NULL DEFAULT 497,
-    minimum_order REAL NOT NULL DEFAULT 30,
-    delivery_fee REAL NOT NULL DEFAULT 6,
-    free_delivery_above REAL NOT NULL DEFAULT 0,
-    support_phone TEXT NOT NULL DEFAULT '',
-    cancellation_window_minutes INTEGER NOT NULL DEFAULT 5,
-    brand_primary TEXT NOT NULL DEFAULT '#092D22',
-    brand_accent TEXT NOT NULL DEFAULT '#12C98A',
-    brand_background TEXT NOT NULL DEFAULT '#F2F5EF',
-    is_open INTEGER NOT NULL DEFAULT 1,
-    created_at TEXT NOT NULL
-  );
-  CREATE TABLE IF NOT EXISTS users (
-    id TEXT PRIMARY KEY,
-    store_id TEXT,
-    role TEXT NOT NULL,
-    name TEXT NOT NULL,
-    email TEXT NOT NULL UNIQUE,
-    password_hash TEXT NOT NULL,
-    password_salt TEXT NOT NULL,
-    created_at TEXT NOT NULL,
-    FOREIGN KEY (store_id) REFERENCES stores(id)
-  );
-  CREATE TABLE IF NOT EXISTS subscriptions (
-    id TEXT PRIMARY KEY,
-    store_id TEXT NOT NULL UNIQUE,
-    plan TEXT NOT NULL,
-    status TEXT NOT NULL,
-    amount REAL NOT NULL,
-    billing_method TEXT NOT NULL DEFAULT 'PIX',
-    next_due_date TEXT NOT NULL,
-    external_id TEXT,
-    created_at TEXT NOT NULL,
-    FOREIGN KEY (store_id) REFERENCES stores(id)
-  );
-`);
-
-function ensureMasterColumn(name, definition) {
-  const columns = master.prepare('PRAGMA table_info(stores)').all();
-  if (!columns.some(column => column.name === name)) master.exec(`ALTER TABLE stores ADD COLUMN ${name} ${definition}`);
-}
-
-ensureMasterColumn('free_delivery_above', 'REAL NOT NULL DEFAULT 0');
-ensureMasterColumn('support_phone', "TEXT NOT NULL DEFAULT ''");
-ensureMasterColumn('cancellation_window_minutes', 'INTEGER NOT NULL DEFAULT 5');
-ensureMasterColumn('brand_primary', "TEXT NOT NULL DEFAULT '#092D22'");
-ensureMasterColumn('brand_accent', "TEXT NOT NULL DEFAULT '#12C98A'");
-ensureMasterColumn('brand_background', "TEXT NOT NULL DEFAULT '#F2F5EF'");
-
-const storeConnections = new Map();
+import { initializePostgres, query, transaction } from './postgres.js';
 
 function isoNow() {
   return new Date().toISOString();
@@ -85,6 +10,10 @@ function nextDueDate() {
   const date = new Date();
   date.setDate(date.getDate() + 30);
   return date.toISOString().slice(0, 10);
+}
+
+function tokenHash(token) {
+  return crypto.createHash('sha256').update(String(token)).digest('hex');
 }
 
 function mapStore(row) {
@@ -100,12 +29,12 @@ function mapStore(row) {
     state: row.state,
     status: row.status,
     plan: row.plan,
-    monthlyPrice: row.monthly_price,
-    minimumOrder: row.minimum_order,
-    deliveryFee: row.delivery_fee,
-    freeDeliveryAbove: row.free_delivery_above || 0,
+    monthlyPrice: Number(row.monthly_price),
+    minimumOrder: Number(row.minimum_order),
+    deliveryFee: Number(row.delivery_fee),
+    freeDeliveryAbove: Number(row.free_delivery_above || 0),
     supportPhone: row.support_phone || row.phone,
-    cancellationWindowMinutes: row.cancellation_window_minutes || 5,
+    cancellationWindowMinutes: Number(row.cancellation_window_minutes || 5),
     brandColors: {
       primary: row.brand_primary || '#092D22',
       accent: row.brand_accent || '#12C98A',
@@ -116,323 +45,33 @@ function mapStore(row) {
   };
 }
 
-function initializeStoreDatabase(storeId) {
-  if (storeConnections.has(storeId)) return storeConnections.get(storeId);
-  const db = new DatabaseSync(path.join(storesDir, `${storeId}.sqlite`));
-  db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;');
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS products (
-      id TEXT PRIMARY KEY,
-      sku TEXT NOT NULL UNIQUE,
-      barcode TEXT NOT NULL DEFAULT '',
-      name TEXT NOT NULL,
-      category TEXT NOT NULL,
-      price REAL NOT NULL,
-      old_price REAL,
-      stock REAL NOT NULL DEFAULT 0,
-      unit TEXT NOT NULL DEFAULT 'UN',
-      image TEXT NOT NULL DEFAULT '',
-      promo INTEGER NOT NULL DEFAULT 0,
-      active INTEGER NOT NULL DEFAULT 1,
-      updated_at TEXT NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS orders (
-      id TEXT PRIMARY KEY,
-      tracking_token TEXT,
-      customer_name TEXT NOT NULL,
-      customer_phone TEXT NOT NULL,
-      customer_address TEXT NOT NULL DEFAULT '',
-      customer_cep TEXT NOT NULL DEFAULT '',
-      customer_street TEXT NOT NULL DEFAULT '',
-      customer_number TEXT NOT NULL DEFAULT '',
-      customer_complement TEXT NOT NULL DEFAULT '',
-      customer_neighborhood TEXT NOT NULL DEFAULT '',
-      customer_city TEXT NOT NULL DEFAULT '',
-      customer_state TEXT NOT NULL DEFAULT '',
-      customer_reference TEXT NOT NULL DEFAULT '',
-      fulfillment_type TEXT NOT NULL,
-      payment_method TEXT NOT NULL,
-      change_for REAL,
-      notes TEXT NOT NULL DEFAULT '',
-      scheduled_to TEXT,
-      subtotal REAL NOT NULL,
-      delivery_fee REAL NOT NULL,
-      total REAL NOT NULL,
-      status TEXT NOT NULL,
-      cancelled_by TEXT,
-      cancelled_at TEXT,
-      cancel_reason TEXT,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS order_items (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      order_id TEXT NOT NULL,
-      product_id TEXT NOT NULL,
-      name TEXT NOT NULL,
-      unit TEXT NOT NULL,
-      quantity REAL NOT NULL,
-      price REAL NOT NULL,
-      total REAL NOT NULL,
-      FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE
-    );
-    CREATE TABLE IF NOT EXISTS banners (
-      id TEXT PRIMARY KEY,
-      eyebrow TEXT NOT NULL DEFAULT '',
-      title TEXT NOT NULL,
-      subtitle TEXT NOT NULL DEFAULT '',
-      image TEXT NOT NULL DEFAULT '',
-      active INTEGER NOT NULL DEFAULT 1,
-      position INTEGER NOT NULL DEFAULT 0,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS push_campaigns (
-      id TEXT PRIMARY KEY,
-      title TEXT NOT NULL,
-      body TEXT NOT NULL,
-      audience TEXT NOT NULL DEFAULT 'ALL_CUSTOMERS',
-      status TEXT NOT NULL DEFAULT 'DRAFT',
-      scheduled_at TEXT,
-      sent_at TEXT,
-      success_count INTEGER NOT NULL DEFAULT 0,
-      failure_count INTEGER NOT NULL DEFAULT 0,
-      send_error TEXT,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS push_automations (
-      id TEXT PRIMARY KEY,
-      name TEXT NOT NULL,
-      title TEXT NOT NULL,
-      body TEXT NOT NULL,
-      trigger_type TEXT NOT NULL,
-      audience TEXT NOT NULL DEFAULT 'ALL_CUSTOMERS',
-      send_time TEXT NOT NULL DEFAULT '10:00',
-      weekday INTEGER,
-      inactive_days INTEGER,
-      active INTEGER NOT NULL DEFAULT 1,
-      last_run_at TEXT,
-      next_run_at TEXT NOT NULL,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS push_devices (
-      token TEXT PRIMARY KEY,
-      platform TEXT NOT NULL DEFAULT 'ANDROID',
-      customer_phone TEXT NOT NULL DEFAULT '',
-      active INTEGER NOT NULL DEFAULT 1,
-      created_at TEXT NOT NULL,
-      last_seen_at TEXT NOT NULL
-    );
-  `);
-  const orderColumns = db.prepare('PRAGMA table_info(orders)').all();
-  const missingColumns = {
-    tracking_token: 'TEXT',
-    customer_cep: "TEXT NOT NULL DEFAULT ''",
-    customer_street: "TEXT NOT NULL DEFAULT ''",
-    customer_number: "TEXT NOT NULL DEFAULT ''",
-    customer_complement: "TEXT NOT NULL DEFAULT ''",
-    customer_neighborhood: "TEXT NOT NULL DEFAULT ''",
-    customer_city: "TEXT NOT NULL DEFAULT ''",
-    customer_state: "TEXT NOT NULL DEFAULT ''",
-    customer_reference: "TEXT NOT NULL DEFAULT ''",
-    cancelled_by: 'TEXT',
-    cancelled_at: 'TEXT',
-    cancel_reason: 'TEXT'
-  };
-  for (const [name, definition] of Object.entries(missingColumns)) {
-    if (!orderColumns.some(column => column.name === name)) db.exec(`ALTER TABLE orders ADD COLUMN ${name} ${definition}`);
-  }
-  const campaignColumns = db.prepare('PRAGMA table_info(push_campaigns)').all();
-  const missingCampaignColumns = {
-    sent_at: 'TEXT',
-    success_count: 'INTEGER NOT NULL DEFAULT 0',
-    failure_count: 'INTEGER NOT NULL DEFAULT 0',
-    send_error: 'TEXT'
-  };
-  for (const [name, definition] of Object.entries(missingCampaignColumns)) {
-    if (!campaignColumns.some(column => column.name === name)) db.exec(`ALTER TABLE push_campaigns ADD COLUMN ${name} ${definition}`);
-  }
-  storeConnections.set(storeId, db);
-  return db;
-}
-
-function seedStore(storeId) {
-  const db = initializeStoreDatabase(storeId);
-  const count = db.prepare('SELECT COUNT(*) AS total FROM products').get().total;
-  if (count === 0) {
-    const products = [
-      ['789100000001', 'CAF001', '789100000001', 'Cafe Tradicional 250g', 'Mercearia', 8.99, 10.49, 42, 'UN', 'https://images.unsplash.com/photo-1447933601403-0c6688de566e?auto=format&fit=crop&w=600&q=80', 1],
-      ['789100000002', 'ARR001', '789100000002', 'Arroz Branco Tipo 1 5kg', 'Mercearia', 24.9, null, 21, 'UN', 'https://images.unsplash.com/photo-1586201375761-83865001e31c?auto=format&fit=crop&w=600&q=80', 0],
-      ['789100000003', 'BAN001', '789100000003', 'Banana Prata', 'Hortifruti', 5.49, null, 85.5, 'KG', 'https://images.unsplash.com/photo-1603833665858-e61d17a86224?auto=format&fit=crop&w=600&q=80', 1],
-      ['789100000004', 'CAR001', '789100000004', 'Carne Bovina Acem', 'Carnes', 29.9, null, 18.2, 'KG', 'https://images.unsplash.com/photo-1607623814075-e51df1bdc82f?auto=format&fit=crop&w=600&q=80', 0],
-      ['789100000005', 'AGU001', '789100000005', 'Agua Mineral 1.5L', 'Bebidas', 2.79, 3.29, 120, 'UN', 'https://images.unsplash.com/photo-1602143407151-7111542de6e8?auto=format&fit=crop&w=600&q=80', 1]
-    ];
-    const statement = db.prepare(`INSERT INTO products
-      (id, sku, barcode, name, category, price, old_price, stock, unit, image, promo, active, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)`);
-    for (const product of products) statement.run(...product, isoNow());
-  }
-  const bannerCount = db.prepare('SELECT COUNT(*) AS total FROM banners').get().total;
-  if (bannerCount === 0) {
-    const insertBanner = db.prepare(`INSERT INTO banners (id, eyebrow, title, subtitle, image, active, position, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?)`);
-    const now = isoNow();
-    insertBanner.run('banner_fresh', 'Feira da semana', 'Frescor que cabe no carrinho', 'Hortifruti selecionado e entrega no mesmo dia.', 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=1200&q=85', 0, now, now);
-    insertBanner.run('banner_pantry', 'Despensa completa', 'Economize nos essenciais', 'Ofertas para abastecer a casa toda.', 'https://images.unsplash.com/photo-1543168256-418811576931?auto=format&fit=crop&w=1200&q=85', 1, now, now);
-    insertBanner.run('banner_delivery', 'Compra sem correria', 'Receba tudo na sua porta', 'Escolha entrega ou retirada e pague somente ao receber.', 'https://images.unsplash.com/photo-1588964895597-cfccd6e2dbf9?auto=format&fit=crop&w=1200&q=85', 2, now, now);
-  }
-}
-
-function ensureUser({ id, storeId = null, role, name, email, password }) {
-  if (master.prepare('SELECT id FROM users WHERE email = ?').get(email)) return;
-  const credentials = hashPassword(password);
-  master.prepare(`INSERT INTO users (id, store_id, role, name, email, password_hash, password_salt, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(id, storeId, role, name, email, credentials.hash, credentials.salt, isoNow());
-}
-
-function syncPlatformAdminFromEnvironment() {
-  const email = String(process.env.AIMERC_ADMIN_EMAIL || '').trim().toLowerCase();
-  const password = String(process.env.AIMERC_ADMIN_PASSWORD || '');
-  const name = String(process.env.AIMERC_ADMIN_NAME || 'Administrador AiMerc').trim();
-
-  if (!email && !password) return false;
-  if (!email || !password) throw new Error('Configure AIMERC_ADMIN_EMAIL e AIMERC_ADMIN_PASSWORD juntos');
-  if (!/^\S+@\S+\.\S+$/.test(email)) throw new Error('AIMERC_ADMIN_EMAIL invalido');
-  if (password.length < 12) throw new Error('AIMERC_ADMIN_PASSWORD deve ter pelo menos 12 caracteres');
-
-  const existing = master.prepare("SELECT id FROM users WHERE role = 'PLATFORM_ADMIN' ORDER BY created_at LIMIT 1").get();
-  const conflict = master.prepare('SELECT id FROM users WHERE email = ? AND id != ?').get(email, existing?.id || '');
-  if (conflict) throw new Error('AIMERC_ADMIN_EMAIL ja pertence a outro usuario');
-
-  const credentials = hashPassword(password);
-  if (existing) {
-    master.prepare(`UPDATE users SET name = ?, email = ?, password_hash = ?, password_salt = ? WHERE id = ?`)
-      .run(name, email, credentials.hash, credentials.salt, existing.id);
-  } else {
-    master.prepare(`INSERT INTO users (id, store_id, role, name, email, password_hash, password_salt, created_at)
-      VALUES (?, NULL, 'PLATFORM_ADMIN', ?, ?, ?, ?, ?)`)
-      .run('user_master_001', name, email, credentials.hash, credentials.salt, isoNow());
-  }
-  return true;
-}
-
-function seedMaster() {
-  const demoId = 'store_001';
-  if (!master.prepare('SELECT id FROM stores WHERE id = ?').get(demoId)) {
-    master.prepare(`INSERT INTO stores
-      (id, slug, name, owner, email, phone, city, state, status, plan, monthly_price, minimum_order, delivery_fee, free_delivery_above, support_phone, cancellation_window_minutes, is_open, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)`)
-      .run(demoId, 'aimerc-demo', 'Mercado Boa Compra', 'Marina Costa', 'gestor@aimerc.local', '(85) 99999-1010', 'Caucaia', 'CE', 'TRIAL', 'PROFESSIONAL', 497, 30, 6, 0, '(85) 99999-1010', 5, isoNow());
-    master.prepare(`INSERT INTO subscriptions
-      (id, store_id, plan, status, amount, billing_method, next_due_date, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
-      .run('sub_001', demoId, 'PROFESSIONAL', 'TRIAL', 497, 'PIX', nextDueDate(), isoNow());
-  }
-  const platformAdminConfigured = syncPlatformAdminFromEnvironment();
-  if (!platformAdminConfigured && process.env.NODE_ENV !== 'production') {
-    ensureUser({ id: 'user_master_001', role: 'PLATFORM_ADMIN', name: 'Samuel Wildary', email: 'admin@aimerc.local', password: 'Admin@2026' });
-  } else if (!platformAdminConfigured) {
-    console.warn('Administrador SaaS nao configurado. Defina AIMERC_ADMIN_EMAIL e AIMERC_ADMIN_PASSWORD.');
-  }
-  ensureUser({ id: 'user_store_001', storeId: demoId, role: 'STORE_MANAGER', name: 'Marina Costa', email: 'gestor@aimerc.local', password: 'Aimerc@2026' });
-  master.prepare("UPDATE stores SET support_phone = phone WHERE id = ? AND support_phone = ''").run(demoId);
-  seedStore(demoId);
-}
-
-seedMaster();
-
-export function findUserByEmail(email) {
-  return master.prepare('SELECT * FROM users WHERE email = ?').get(email);
-}
-
-export function getStore(id) {
-  return mapStore(master.prepare('SELECT * FROM stores WHERE id = ?').get(id));
-}
-
-export function getStoreBySlug(slug) {
-  return mapStore(master.prepare('SELECT * FROM stores WHERE slug = ?').get(slug));
-}
-
-export function updateStoreSettings(id, input) {
-  master.prepare(`UPDATE stores
-    SET minimum_order = ?, delivery_fee = ?, free_delivery_above = ?, support_phone = ?, cancellation_window_minutes = ?, is_open = ?
-    WHERE id = ?`)
-    .run(input.minimumOrder, input.deliveryFee, input.freeDeliveryAbove, input.supportPhone, input.cancellationWindowMinutes, input.open ? 1 : 0, id);
-  return getStore(id);
-}
-
-export function listStores() {
-  return master.prepare('SELECT * FROM stores ORDER BY created_at DESC').all().map(mapStore);
-}
-
-export function createStore(input) {
-  const id = `store_${crypto.randomUUID().slice(0, 8)}`;
-  master.prepare(`INSERT INTO stores
-    (id, slug, name, owner, email, phone, city, state, status, plan, monthly_price, minimum_order, delivery_fee, free_delivery_above, support_phone, cancellation_window_minutes, brand_primary, brand_accent, brand_background, is_open, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'TRIAL', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)`)
-    .run(id, input.slug, input.name, input.owner, input.email, input.phone, input.city, input.state, input.plan, input.monthlyPrice, input.minimumOrder, input.deliveryFee, input.freeDeliveryAbove || 0, input.supportPhone || input.phone, input.cancellationWindowMinutes || 5, input.brandColors.primary, input.brandColors.accent, input.brandColors.background, isoNow());
-  master.prepare(`INSERT INTO subscriptions
-    (id, store_id, plan, status, amount, billing_method, next_due_date, created_at)
-    VALUES (?, ?, ?, 'TRIAL', ?, ?, ?, ?)`)
-    .run(`sub_${crypto.randomUUID().slice(0, 8)}`, id, input.plan, input.monthlyPrice, input.billingMethod, nextDueDate(), isoNow());
-  const credentials = hashPassword(input.password);
-  master.prepare(`INSERT INTO users (id, store_id, role, name, email, password_hash, password_salt, created_at)
-    VALUES (?, ?, 'STORE_MANAGER', ?, ?, ?, ?, ?)`)
-    .run(`user_${crypto.randomUUID().slice(0, 8)}`, id, input.owner, input.email, credentials.hash, credentials.salt, isoNow());
-  initializeStoreDatabase(id);
-  return getStore(id);
-}
-
-export function updateStoreStatus(id, status) {
-  master.prepare('UPDATE stores SET status = ? WHERE id = ?').run(status, id);
-  master.prepare('UPDATE subscriptions SET status = ? WHERE store_id = ?').run(status, id);
-  return getStore(id);
-}
-
-export function updateStoreBranding(id, brandColors) {
-  master.prepare('UPDATE stores SET brand_primary = ?, brand_accent = ?, brand_background = ? WHERE id = ?')
-    .run(brandColors.primary, brandColors.accent, brandColors.background, id);
-  return getStore(id);
-}
-
-export function listSubscriptions() {
-  return master.prepare(`SELECT subscriptions.*, stores.name AS store_name
-    FROM subscriptions JOIN stores ON stores.id = subscriptions.store_id
-    ORDER BY subscriptions.created_at DESC`).all().map(row => ({
-      id: row.id,
-      storeId: row.store_id,
-      storeName: row.store_name,
-      plan: row.plan,
-      status: row.status,
-      amount: row.amount,
-      billingMethod: row.billing_method,
-      nextDueDate: row.next_due_date,
-      externalId: row.external_id
-    }));
-}
-
-export function getStoreDb(storeId) {
-  if (!getStore(storeId)) return null;
-  return initializeStoreDatabase(storeId);
-}
-
 export function mapProduct(row) {
+  const sourceName = row.source_name || row.name;
+  const sourceCategory = row.source_category || row.category;
   return {
     id: row.id,
     sku: row.sku,
     barcode: row.barcode,
-    name: row.name,
-    category: row.category,
-    price: row.price,
-    oldPrice: row.old_price,
-    stock: row.stock,
+    name: row.catalog_name || sourceName,
+    sourceName,
+    category: row.catalog_category || sourceCategory,
+    sourceCategory,
+    catalogName: row.catalog_name || '',
+    catalogCategory: row.catalog_category || '',
+    description: row.description || '',
+    price: Number(row.price),
+    oldPrice: row.old_price == null ? null : Number(row.old_price),
+    stock: Number(row.stock),
     unit: row.unit,
     image: row.image,
     promo: Boolean(row.promo),
     active: Boolean(row.active),
-    updatedAt: row.updated_at
+    catalogVisible: Boolean(row.catalog_visible),
+    enrichmentStatus: row.enrichment_status || 'PENDING',
+    enrichedAt: row.enriched_at,
+    updatedAt: row.updated_at,
+    hasStoredImage: Boolean(row.has_stored_image),
+    hasCatalogImage: Boolean(row.has_catalog_image)
   };
 }
 
@@ -444,107 +83,27 @@ function mapBanner(row) {
     subtitle: row.subtitle,
     image: row.image,
     active: Boolean(row.active),
-    position: row.position,
+    position: Number(row.position),
     createdAt: row.created_at,
     updatedAt: row.updated_at
   };
 }
 
-export function listBanners(storeId, includeInactive = false) {
-  const db = getStoreDb(storeId);
-  const where = includeInactive ? '' : 'WHERE active = 1';
-  return db.prepare(`SELECT * FROM banners ${where} ORDER BY position, created_at`).all().map(mapBanner);
-}
-
-export function createBanner(storeId, input) {
-  const db = getStoreDb(storeId);
-  const id = `banner_${crypto.randomUUID().slice(0, 10)}`;
-  const now = isoNow();
-  db.prepare(`INSERT INTO banners (id, eyebrow, title, subtitle, image, active, position, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-    .run(id, input.eyebrow, input.title, input.subtitle, input.image, input.active ? 1 : 0, input.position, now, now);
-  return mapBanner(db.prepare('SELECT * FROM banners WHERE id = ?').get(id));
-}
-
-export function updateBanner(storeId, id, input) {
-  const db = getStoreDb(storeId);
-  const existing = db.prepare('SELECT id FROM banners WHERE id = ?').get(id);
-  if (!existing) return null;
-  db.prepare(`UPDATE banners SET eyebrow = ?, title = ?, subtitle = ?, image = ?, active = ?, position = ?, updated_at = ? WHERE id = ?`)
-    .run(input.eyebrow, input.title, input.subtitle, input.image, input.active ? 1 : 0, input.position, isoNow(), id);
-  return mapBanner(db.prepare('SELECT * FROM banners WHERE id = ?').get(id));
-}
-
-export function deleteBanner(storeId, id) {
-  const db = getStoreDb(storeId);
-  return db.prepare('DELETE FROM banners WHERE id = ?').run(id).changes > 0;
-}
-
 function mapPushCampaign(row) {
-  return { id: row.id, title: row.title, body: row.body, audience: row.audience, status: row.status, scheduledAt: row.scheduled_at, sentAt: row.sent_at, successCount: row.success_count || 0, failureCount: row.failure_count || 0, sendError: row.send_error, createdAt: row.created_at, updatedAt: row.updated_at };
-}
-
-export function listPushCampaigns(storeId) {
-  const db = getStoreDb(storeId);
-  return db.prepare('SELECT * FROM push_campaigns ORDER BY created_at DESC').all().map(mapPushCampaign);
-}
-
-export function listPendingPushCampaigns(storeId, now = new Date()) {
-  return getStoreDb(storeId).prepare("SELECT * FROM push_campaigns WHERE status = 'SCHEDULED' AND scheduled_at <= ? ORDER BY scheduled_at").all(now.toISOString()).map(mapPushCampaign);
-}
-
-export function createPushCampaign(storeId, input) {
-  const db = getStoreDb(storeId);
-  const id = `push_${crypto.randomUUID().slice(0, 10)}`;
-  const now = isoNow();
-  db.prepare(`INSERT INTO push_campaigns (id, title, body, audience, status, scheduled_at, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
-    .run(id, input.title, input.body, input.audience, input.status, input.scheduledAt || null, now, now);
-  return mapPushCampaign(db.prepare('SELECT * FROM push_campaigns WHERE id = ?').get(id));
-}
-
-export function updatePushCampaign(storeId, id, input) {
-  const db = getStoreDb(storeId);
-  if (!db.prepare('SELECT id FROM push_campaigns WHERE id = ?').get(id)) return null;
-  db.prepare(`UPDATE push_campaigns SET title = ?, body = ?, audience = ?, status = ?, scheduled_at = ?, updated_at = ? WHERE id = ?`)
-    .run(input.title, input.body, input.audience, input.status, input.scheduledAt || null, isoNow(), id);
-  return mapPushCampaign(db.prepare('SELECT * FROM push_campaigns WHERE id = ?').get(id));
-}
-
-export function deletePushCampaign(storeId, id) {
-  return getStoreDb(storeId).prepare('DELETE FROM push_campaigns WHERE id = ?').run(id).changes > 0;
-}
-
-export function getPushCampaign(storeId, id) {
-  const row = getStoreDb(storeId).prepare('SELECT * FROM push_campaigns WHERE id = ?').get(id);
-  return row ? mapPushCampaign(row) : null;
-}
-
-export function markPushCampaignResult(storeId, id, result) {
-  const status = result.failureCount === 0 ? 'SENT' : result.successCount > 0 ? 'PARTIAL' : 'FAILED';
-  const now = isoNow();
-  const db = getStoreDb(storeId);
-  db.prepare(`UPDATE push_campaigns SET status = ?, sent_at = ?, success_count = ?, failure_count = ?, send_error = ?, updated_at = ? WHERE id = ?`)
-    .run(status, now, result.successCount, result.failureCount, result.error || null, now, id);
-  if (result.invalidTokens?.length) {
-    const deactivate = db.prepare('UPDATE push_devices SET active = 0 WHERE token = ?');
-    for (const token of result.invalidTokens) deactivate.run(token);
-  }
-  return getPushCampaign(storeId, id);
-}
-
-export function registerPushDevice(storeId, input) {
-  const db = getStoreDb(storeId);
-  const now = isoNow();
-  db.prepare(`INSERT INTO push_devices (token, platform, customer_phone, active, created_at, last_seen_at)
-    VALUES (?, 'ANDROID', ?, 1, ?, ?)
-    ON CONFLICT(token) DO UPDATE SET customer_phone = excluded.customer_phone, active = 1, last_seen_at = excluded.last_seen_at`)
-    .run(input.token, input.customerPhone || '', now, now);
-  return { registered: true };
-}
-
-export function listActivePushDevices(storeId) {
-  return getStoreDb(storeId).prepare('SELECT token, customer_phone FROM push_devices WHERE active = 1 ORDER BY last_seen_at DESC').all().map(row => ({ token: row.token, customerPhone: row.customer_phone }));
+  return {
+    id: row.id,
+    title: row.title,
+    body: row.body,
+    audience: row.audience,
+    status: row.status,
+    scheduledAt: row.scheduled_at,
+    sentAt: row.sent_at,
+    successCount: Number(row.success_count || 0),
+    failureCount: Number(row.failure_count || 0),
+    sendError: row.send_error,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  };
 }
 
 function automationNextRun(input, from = new Date()) {
@@ -552,7 +111,6 @@ function automationNextRun(input, from = new Date()) {
   const next = new Date(from);
   next.setSeconds(0, 0);
   next.setHours(hours, minutes, 0, 0);
-
   if (input.triggerType === 'WEEKLY') {
     const weekday = Number(input.weekday ?? 1);
     let daysAhead = (weekday - next.getDay() + 7) % 7;
@@ -583,140 +141,496 @@ function mapPushAutomation(row) {
   };
 }
 
-export function listPushAutomations(storeId) {
-  return getStoreDb(storeId).prepare('SELECT * FROM push_automations ORDER BY active DESC, created_at DESC').all().map(mapPushAutomation);
+async function syncPlatformAdminFromEnvironment() {
+  const email = String(process.env.AIMERC_ADMIN_EMAIL || '').trim().toLowerCase();
+  const password = String(process.env.AIMERC_ADMIN_PASSWORD || '');
+  const name = String(process.env.AIMERC_ADMIN_NAME || 'Administrador AiMerc').trim();
+  if (!email && !password) return;
+  if (!email || !password) throw new Error('Configure AIMERC_ADMIN_EMAIL e AIMERC_ADMIN_PASSWORD juntos');
+  if (!/^\S+@\S+\.\S+$/.test(email)) throw new Error('AIMERC_ADMIN_EMAIL invalido');
+  if (password.length < 12) throw new Error('AIMERC_ADMIN_PASSWORD deve ter pelo menos 12 caracteres');
+
+  const credentials = hashPassword(password);
+  await transaction(async client => {
+    const existing = await client.query("SELECT id FROM users WHERE role = 'PLATFORM_ADMIN' ORDER BY created_at LIMIT 1 FOR UPDATE");
+    const id = existing.rows[0]?.id || `user_${crypto.randomUUID().slice(0, 12)}`;
+    const conflict = await client.query('SELECT id FROM users WHERE email = $1 AND id != $2', [email, id]);
+    if (conflict.rowCount) throw new Error('AIMERC_ADMIN_EMAIL ja pertence a outro usuario');
+    await client.query(`INSERT INTO users (id, store_id, role, name, email, password_hash, password_salt, created_at)
+      VALUES ($1, NULL, 'PLATFORM_ADMIN', $2, $3, $4, $5, $6)
+      ON CONFLICT (id) DO UPDATE SET name=EXCLUDED.name, email=EXCLUDED.email,
+        password_hash=EXCLUDED.password_hash, password_salt=EXCLUDED.password_salt`,
+    [id, name, email, credentials.hash, credentials.salt, isoNow()]);
+  });
 }
 
-export function createPushAutomation(storeId, input) {
-  const db = getStoreDb(storeId);
-  const id = `automation_${crypto.randomUUID().slice(0, 10)}`;
+export async function initializeDatabase() {
+  await initializePostgres();
+  await syncPlatformAdminFromEnvironment();
+  const admins = await query("SELECT COUNT(*)::int AS total FROM users WHERE role = 'PLATFORM_ADMIN'");
+  if (process.env.NODE_ENV === 'production' && !admins.rows[0].total) {
+    throw new Error('Nenhum administrador SaaS configurado. Defina AIMERC_ADMIN_EMAIL e AIMERC_ADMIN_PASSWORD.');
+  }
+}
+
+export async function databaseHealth() {
+  const result = await query('SELECT 1 AS healthy');
+  return result.rows[0]?.healthy === 1;
+}
+
+export async function findUserByEmail(email) {
+  return (await query('SELECT * FROM users WHERE email = $1', [email])).rows[0] || null;
+}
+
+export async function findUserById(id) {
+  return (await query('SELECT * FROM users WHERE id = $1', [id])).rows[0] || null;
+}
+
+export async function updateUserPassword(id, password) {
+  const credentials = hashPassword(password);
+  await query('UPDATE users SET password_hash=$1, password_salt=$2 WHERE id=$3', [credentials.hash, credentials.salt, id]);
+}
+
+export async function getStore(id) {
+  return mapStore((await query('SELECT * FROM stores WHERE id = $1', [id])).rows[0]);
+}
+
+export async function getStoreBySlug(slug) {
+  return mapStore((await query('SELECT * FROM stores WHERE slug = $1', [slug])).rows[0]);
+}
+
+export async function updateStoreSettings(id, input) {
+  await query(`UPDATE stores SET minimum_order=$1, delivery_fee=$2, free_delivery_above=$3,
+    support_phone=$4, cancellation_window_minutes=$5, is_open=$6 WHERE id=$7`,
+  [input.minimumOrder, input.deliveryFee, input.freeDeliveryAbove, input.supportPhone, input.cancellationWindowMinutes, input.open ? 1 : 0, id]);
+  return getStore(id);
+}
+
+export async function listStores() {
+  return (await query('SELECT * FROM stores ORDER BY created_at DESC')).rows.map(mapStore);
+}
+
+export async function createStore(input) {
+  const id = `store_${crypto.randomUUID().slice(0, 12)}`;
   const now = isoNow();
-  const nextRunAt = automationNextRun(input);
-  db.prepare(`INSERT INTO push_automations
-    (id, name, title, body, trigger_type, audience, send_time, weekday, inactive_days, active, next_run_at, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-    .run(id, input.name, input.title, input.body, input.triggerType, input.audience, input.sendTime, input.weekday, input.inactiveDays, input.active ? 1 : 0, nextRunAt, now, now);
-  return mapPushAutomation(db.prepare('SELECT * FROM push_automations WHERE id = ?').get(id));
+  const credentials = hashPassword(input.password);
+  await transaction(async client => {
+    await client.query(`INSERT INTO stores
+      (id, slug, name, owner, email, phone, city, state, status, plan, monthly_price, minimum_order,
+       delivery_fee, free_delivery_above, support_phone, cancellation_window_minutes, brand_primary,
+       brand_accent, brand_background, is_open, created_at)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'TRIAL',$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,1,$19)`,
+    [id, input.slug, input.name, input.owner, input.email, input.phone, input.city, input.state, input.plan,
+      input.monthlyPrice, input.minimumOrder, input.deliveryFee, input.freeDeliveryAbove || 0,
+      input.supportPhone || input.phone, input.cancellationWindowMinutes || 5, input.brandColors.primary,
+      input.brandColors.accent, input.brandColors.background, now]);
+    await client.query(`INSERT INTO subscriptions
+      (id, store_id, plan, status, amount, billing_method, next_due_date, created_at)
+      VALUES ($1,$2,$3,'TRIAL',$4,$5,$6,$7)`,
+    [`sub_${crypto.randomUUID().slice(0, 12)}`, id, input.plan, input.monthlyPrice, input.billingMethod, nextDueDate(), now]);
+    await client.query(`INSERT INTO users
+      (id, store_id, role, name, email, password_hash, password_salt, created_at)
+      VALUES ($1,$2,'STORE_MANAGER',$3,$4,$5,$6,$7)`,
+    [`user_${crypto.randomUUID().slice(0, 12)}`, id, input.owner, input.email, credentials.hash, credentials.salt, now]);
+  });
+  return getStore(id);
 }
 
-export function updatePushAutomation(storeId, id, input) {
-  const db = getStoreDb(storeId);
-  if (!db.prepare('SELECT id FROM push_automations WHERE id = ?').get(id)) return null;
-  const nextRunAt = automationNextRun(input);
-  db.prepare(`UPDATE push_automations SET
-    name = ?, title = ?, body = ?, trigger_type = ?, audience = ?, send_time = ?, weekday = ?, inactive_days = ?, active = ?, next_run_at = ?, updated_at = ?
-    WHERE id = ?`)
-    .run(input.name, input.title, input.body, input.triggerType, input.audience, input.sendTime, input.weekday, input.inactiveDays, input.active ? 1 : 0, nextRunAt, isoNow(), id);
-  return mapPushAutomation(db.prepare('SELECT * FROM push_automations WHERE id = ?').get(id));
+export async function updateStoreStatus(id, status) {
+  await transaction(async client => {
+    await client.query('UPDATE stores SET status=$1 WHERE id=$2', [status, id]);
+    await client.query('UPDATE subscriptions SET status=$1 WHERE store_id=$2', [status, id]);
+  });
+  return getStore(id);
 }
 
-export function deletePushAutomation(storeId, id) {
-  return getStoreDb(storeId).prepare('DELETE FROM push_automations WHERE id = ?').run(id).changes > 0;
+export async function updateStoreBranding(id, colors) {
+  await query('UPDATE stores SET brand_primary=$1, brand_accent=$2, brand_background=$3 WHERE id=$4',
+    [colors.primary, colors.accent, colors.background, id]);
+  return getStore(id);
 }
 
-export function runDuePushAutomations(storeId, now = new Date()) {
-  const db = getStoreDb(storeId);
-  const due = db.prepare('SELECT * FROM push_automations WHERE active = 1 AND next_run_at <= ?').all(now.toISOString());
-  db.exec('BEGIN');
-  try {
-    for (const automation of due) {
-      const campaignId = `push_${crypto.randomUUID().slice(0, 10)}`;
-      const timestamp = now.toISOString();
-      db.prepare(`INSERT INTO push_campaigns (id, title, body, audience, status, scheduled_at, created_at, updated_at)
-        VALUES (?, ?, ?, ?, 'SCHEDULED', ?, ?, ?)`)
-        .run(campaignId, automation.title, automation.body, automation.audience, timestamp, timestamp, timestamp);
-      const nextRunAt = automationNextRun({
-        triggerType: automation.trigger_type,
-        sendTime: automation.send_time,
-        weekday: automation.weekday
-      }, new Date(now.getTime() + 60_000));
-      db.prepare('UPDATE push_automations SET last_run_at = ?, next_run_at = ?, updated_at = ? WHERE id = ?')
-        .run(timestamp, nextRunAt, timestamp, automation.id);
+export async function deleteStore(id, actorId) {
+  return transaction(async client => {
+    const result = await client.query('SELECT * FROM stores WHERE id=$1 FOR UPDATE', [id]);
+    const store = result.rows[0];
+    if (!store) return null;
+    await client.query(`INSERT INTO audit_logs (store_id,actor_id,action,entity_type,entity_id,metadata)
+      VALUES (NULL,$1,'STORE_DELETED','STORE',$2,$3::jsonb)`, [
+      actorId,
+      store.id,
+      JSON.stringify({ storeId: store.id, slug: store.slug, name: store.name, email: store.email })
+    ]);
+    await client.query('DELETE FROM stores WHERE id=$1', [id]);
+    return mapStore(store);
+  });
+}
+
+export async function listSubscriptions() {
+  const result = await query(`SELECT subscriptions.*, stores.name AS store_name
+    FROM subscriptions JOIN stores ON stores.id=subscriptions.store_id ORDER BY subscriptions.created_at DESC`);
+  return result.rows.map(row => ({
+    id: row.id, storeId: row.store_id, storeName: row.store_name, plan: row.plan, status: row.status,
+    amount: Number(row.amount), billingMethod: row.billing_method, nextDueDate: row.next_due_date, externalId: row.external_id
+  }));
+}
+
+export async function listBanners(storeId, includeInactive = false) {
+  const result = await query(`SELECT * FROM banners WHERE store_id=$1 ${includeInactive ? '' : 'AND active=1'} ORDER BY position, created_at`, [storeId]);
+  return result.rows.map(mapBanner);
+}
+
+export async function createBanner(storeId, input) {
+  const id = `banner_${crypto.randomUUID().slice(0, 12)}`;
+  const now = isoNow();
+  const result = await query(`INSERT INTO banners
+    (store_id,id,eyebrow,title,subtitle,image,active,position,created_at,updated_at)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$9) RETURNING *`,
+  [storeId, id, input.eyebrow, input.title, input.subtitle, input.image, input.active ? 1 : 0, input.position, now]);
+  return mapBanner(result.rows[0]);
+}
+
+export async function updateBanner(storeId, id, input) {
+  const result = await query(`UPDATE banners SET eyebrow=$3,title=$4,subtitle=$5,image=$6,active=$7,position=$8,updated_at=$9
+    WHERE store_id=$1 AND id=$2 RETURNING *`,
+  [storeId, id, input.eyebrow, input.title, input.subtitle, input.image, input.active ? 1 : 0, input.position, isoNow()]);
+  return result.rowCount ? mapBanner(result.rows[0]) : null;
+}
+
+export async function deleteBanner(storeId, id) {
+  return (await query('DELETE FROM banners WHERE store_id=$1 AND id=$2', [storeId, id])).rowCount > 0;
+}
+
+export async function listPushCampaigns(storeId) {
+  return (await query('SELECT * FROM push_campaigns WHERE store_id=$1 ORDER BY created_at DESC', [storeId])).rows.map(mapPushCampaign);
+}
+
+export async function listPendingPushCampaigns(storeId, now = new Date()) {
+  return (await query("SELECT * FROM push_campaigns WHERE store_id=$1 AND status='SCHEDULED' AND scheduled_at <= $2 ORDER BY scheduled_at", [storeId, now.toISOString()])).rows.map(mapPushCampaign);
+}
+
+export async function createPushCampaign(storeId, input) {
+  const id = `push_${crypto.randomUUID().slice(0, 12)}`;
+  const now = isoNow();
+  const result = await query(`INSERT INTO push_campaigns
+    (store_id,id,title,body,audience,status,scheduled_at,created_at,updated_at)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$8) RETURNING *`,
+  [storeId, id, input.title, input.body, input.audience, input.status, input.scheduledAt || null, now]);
+  return mapPushCampaign(result.rows[0]);
+}
+
+export async function updatePushCampaign(storeId, id, input) {
+  const result = await query(`UPDATE push_campaigns SET title=$3,body=$4,audience=$5,status=$6,scheduled_at=$7,updated_at=$8
+    WHERE store_id=$1 AND id=$2 RETURNING *`,
+  [storeId, id, input.title, input.body, input.audience, input.status, input.scheduledAt || null, isoNow()]);
+  return result.rowCount ? mapPushCampaign(result.rows[0]) : null;
+}
+
+export async function deletePushCampaign(storeId, id) {
+  return (await query('DELETE FROM push_campaigns WHERE store_id=$1 AND id=$2', [storeId, id])).rowCount > 0;
+}
+
+export async function getPushCampaign(storeId, id) {
+  const row = (await query('SELECT * FROM push_campaigns WHERE store_id=$1 AND id=$2', [storeId, id])).rows[0];
+  return row ? mapPushCampaign(row) : null;
+}
+
+export async function markPushCampaignResult(storeId, id, result) {
+  const status = result.failureCount === 0 ? 'SENT' : result.successCount > 0 ? 'PARTIAL' : 'FAILED';
+  const now = isoNow();
+  await transaction(async client => {
+    await client.query(`UPDATE push_campaigns SET status=$3,sent_at=$4,success_count=$5,failure_count=$6,send_error=$7,updated_at=$4
+      WHERE store_id=$1 AND id=$2`, [storeId, id, status, now, result.successCount, result.failureCount, result.error || null]);
+    if (result.invalidTokens?.length) {
+      await client.query('UPDATE push_devices SET active=0 WHERE store_id=$1 AND token=ANY($2::text[])', [storeId, result.invalidTokens]);
     }
-    db.exec('COMMIT');
-  } catch (error) {
-    db.exec('ROLLBACK');
-    throw error;
-  }
-  return due.length;
+  });
+  return getPushCampaign(storeId, id);
 }
 
-export function runPushAutomationNow(storeId, id) {
-  const db = getStoreDb(storeId);
-  const automation = db.prepare('SELECT * FROM push_automations WHERE id = ?').get(id);
-  if (!automation) return null;
-  const now = new Date();
+export async function registerPushDevice(storeId, input) {
+  const now = isoNow();
+  await query(`INSERT INTO push_devices (store_id,token,platform,customer_phone,active,created_at,last_seen_at)
+    VALUES ($1,$2,'ANDROID',$3,1,$4,$4)
+    ON CONFLICT(store_id,token) DO UPDATE SET customer_phone=EXCLUDED.customer_phone,active=1,last_seen_at=EXCLUDED.last_seen_at`,
+  [storeId, input.token, input.customerPhone || '', now]);
+  return { registered: true };
+}
+
+export async function listActivePushDevices(storeId) {
+  const rows = (await query('SELECT token,customer_phone FROM push_devices WHERE store_id=$1 AND active=1 ORDER BY last_seen_at DESC', [storeId])).rows;
+  return rows.map(row => ({ token: row.token, customerPhone: row.customer_phone }));
+}
+
+export async function listPushAutomations(storeId) {
+  return (await query('SELECT * FROM push_automations WHERE store_id=$1 ORDER BY active DESC,created_at DESC', [storeId])).rows.map(mapPushAutomation);
+}
+
+export async function createPushAutomation(storeId, input) {
+  const id = `automation_${crypto.randomUUID().slice(0, 12)}`;
+  const now = isoNow();
+  const result = await query(`INSERT INTO push_automations
+    (store_id,id,name,title,body,trigger_type,audience,send_time,weekday,inactive_days,active,next_run_at,created_at,updated_at)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$13) RETURNING *`,
+  [storeId, id, input.name, input.title, input.body, input.triggerType, input.audience, input.sendTime,
+    input.weekday, input.inactiveDays, input.active ? 1 : 0, automationNextRun(input), now]);
+  return mapPushAutomation(result.rows[0]);
+}
+
+export async function updatePushAutomation(storeId, id, input) {
+  const result = await query(`UPDATE push_automations SET name=$3,title=$4,body=$5,trigger_type=$6,audience=$7,
+    send_time=$8,weekday=$9,inactive_days=$10,active=$11,next_run_at=$12,updated_at=$13
+    WHERE store_id=$1 AND id=$2 RETURNING *`,
+  [storeId, id, input.name, input.title, input.body, input.triggerType, input.audience, input.sendTime,
+    input.weekday, input.inactiveDays, input.active ? 1 : 0, automationNextRun(input), isoNow()]);
+  return result.rowCount ? mapPushAutomation(result.rows[0]) : null;
+}
+
+export async function deletePushAutomation(storeId, id) {
+  return (await query('DELETE FROM push_automations WHERE store_id=$1 AND id=$2', [storeId, id])).rowCount > 0;
+}
+
+async function enqueueAutomation(client, storeId, automation, now) {
   const timestamp = now.toISOString();
-  const campaignId = `push_${crypto.randomUUID().slice(0, 10)}`;
+  await client.query(`INSERT INTO push_campaigns
+    (store_id,id,title,body,audience,status,scheduled_at,created_at,updated_at)
+    VALUES ($1,$2,$3,$4,$5,'SCHEDULED',$6,$6,$6)`,
+  [storeId, `push_${crypto.randomUUID().slice(0, 12)}`, automation.title, automation.body, automation.audience, timestamp]);
   const nextRunAt = automationNextRun({
-    triggerType: automation.trigger_type,
-    sendTime: automation.send_time,
-    weekday: automation.weekday
+    triggerType: automation.trigger_type, sendTime: automation.send_time, weekday: automation.weekday
   }, new Date(now.getTime() + 60_000));
-  db.exec('BEGIN');
-  try {
-    db.prepare(`INSERT INTO push_campaigns (id, title, body, audience, status, scheduled_at, created_at, updated_at)
-      VALUES (?, ?, ?, ?, 'SCHEDULED', ?, ?, ?)`)
-      .run(campaignId, automation.title, automation.body, automation.audience, timestamp, timestamp, timestamp);
-    db.prepare('UPDATE push_automations SET last_run_at = ?, next_run_at = ?, updated_at = ? WHERE id = ?')
-      .run(timestamp, nextRunAt, timestamp, id);
-    db.exec('COMMIT');
-  } catch (error) {
-    db.exec('ROLLBACK');
-    throw error;
-  }
-  return mapPushAutomation(db.prepare('SELECT * FROM push_automations WHERE id = ?').get(id));
+  await client.query(`UPDATE push_automations SET last_run_at=$3,next_run_at=$4,updated_at=$3
+    WHERE store_id=$1 AND id=$2`, [storeId, automation.id, timestamp, nextRunAt]);
 }
 
-export function listProducts(storeId, filters = {}) {
-  const db = getStoreDb(storeId);
-  if (!db) return [];
-  const terms = ['active = 1'];
-  const values = [];
+export async function runDuePushAutomations(storeId, now = new Date()) {
+  return transaction(async client => {
+    const due = await client.query(`SELECT * FROM push_automations WHERE store_id=$1 AND active=1 AND next_run_at <= $2 FOR UPDATE SKIP LOCKED`,
+      [storeId, now.toISOString()]);
+    for (const automation of due.rows) await enqueueAutomation(client, storeId, automation, now);
+    return due.rowCount;
+  });
+}
+
+export async function runPushAutomationNow(storeId, id) {
+  return transaction(async client => {
+    const result = await client.query('SELECT * FROM push_automations WHERE store_id=$1 AND id=$2 FOR UPDATE', [storeId, id]);
+    if (!result.rowCount) return null;
+    await enqueueAutomation(client, storeId, result.rows[0], new Date());
+    return mapPushAutomation((await client.query('SELECT * FROM push_automations WHERE store_id=$1 AND id=$2', [storeId, id])).rows[0]);
+  });
+}
+
+export async function listProducts(storeId, filters = {}) {
+  const clauses = ['p.store_id=$1'];
+  const values = [storeId];
+  if (!filters.includeInactive) clauses.push('p.active=1');
+  if (!filters.includeHidden) clauses.push('p.catalog_visible=1');
   if (filters.category && filters.category !== 'Todos') {
-    terms.push('category = ?');
     values.push(filters.category);
+    clauses.push(`COALESCE(NULLIF(p.catalog_category,''),p.source_category,p.category)=$${values.length}`);
   }
   if (filters.q) {
-    terms.push('(lower(name) LIKE ? OR lower(sku) LIKE ? OR barcode LIKE ? OR lower(category) LIKE ?)');
-    const query = `%${filters.q.toLowerCase()}%`;
-    values.push(query, query, query, query);
+    values.push(`%${String(filters.q).toLowerCase()}%`);
+    const index = values.length;
+    clauses.push(`(lower(COALESCE(NULLIF(p.catalog_name,''),p.source_name,p.name)) LIKE $${index} OR lower(p.sku) LIKE $${index} OR p.barcode LIKE $${index} OR lower(COALESCE(NULLIF(p.catalog_category,''),p.source_category,p.category)) LIKE $${index})`);
   }
-  return db.prepare(`SELECT * FROM products WHERE ${terms.join(' AND ')} ORDER BY promo DESC, CASE WHEN image != '' THEN 0 ELSE 1 END, name`).all(...values).map(mapProduct);
+  const result = await query(`SELECT p.*,EXISTS(
+      SELECT 1 FROM product_images pi WHERE pi.store_id=p.store_id AND pi.product_id=p.id
+    ) AS has_stored_image,EXISTS(
+      SELECT 1 FROM catalog_assets ca WHERE ca.ean=p.barcode
+    ) AS has_catalog_image FROM products p WHERE ${clauses.join(' AND ')}
+    ORDER BY p.promo DESC,CASE WHEN p.image != '' THEN 0 ELSE 1 END,COALESCE(NULLIF(p.catalog_name,''),p.source_name,p.name)`, values);
+  return result.rows.map(mapProduct);
 }
 
-export function getProduct(storeId, productId) {
-  const db = getStoreDb(storeId);
-  if (!db) return null;
-  const row = db.prepare('SELECT * FROM products WHERE id = ? AND active = 1').get(productId);
+export async function getProduct(storeId, productId) {
+  const row = (await query(`SELECT p.*,EXISTS(
+    SELECT 1 FROM product_images pi WHERE pi.store_id=p.store_id AND pi.product_id=p.id
+  ) AS has_stored_image,EXISTS(
+    SELECT 1 FROM catalog_assets ca WHERE ca.ean=p.barcode
+  ) AS has_catalog_image FROM products p WHERE p.store_id=$1 AND p.id=$2 AND p.active=1`, [storeId, productId])).rows[0];
   return row ? mapProduct(row) : null;
 }
 
-export function upsertProducts(storeId, items) {
-  const db = getStoreDb(storeId);
-  let created = 0;
-  let updated = 0;
-  const existing = db.prepare('SELECT id FROM products WHERE sku = ?');
-  const update = db.prepare(`UPDATE products SET barcode=?, name=?, category=?, price=?, old_price=?, stock=?, unit=?, image=?, promo=?, active=?, updated_at=? WHERE sku=?`);
-  const insert = db.prepare(`INSERT INTO products (id, sku, barcode, name, category, price, old_price, stock, unit, image, promo, active, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
-  db.exec('BEGIN');
-  try {
-    for (const item of items) {
-      if (existing.get(item.sku)) {
-        update.run(item.barcode, item.name, item.category, item.price, item.oldPrice, item.stock, item.unit, item.image, item.promo ? 1 : 0, item.active === false ? 0 : 1, isoNow(), item.sku);
-        updated += 1;
-      } else {
-        insert.run(item.barcode || item.sku, item.sku, item.barcode, item.name, item.category, item.price, item.oldPrice, item.stock, item.unit, item.image, item.promo ? 1 : 0, item.active === false ? 0 : 1, isoNow());
-        created += 1;
-      }
+export async function upsertProducts(storeId, items) {
+  return transaction(async client => {
+    const existing = new Set((await client.query('SELECT sku FROM products WHERE store_id=$1', [storeId])).rows.map(row => row.sku));
+    let created = 0;
+    let updated = 0;
+    const now = isoNow();
+    for (let offset = 0; offset < items.length; offset += 500) {
+      const batch = items.slice(offset, offset + 500);
+      const values = [];
+      const rows = batch.map((item, rowIndex) => {
+        const id = item.barcode || item.sku;
+        const cells = [storeId, id, item.sku, item.barcode, item.name, item.category, item.name, item.category, item.price, item.oldPrice,
+          item.stock, item.unit, item.image, item.promo ? 1 : 0, item.active === false ? 0 : 1, now];
+        values.push(...cells);
+        const start = rowIndex * cells.length;
+        return `(${cells.map((_, index) => `$${start + index + 1}`).join(',')})`;
+      });
+      await client.query(`INSERT INTO products
+        (store_id,id,sku,barcode,name,category,source_name,source_category,price,old_price,stock,unit,image,promo,active,updated_at)
+        VALUES ${rows.join(',')}
+        ON CONFLICT(store_id,sku) DO UPDATE SET barcode=EXCLUDED.barcode,name=EXCLUDED.name,category=EXCLUDED.category,
+          source_name=EXCLUDED.source_name,source_category=EXCLUDED.source_category,
+          price=EXCLUDED.price,old_price=EXCLUDED.old_price,stock=EXCLUDED.stock,unit=EXCLUDED.unit,image=EXCLUDED.image,
+          promo=EXCLUDED.promo,active=EXCLUDED.active,updated_at=EXCLUDED.updated_at`, values);
+      for (const item of batch) existing.has(item.sku) ? updated += 1 : created += 1;
     }
-    db.exec('COMMIT');
-  } catch (error) {
-    db.exec('ROLLBACK');
-    throw error;
-  }
-  return { created, updated, total: db.prepare('SELECT COUNT(*) AS total FROM products').get().total };
+    const total = Number((await client.query('SELECT COUNT(*)::int AS total FROM products WHERE store_id=$1', [storeId])).rows[0].total);
+    return { created, updated, total };
+  });
+}
+
+export async function updateProductCatalog(storeId, productId, input) {
+  const result = await query(`UPDATE products SET catalog_name=$3,catalog_category=$4,description=$5,
+    catalog_visible=$6,updated_at=$7 WHERE store_id=$1 AND id=$2 RETURNING *`, [
+    storeId, productId, input.catalogName || null, input.catalogCategory || null, input.description || '',
+    input.catalogVisible ? 1 : 0, isoNow()
+  ]);
+  return result.rowCount ? getProduct(storeId, productId) : null;
+}
+
+export async function listProductCategories(storeId) {
+  const result = await query(`SELECT COALESCE(NULLIF(catalog_category,''),source_category,category) AS name,
+    COUNT(*)::int AS total FROM products WHERE store_id=$1 GROUP BY 1 ORDER BY 1`, [storeId]);
+  return result.rows.map(row => ({ name: row.name || 'Sem categoria', total: Number(row.total) }));
+}
+
+function mapStoreIntegration(row) {
+  if (!row) return null;
+  return {
+    storeId: row.store_id,
+    providerCode: row.provider_code || 'GENERIC_JSON',
+    providerName: row.provider_name,
+    connectionMode: row.connection_mode || 'LOCAL_AGENT',
+    endpointUrl: row.endpoint_url,
+    authType: row.auth_type,
+    authHeader: row.auth_header,
+    hasSecret: Boolean(row.encrypted_secret),
+    fieldMapping: row.field_mapping || {},
+    syncIntervalSeconds: Number(row.sync_interval_seconds || 300),
+    enabled: Boolean(row.enabled),
+    lastSyncAt: row.last_sync_at,
+    lastSyncStatus: row.last_sync_status,
+    lastSyncMessage: row.last_sync_message
+  };
+}
+
+export async function getStoreIntegration(storeId, includeSecret = false) {
+  const row = (await query('SELECT * FROM store_integrations WHERE store_id=$1', [storeId])).rows[0];
+  if (!row) return null;
+  return includeSecret ? row : mapStoreIntegration(row);
+}
+
+export async function saveStoreIntegration(storeId, input) {
+  const now = isoNow();
+  const result = await query(`INSERT INTO store_integrations
+    (store_id,provider_code,provider_name,connection_mode,endpoint_url,auth_type,auth_header,encrypted_secret,
+     field_mapping,sync_interval_seconds,enabled,created_at,updated_at)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,$11,$12,$12)
+    ON CONFLICT(store_id) DO UPDATE SET provider_code=EXCLUDED.provider_code,provider_name=EXCLUDED.provider_name,
+      connection_mode=EXCLUDED.connection_mode,endpoint_url=EXCLUDED.endpoint_url,
+      auth_type=EXCLUDED.auth_type,auth_header=EXCLUDED.auth_header,
+      encrypted_secret=CASE WHEN EXCLUDED.encrypted_secret='' THEN store_integrations.encrypted_secret ELSE EXCLUDED.encrypted_secret END,
+      field_mapping=EXCLUDED.field_mapping,sync_interval_seconds=EXCLUDED.sync_interval_seconds,
+      enabled=EXCLUDED.enabled,updated_at=EXCLUDED.updated_at RETURNING *`, [
+    storeId, input.providerCode, input.providerName, input.connectionMode, input.endpointUrl, input.authType,
+    input.authHeader, input.encryptedSecret, JSON.stringify(input.fieldMapping), input.syncIntervalSeconds,
+    input.enabled ? 1 : 0, now
+  ]);
+  return mapStoreIntegration(result.rows[0]);
+}
+
+export async function recordStoreIntegrationSync(storeId, status, message) {
+  await query(`UPDATE store_integrations SET last_sync_at=$2,last_sync_status=$3,last_sync_message=$4,updated_at=$2 WHERE store_id=$1`,
+    [storeId, isoNow(), status, String(message || '').slice(0, 500)]);
+}
+
+function mapIntegrationAgent(row) {
+  if (!row) return null;
+  const lastSeen = row.last_seen_at ? new Date(row.last_seen_at) : null;
+  const online = lastSeen && Date.now() - lastSeen.getTime() < 3 * 60_000;
+  return {
+    id: row.id,
+    storeId: row.store_id,
+    name: row.name,
+    providerCode: row.provider_code,
+    version: row.version || '',
+    status: row.status === 'REVOKED' ? 'REVOKED' : online ? 'ONLINE' : lastSeen ? 'OFFLINE' : 'PENDING',
+    capabilities: row.capabilities || [],
+    lastIp: row.last_ip || '',
+    lastSeenAt: row.last_seen_at,
+    createdAt: row.created_at
+  };
+}
+
+export async function createIntegrationAgent(storeId, input) {
+  const id = `agent_${crypto.randomUUID().slice(0, 16)}`;
+  const token = `aima_${crypto.randomBytes(32).toString('base64url')}`;
+  const now = isoNow();
+  await transaction(async client => {
+    await client.query("UPDATE integration_agents SET status='REVOKED',updated_at=$2 WHERE store_id=$1 AND status<>'REVOKED'", [storeId, now]);
+    await client.query(`INSERT INTO integration_agents
+      (id,store_id,name,provider_code,token_hash,status,created_at,updated_at)
+      VALUES ($1,$2,$3,$4,$5,'PENDING',$6,$6)`, [id, storeId, input.name, input.providerCode, tokenHash(token), now]);
+  });
+  const agent = mapIntegrationAgent((await query('SELECT * FROM integration_agents WHERE id=$1', [id])).rows[0]);
+  return { agent, token };
+}
+
+export async function findIntegrationAgentByToken(token) {
+  if (!token) return null;
+  const row = (await query("SELECT * FROM integration_agents WHERE token_hash=$1 AND status<>'REVOKED'", [tokenHash(token)])).rows[0];
+  return mapIntegrationAgent(row);
+}
+
+export async function heartbeatIntegrationAgent(agentId, input) {
+  const result = await query(`UPDATE integration_agents SET version=$2,status='ONLINE',capabilities=$3::jsonb,
+    last_ip=$4,last_seen_at=NOW(),updated_at=NOW() WHERE id=$1 AND status<>'REVOKED' RETURNING *`,
+  [agentId, input.version || '', JSON.stringify(input.capabilities || []), input.ip || '']);
+  return mapIntegrationAgent(result.rows[0]);
+}
+
+export async function listIntegrationOverview() {
+  const integrations = (await query(`SELECT s.id AS store_id,s.name AS store_name,s.slug,s.status AS store_status,
+    i.*,a.id AS agent_id,a.name AS agent_name,a.version AS agent_version,a.status AS agent_status,
+    a.capabilities AS agent_capabilities,a.last_ip AS agent_last_ip,a.last_seen_at AS agent_last_seen_at,
+    a.created_at AS agent_created_at
+    FROM stores s LEFT JOIN store_integrations i ON i.store_id=s.id
+    LEFT JOIN LATERAL (SELECT * FROM integration_agents ia WHERE ia.store_id=s.id AND ia.status<>'REVOKED'
+      ORDER BY ia.created_at DESC LIMIT 1) a ON TRUE ORDER BY s.created_at DESC`)).rows;
+  const runs = (await query(`SELECT DISTINCT ON (store_id) * FROM integration_runs ORDER BY store_id,started_at DESC`)).rows;
+  const runByStore = new Map(runs.map(row => [row.store_id, {
+    id: row.id, status: row.status, received: Number(row.received_count), created: Number(row.created_count),
+    updated: Number(row.updated_count), errors: Number(row.error_count), message: row.message,
+    startedAt: row.started_at, finishedAt: row.finished_at
+  }]));
+  return integrations.map(row => ({
+    store: { id: row.store_id, name: row.store_name, slug: row.slug, status: row.store_status },
+    integration: row.provider_name ? mapStoreIntegration(row) : null,
+    agent: row.agent_id ? mapIntegrationAgent({
+      id: row.agent_id, store_id: row.store_id, name: row.agent_name, provider_code: row.provider_code,
+      version: row.agent_version, status: row.agent_status, capabilities: row.agent_capabilities,
+      last_ip: row.agent_last_ip, last_seen_at: row.agent_last_seen_at, created_at: row.agent_created_at
+    }) : null,
+    lastRun: runByStore.get(row.store_id) || null
+  }));
+}
+
+export async function recordIntegrationRun(agent, result, input = {}) {
+  const id = `run_${crypto.randomUUID().slice(0, 16)}`;
+  await query(`INSERT INTO integration_runs
+    (id,store_id,agent_id,provider_code,status,received_count,created_count,updated_count,error_count,message,started_at,finished_at)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,NOW())`, [
+    id, agent.storeId, agent.id, agent.providerCode, input.status || 'COMPLETED', Number(input.received || 0),
+    Number(result.created || 0), Number(result.updated || 0), Number(input.errors || 0),
+    String(input.message || '').slice(0, 500), input.startedAt || isoNow()
+  ]);
+  await recordStoreIntegrationSync(agent.storeId, input.status || 'SUCCESS', input.message || `${input.received || 0} produtos recebidos`);
+  return id;
 }
 
 function formattedAddress(row) {
@@ -730,46 +644,41 @@ function formattedAddress(row) {
   return row.customer_address || '';
 }
 
-function hydrateOrder(db, row) {
+function hydrateOrder(row, items = []) {
   return {
     id: row.id,
     customer: {
-      name: row.customer_name,
-      phone: row.customer_phone,
-      address: formattedAddress(row),
-      cep: row.customer_cep || '',
-      street: row.customer_street || '',
-      number: row.customer_number || '',
-      complement: row.customer_complement || '',
-      neighborhood: row.customer_neighborhood || '',
-      city: row.customer_city || '',
-      state: row.customer_state || '',
+      name: row.customer_name, phone: row.customer_phone, address: formattedAddress(row), cep: row.customer_cep || '',
+      street: row.customer_street || '', number: row.customer_number || '', complement: row.customer_complement || '',
+      neighborhood: row.customer_neighborhood || '', city: row.customer_city || '', state: row.customer_state || '',
       reference: row.customer_reference || ''
     },
     fulfillmentType: row.fulfillment_type,
     paymentMethod: row.payment_method,
-    changeFor: row.change_for,
+    changeFor: row.change_for == null ? null : Number(row.change_for),
     notes: row.notes,
     scheduledTo: row.scheduled_to,
-    subtotal: row.subtotal,
-    deliveryFee: row.delivery_fee,
-    total: row.total,
+    subtotal: Number(row.subtotal),
+    deliveryFee: Number(row.delivery_fee),
+    total: Number(row.total),
     status: row.status,
     cancelledBy: row.cancelled_by || null,
     cancelledAt: row.cancelled_at || null,
     cancelReason: row.cancel_reason || null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
-    items: db.prepare('SELECT product_id AS productId, name, unit, quantity, price, total FROM order_items WHERE order_id = ?').all(row.id)
+    items: items.map(item => ({
+      productId: item.product_id, name: item.name, unit: item.unit, quantity: Number(item.quantity),
+      price: Number(item.price), total: Number(item.total)
+    }))
   };
 }
 
-function customerOrderView(store, db, row) {
-  const order = hydrateOrder(db, row);
+function customerOrderView(store, row, items) {
+  const order = hydrateOrder(row, items);
   const windowEndsAt = new Date(new Date(row.created_at).getTime() + store.cancellationWindowMinutes * 60_000).toISOString();
   const statusAllowsCancellation = row.status === 'RECEIVED';
-  const insideWindow = Date.now() <= new Date(windowEndsAt).getTime();
-  const eligible = statusAllowsCancellation && insideWindow;
+  const eligible = statusAllowsCancellation && Date.now() <= new Date(windowEndsAt).getTime();
   order.cancellation = {
     eligible,
     windowEndsAt,
@@ -783,194 +692,201 @@ function customerOrderView(store, db, row) {
   return order;
 }
 
-export function getTrackedOrder(storeId, orderId, trackingToken) {
-  const db = getStoreDb(storeId);
-  const row = db.prepare('SELECT * FROM orders WHERE id = ? AND tracking_token = ?').get(orderId, trackingToken);
-  const store = getStore(storeId);
-  return row && store ? customerOrderView(store, db, row) : null;
+async function orderItems(client, storeId, orderIds) {
+  if (!orderIds.length) return new Map();
+  const result = await client.query('SELECT * FROM order_items WHERE store_id=$1 AND order_id=ANY($2::text[]) ORDER BY id', [storeId, orderIds]);
+  const grouped = new Map(orderIds.map(id => [id, []]));
+  for (const item of result.rows) grouped.get(item.order_id)?.push(item);
+  return grouped;
 }
 
-export function listOrders(storeId, filters = {}) {
-  const db = getStoreDb(storeId);
-  const clauses = [];
-  const values = [];
-  if (filters.status) { clauses.push('status = ?'); values.push(filters.status); }
-  if (filters.fulfillmentType) { clauses.push('fulfillment_type = ?'); values.push(filters.fulfillmentType); }
-  const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
-  return db.prepare(`SELECT * FROM orders ${where} ORDER BY created_at DESC LIMIT 250`).all(...values).map(row => hydrateOrder(db, row));
+export async function getTrackedOrder(storeId, orderId, trackingToken) {
+  const hash = tokenHash(trackingToken);
+  const result = await query(`SELECT * FROM orders WHERE store_id=$1 AND id=$2 AND (tracking_token_hash=$3 OR tracking_token=$4)`,
+    [storeId, orderId, hash, trackingToken]);
+  if (!result.rowCount) return null;
+  const [store, items] = await Promise.all([getStore(storeId), orderItems({ query }, storeId, [orderId])]);
+  if (!store) return null;
+  if (!result.rows[0].tracking_token_hash) {
+    await query('UPDATE orders SET tracking_token_hash=$3,tracking_token=NULL WHERE store_id=$1 AND id=$2', [storeId, orderId, hash]);
+  }
+  return customerOrderView(store, result.rows[0], items.get(orderId));
 }
 
-export function createOrder(store, input) {
-  const db = getStoreDb(store.id);
-  const productStatement = db.prepare('SELECT * FROM products WHERE id = ? AND active = 1');
-  const items = input.items.map(item => {
-    const product = productStatement.get(item.productId);
-    if (!product) throw Object.assign(new Error(`Produto nao encontrado: ${item.productId}`), { status: 400 });
-    if (item.quantity > product.stock) throw Object.assign(new Error(`Estoque insuficiente para ${product.name}`), { status: 409 });
-    return { product, quantity: item.quantity, total: Number((item.quantity * product.price).toFixed(2)) };
-  });
-  const subtotal = Number(items.reduce((sum, item) => sum + item.total, 0).toFixed(2));
-  if (subtotal < store.minimumOrder) throw Object.assign(new Error(`Pedido minimo de R$ ${store.minimumOrder.toFixed(2)}`), { status: 400 });
-  const deliveryFee = input.fulfillmentType === 'DELIVERY' && !(store.freeDeliveryAbove > 0 && subtotal >= store.freeDeliveryAbove) ? store.deliveryFee : 0;
-  const id = `AM${Date.now().toString().slice(-8)}${Math.floor(Math.random() * 90 + 10)}`;
+export async function listOrders(storeId, filters = {}) {
+  const clauses = ['store_id=$1'];
+  const values = [storeId];
+  if (filters.status) { values.push(filters.status); clauses.push(`status=$${values.length}`); }
+  if (filters.fulfillmentType) { values.push(filters.fulfillmentType); clauses.push(`fulfillment_type=$${values.length}`); }
+  const rows = (await query(`SELECT * FROM orders WHERE ${clauses.join(' AND ')} ORDER BY created_at DESC LIMIT 250`, values)).rows;
+  const items = await orderItems({ query }, storeId, rows.map(row => row.id));
+  return rows.map(row => hydrateOrder(row, items.get(row.id)));
+}
+
+export async function createOrder(store, input) {
   const trackingToken = crypto.randomBytes(24).toString('base64url');
-  const now = isoNow();
-  db.exec('BEGIN');
-  try {
-    db.prepare(`INSERT INTO orders
-      (id, tracking_token, customer_name, customer_phone, customer_address, customer_cep, customer_street, customer_number, customer_complement, customer_neighborhood, customer_city, customer_state, customer_reference, fulfillment_type, payment_method, change_for, notes, scheduled_to, subtotal, delivery_fee, total, status, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'RECEIVED', ?, ?)`)
-      .run(id, trackingToken, input.customer.name, input.customer.phone, input.customer.address, input.customer.cep, input.customer.street, input.customer.number, input.customer.complement, input.customer.neighborhood, input.customer.city, input.customer.state, input.customer.reference, input.fulfillmentType, input.paymentMethod, input.changeFor, input.notes, input.scheduledTo, subtotal, deliveryFee, subtotal + deliveryFee, now, now);
-    const addItem = db.prepare(`INSERT INTO order_items (order_id, product_id, name, unit, quantity, price, total) VALUES (?, ?, ?, ?, ?, ?, ?)`);
-    const removeStock = db.prepare('UPDATE products SET stock = stock - ?, updated_at = ? WHERE id = ?');
+  return transaction(async client => {
+    const quantities = new Map();
+    for (const item of input.items) quantities.set(item.productId, (quantities.get(item.productId) || 0) + item.quantity);
+    const normalizedItems = [...quantities].map(([productId, quantity]) => ({ productId, quantity }));
+    const productIds = normalizedItems.map(item => item.productId);
+    const productsResult = await client.query(`SELECT * FROM products WHERE store_id=$1 AND id=ANY($2::text[]) AND active=1 FOR UPDATE`,
+      [store.id, productIds]);
+    const products = new Map(productsResult.rows.map(row => [row.id, row]));
+    const items = normalizedItems.map(item => {
+      const product = products.get(item.productId);
+      if (!product) throw Object.assign(new Error(`Produto nao encontrado: ${item.productId}`), { status: 400 });
+      if (item.quantity > Number(product.stock)) throw Object.assign(new Error(`Estoque insuficiente para ${product.name}`), { status: 409 });
+      return { product, quantity: item.quantity, total: Number((item.quantity * Number(product.price)).toFixed(2)) };
+    });
+    const subtotal = Number(items.reduce((sum, item) => sum + item.total, 0).toFixed(2));
+    if (subtotal < store.minimumOrder) throw Object.assign(new Error(`Pedido minimo de R$ ${store.minimumOrder.toFixed(2)}`), { status: 400 });
+    const deliveryFee = input.fulfillmentType === 'DELIVERY' && !(store.freeDeliveryAbove > 0 && subtotal >= store.freeDeliveryAbove) ? store.deliveryFee : 0;
+    const id = `AM${Date.now().toString().slice(-8)}${crypto.randomInt(10, 100)}`;
+    const now = isoNow();
+    const result = await client.query(`INSERT INTO orders
+      (store_id,id,tracking_token_hash,customer_name,customer_phone,customer_address,customer_cep,customer_street,
+       customer_number,customer_complement,customer_neighborhood,customer_city,customer_state,customer_reference,
+       fulfillment_type,payment_method,change_for,notes,scheduled_to,subtotal,delivery_fee,total,status,created_at,updated_at)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,'RECEIVED',$23,$23) RETURNING *`,
+    [store.id, id, tokenHash(trackingToken), input.customer.name, input.customer.phone, input.customer.address,
+      input.customer.cep, input.customer.street, input.customer.number, input.customer.complement, input.customer.neighborhood,
+      input.customer.city, input.customer.state, input.customer.reference, input.fulfillmentType, input.paymentMethod,
+      input.changeFor, input.notes, input.scheduledTo, subtotal, deliveryFee, subtotal + deliveryFee, now]);
     for (const item of items) {
-      addItem.run(id, item.product.id, item.product.name, item.product.unit, item.quantity, item.product.price, item.total);
-      removeStock.run(item.quantity, now, item.product.id);
+      await client.query(`INSERT INTO order_items (store_id,order_id,product_id,name,unit,quantity,price,total)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+      [store.id, id, item.product.id, item.product.name, item.product.unit, item.quantity, item.product.price, item.total]);
+      await client.query('UPDATE products SET stock=stock-$3,updated_at=$4 WHERE store_id=$1 AND id=$2',
+        [store.id, item.product.id, item.quantity, now]);
     }
-    db.exec('COMMIT');
-  } catch (error) {
-    db.exec('ROLLBACK');
-    throw error;
-  }
-  return { ...customerOrderView(store, db, db.prepare('SELECT * FROM orders WHERE id = ?').get(id)), trackingToken };
+    const insertedItems = (await client.query('SELECT * FROM order_items WHERE store_id=$1 AND order_id=$2 ORDER BY id', [store.id, id])).rows;
+    return { ...customerOrderView(store, result.rows[0], insertedItems), trackingToken };
+  });
 }
 
-export function cancelOrderByCustomer(storeId, orderId, trackingToken) {
-  const db = getStoreDb(storeId);
-  const store = getStore(storeId);
-  const current = db.prepare('SELECT * FROM orders WHERE id = ? AND tracking_token = ?').get(orderId, trackingToken);
-  if (!current || !store) return null;
-  const windowEndsAt = new Date(new Date(current.created_at).getTime() + store.cancellationWindowMinutes * 60_000);
-  if (current.status !== 'RECEIVED' || Date.now() > windowEndsAt.getTime()) {
-    const error = new Error('O cancelamento pelo aplicativo nao esta mais disponivel. Ligue para a central da loja.');
-    error.status = 409;
-    error.details = { supportPhone: store.supportPhone, windowEndsAt: windowEndsAt.toISOString() };
-    throw error;
-  }
-  db.exec('BEGIN');
-  try {
-    db.prepare(`UPDATE orders SET status = 'CANCELLED', cancelled_by = 'CUSTOMER', cancelled_at = ?, cancel_reason = 'Cancelado pelo cliente no aplicativo', updated_at = ? WHERE id = ?`)
-      .run(isoNow(), isoNow(), orderId);
-    const restoreStock = db.prepare('UPDATE products SET stock = stock + ?, updated_at = ? WHERE id = ?');
-    for (const item of db.prepare('SELECT product_id, quantity FROM order_items WHERE order_id = ?').all(orderId)) restoreStock.run(item.quantity, isoNow(), item.product_id);
-    db.exec('COMMIT');
-  } catch (error) {
-    db.exec('ROLLBACK');
-    throw error;
-  }
-  return customerOrderView(store, db, db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId));
+export async function cancelOrderByCustomer(storeId, orderId, trackingToken) {
+  const store = await getStore(storeId);
+  if (!store) return null;
+  return transaction(async client => {
+    const result = await client.query(`SELECT * FROM orders WHERE store_id=$1 AND id=$2
+      AND (tracking_token_hash=$3 OR tracking_token=$4) FOR UPDATE`, [storeId, orderId, tokenHash(trackingToken), trackingToken]);
+    if (!result.rowCount) return null;
+    const current = result.rows[0];
+    const windowEndsAt = new Date(new Date(current.created_at).getTime() + store.cancellationWindowMinutes * 60_000);
+    if (current.status !== 'RECEIVED' || Date.now() > windowEndsAt.getTime()) {
+      const error = new Error('O cancelamento pelo aplicativo nao esta mais disponivel. Ligue para a central da loja.');
+      error.status = 409;
+      error.details = { supportPhone: store.supportPhone, windowEndsAt: windowEndsAt.toISOString() };
+      throw error;
+    }
+    const now = isoNow();
+    await client.query(`UPDATE orders SET status='CANCELLED',cancelled_by='CUSTOMER',cancelled_at=$3,
+      cancel_reason='Cancelado pelo cliente no aplicativo',updated_at=$3,tracking_token_hash=$4,tracking_token=NULL
+      WHERE store_id=$1 AND id=$2`, [storeId, orderId, now, tokenHash(trackingToken)]);
+    const items = (await client.query('SELECT * FROM order_items WHERE store_id=$1 AND order_id=$2', [storeId, orderId])).rows;
+    for (const item of items) await client.query('UPDATE products SET stock=stock+$3,updated_at=$4 WHERE store_id=$1 AND id=$2', [storeId, item.product_id, item.quantity, now]);
+    return customerOrderView(store, (await client.query('SELECT * FROM orders WHERE store_id=$1 AND id=$2', [storeId, orderId])).rows[0], items);
+  });
 }
 
 const statusTransitions = {
-  RECEIVED: ['PICKING', 'CANCELLED'],
-  PICKING: ['READY', 'CANCELLED'],
-  READY: ['OUT_FOR_DELIVERY', 'DONE', 'CANCELLED'],
-  OUT_FOR_DELIVERY: ['DONE', 'CANCELLED'],
-  DONE: [],
-  CANCELLED: []
+  RECEIVED: ['PICKING', 'CANCELLED'], PICKING: ['READY', 'CANCELLED'],
+  READY: ['OUT_FOR_DELIVERY', 'DONE', 'CANCELLED'], OUT_FOR_DELIVERY: ['DONE', 'CANCELLED'], DONE: [], CANCELLED: []
 };
 
-export function updateOrderStatus(storeId, orderId, status) {
-  const db = getStoreDb(storeId);
-  const current = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
-  if (!current) return null;
-  if (!statusTransitions[current.status]?.includes(status)) {
-    const error = new Error(`Transicao invalida: ${current.status} para ${status}`);
-    error.status = 409;
-    throw error;
-  }
-  db.exec('BEGIN');
-  try {
+export async function updateOrderStatus(storeId, orderId, status) {
+  return transaction(async client => {
+    const result = await client.query('SELECT * FROM orders WHERE store_id=$1 AND id=$2 FOR UPDATE', [storeId, orderId]);
+    if (!result.rowCount) return null;
+    const current = result.rows[0];
+    if (!statusTransitions[current.status]?.includes(status)) throw Object.assign(new Error(`Transicao invalida: ${current.status} para ${status}`), { status: 409 });
+    const now = isoNow();
     if (status === 'CANCELLED') {
-      db.prepare(`UPDATE orders SET status = ?, cancelled_by = 'STORE_MANAGER', cancelled_at = ?, cancel_reason = 'Cancelado pela loja', updated_at = ? WHERE id = ?`)
-        .run(status, isoNow(), isoNow(), orderId);
-      const restoreStock = db.prepare('UPDATE products SET stock = stock + ?, updated_at = ? WHERE id = ?');
-      for (const item of db.prepare('SELECT product_id, quantity FROM order_items WHERE order_id = ?').all(orderId)) restoreStock.run(item.quantity, isoNow(), item.product_id);
+      await client.query(`UPDATE orders SET status=$3,cancelled_by='STORE_MANAGER',cancelled_at=$4,
+        cancel_reason='Cancelado pela loja',updated_at=$4 WHERE store_id=$1 AND id=$2`, [storeId, orderId, status, now]);
+      const items = (await client.query('SELECT * FROM order_items WHERE store_id=$1 AND order_id=$2', [storeId, orderId])).rows;
+      for (const item of items) await client.query('UPDATE products SET stock=stock+$3,updated_at=$4 WHERE store_id=$1 AND id=$2', [storeId, item.product_id, item.quantity, now]);
     } else {
-      db.prepare('UPDATE orders SET status = ?, updated_at = ? WHERE id = ?').run(status, isoNow(), orderId);
+      await client.query('UPDATE orders SET status=$3,updated_at=$4 WHERE store_id=$1 AND id=$2', [storeId, orderId, status, now]);
     }
-    db.exec('COMMIT');
-  } catch (error) {
-    db.exec('ROLLBACK');
-    throw error;
-  }
-  return hydrateOrder(db, db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId));
-}
-
-export function dashboardSummary(storeId) {
-  const db = getStoreDb(storeId);
-  const statuses = Object.fromEntries(db.prepare('SELECT status, COUNT(*) AS total FROM orders GROUP BY status').all().map(row => [row.status, row.total]));
-  const sales = db.prepare("SELECT COALESCE(SUM(total), 0) AS total, COUNT(*) AS orders FROM orders WHERE status != 'CANCELLED' AND date(created_at) = date('now')").get();
-  const lowStock = db.prepare('SELECT COUNT(*) AS total FROM products WHERE active = 1 AND stock <= 5').get().total;
-  return { statuses, salesToday: sales.total, ordersToday: sales.orders, lowStock, products: db.prepare('SELECT COUNT(*) AS total FROM products WHERE active = 1').get().total };
-}
-
-export function listCustomers(storeId, query = '') {
-  const db = getStoreDb(storeId);
-  const normalized = `%${String(query).toLowerCase()}%`;
-  const rows = db.prepare(`SELECT
-      customer_phone AS phone,
-      MAX(customer_name) AS name,
-      COUNT(*) AS orders,
-      COALESCE(SUM(CASE WHEN status != 'CANCELLED' THEN total ELSE 0 END), 0) AS total_spent,
-      MAX(created_at) AS last_order_at
-    FROM orders
-    WHERE lower(customer_name) LIKE ? OR customer_phone LIKE ?
-    GROUP BY customer_phone
-    ORDER BY last_order_at DESC
-    LIMIT 300`).all(normalized, normalized);
-  const latestOrder = db.prepare('SELECT * FROM orders WHERE customer_phone = ? ORDER BY created_at DESC LIMIT 1');
-  return rows.map(row => {
-    const latest = latestOrder.get(row.phone);
-    return {
-      name: row.name,
-      phone: row.phone,
-      orders: row.orders,
-      totalSpent: row.total_spent,
-      lastOrderAt: row.last_order_at,
-      lastOrderStatus: latest?.status || null,
-      address: latest ? formattedAddress(latest) : '',
-      cep: latest?.customer_cep || '',
-      neighborhood: latest?.customer_neighborhood || '',
-      city: latest?.customer_city || ''
-    };
+    const [row, items] = await Promise.all([
+      client.query('SELECT * FROM orders WHERE store_id=$1 AND id=$2', [storeId, orderId]),
+      client.query('SELECT * FROM order_items WHERE store_id=$1 AND order_id=$2 ORDER BY id', [storeId, orderId])
+    ]);
+    return hydrateOrder(row.rows[0], items.rows);
   });
 }
 
-export function storeReports(storeId) {
-  const db = getStoreDb(storeId);
-  const today = db.prepare(`SELECT
-      COUNT(*) AS orders,
-      COALESCE(SUM(CASE WHEN status != 'CANCELLED' THEN total ELSE 0 END), 0) AS revenue,
-      COALESCE(AVG(CASE WHEN status != 'CANCELLED' THEN total END), 0) AS average_ticket,
-      COALESCE(SUM(CASE WHEN status = 'CANCELLED' THEN 1 ELSE 0 END), 0) AS cancellations
-    FROM orders WHERE date(created_at) = date('now')`).get();
-  const dailyStatement = db.prepare(`SELECT
-      COUNT(*) AS orders,
-      COALESCE(SUM(CASE WHEN status != 'CANCELLED' THEN total ELSE 0 END), 0) AS revenue
-    FROM orders WHERE date(created_at) = ?`);
-  const days = [];
-  for (let index = 6; index >= 0; index -= 1) {
-    const date = new Date();
-    date.setDate(date.getDate() - index);
-    const key = date.toISOString().slice(0, 10);
-    const values = dailyStatement.get(key);
-    days.push({ date: key, label: date.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', ''), orders: values.orders, revenue: values.revenue });
-  }
-  const statuses = db.prepare('SELECT status, COUNT(*) AS total FROM orders GROUP BY status').all();
-  const hours = db.prepare(`SELECT strftime('%H', created_at) AS hour, COUNT(*) AS total FROM orders GROUP BY hour ORDER BY hour`).all();
+export async function dashboardSummary(storeId) {
+  const [statuses, sales, lowStock, products] = await Promise.all([
+    query('SELECT status,COUNT(*)::int AS total FROM orders WHERE store_id=$1 GROUP BY status', [storeId]),
+    query(`SELECT COALESCE(SUM(total),0)::float8 AS total,COUNT(*)::int AS orders FROM orders
+      WHERE store_id=$1 AND status!='CANCELLED' AND created_at::timestamptz::date=CURRENT_DATE`, [storeId]),
+    query('SELECT COUNT(*)::int AS total FROM products WHERE store_id=$1 AND active=1 AND stock<=5', [storeId]),
+    query('SELECT COUNT(*)::int AS total FROM products WHERE store_id=$1 AND active=1', [storeId])
+  ]);
   return {
-    today: { orders: today.orders, revenue: today.revenue, averageTicket: today.average_ticket, cancellations: today.cancellations },
-    days,
-    statuses: Object.fromEntries(statuses.map(row => [row.status, row.total])),
-    busyHours: hours.map(row => ({ hour: row.hour, total: row.total })),
-    topCustomers: listCustomers(storeId).slice(0, 5)
+    statuses: Object.fromEntries(statuses.rows.map(row => [row.status, Number(row.total)])),
+    salesToday: Number(sales.rows[0].total), ordersToday: Number(sales.rows[0].orders),
+    lowStock: Number(lowStock.rows[0].total), products: Number(products.rows[0].total)
   };
 }
 
-export function adminOverview() {
-  const stores = listStores();
-  const subscriptions = listSubscriptions();
+export async function listCustomers(storeId, search = '') {
+  const normalized = `%${String(search).toLowerCase()}%`;
+  const result = await query(`WITH customer_totals AS (
+      SELECT customer_phone AS phone,MAX(customer_name) AS name,COUNT(*)::int AS orders,
+        COALESCE(SUM(CASE WHEN status!='CANCELLED' THEN total ELSE 0 END),0)::float8 AS total_spent,
+        MAX(created_at) AS last_order_at
+      FROM orders WHERE store_id=$1 AND (lower(customer_name) LIKE $2 OR customer_phone LIKE $2)
+      GROUP BY customer_phone
+    ), latest AS (
+      SELECT DISTINCT ON (customer_phone) * FROM orders WHERE store_id=$1 ORDER BY customer_phone,created_at DESC
+    )
+    SELECT customer_totals.*,latest.status AS last_order_status,latest.customer_address,latest.customer_cep,
+      latest.customer_street,latest.customer_number,latest.customer_complement,latest.customer_neighborhood,
+      latest.customer_city,latest.customer_state
+    FROM customer_totals JOIN latest ON latest.customer_phone=customer_totals.phone
+    ORDER BY customer_totals.last_order_at DESC LIMIT 300`, [storeId, normalized]);
+  return result.rows.map(row => ({
+    name: row.name, phone: row.phone, orders: Number(row.orders), totalSpent: Number(row.total_spent),
+    lastOrderAt: row.last_order_at, lastOrderStatus: row.last_order_status, address: formattedAddress(row),
+    cep: row.customer_cep || '', neighborhood: row.customer_neighborhood || '', city: row.customer_city || ''
+  }));
+}
+
+export async function storeReports(storeId) {
+  const [today, daily, statuses, hours, customers] = await Promise.all([
+    query(`SELECT COUNT(*)::int AS orders,
+      COALESCE(SUM(CASE WHEN status!='CANCELLED' THEN total ELSE 0 END),0)::float8 AS revenue,
+      COALESCE(AVG(CASE WHEN status!='CANCELLED' THEN total END),0)::float8 AS average_ticket,
+      COUNT(*) FILTER (WHERE status='CANCELLED')::int AS cancellations
+      FROM orders WHERE store_id=$1 AND created_at::timestamptz::date=CURRENT_DATE`, [storeId]),
+    query(`SELECT day::date::text AS date,COUNT(orders.id)::int AS orders,
+      COALESCE(SUM(CASE WHEN orders.status!='CANCELLED' THEN orders.total ELSE 0 END),0)::float8 AS revenue
+      FROM generate_series(CURRENT_DATE-INTERVAL '6 days',CURRENT_DATE,INTERVAL '1 day') day
+      LEFT JOIN orders ON orders.store_id=$1 AND orders.created_at::timestamptz::date=day::date GROUP BY day ORDER BY day`, [storeId]),
+    query('SELECT status,COUNT(*)::int AS total FROM orders WHERE store_id=$1 GROUP BY status', [storeId]),
+    query(`SELECT to_char(created_at::timestamptz,'HH24') AS hour,COUNT(*)::int AS total
+      FROM orders WHERE store_id=$1 GROUP BY hour ORDER BY hour`, [storeId]),
+    listCustomers(storeId)
+  ]);
+  const labels = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sab'];
+  return {
+    today: {
+      orders: Number(today.rows[0].orders), revenue: Number(today.rows[0].revenue),
+      averageTicket: Number(today.rows[0].average_ticket), cancellations: Number(today.rows[0].cancellations)
+    },
+    days: daily.rows.map(row => ({ ...row, orders: Number(row.orders), revenue: Number(row.revenue), label: labels[new Date(`${row.date}T12:00:00Z`).getUTCDay()] })),
+    statuses: Object.fromEntries(statuses.rows.map(row => [row.status, Number(row.total)])),
+    busyHours: hours.rows.map(row => ({ hour: row.hour, total: Number(row.total) })),
+    topCustomers: customers.slice(0, 5)
+  };
+}
+
+export async function adminOverview() {
+  const [stores, subscriptions] = await Promise.all([listStores(), listSubscriptions()]);
   const activeStatuses = new Set(['ACTIVE', 'TRIAL']);
   return {
     stores: stores.length,
@@ -980,4 +896,56 @@ export function adminOverview() {
     mrr: subscriptions.filter(item => activeStatuses.has(item.status)).reduce((sum, item) => sum + item.amount, 0),
     overdue: subscriptions.filter(item => item.status === 'OVERDUE').length
   };
+}
+
+function loginAttemptKey(email, ip) {
+  return crypto.createHash('sha256').update(`${String(email).toLowerCase()}|${ip}`).digest('hex');
+}
+
+export async function assertLoginAllowed(email, ip) {
+  const row = (await query('SELECT blocked_until FROM login_attempts WHERE attempt_key=$1', [loginAttemptKey(email, ip)])).rows[0];
+  if (row?.blocked_until && new Date(row.blocked_until).getTime() > Date.now()) {
+    const error = new Error('Muitas tentativas de login. Aguarde 15 minutos e tente novamente.');
+    error.status = 429;
+    throw error;
+  }
+}
+
+export async function recordLoginResult(email, ip, success) {
+  const key = loginAttemptKey(email, ip);
+  if (success) {
+    await query('DELETE FROM login_attempts WHERE attempt_key=$1', [key]);
+    return;
+  }
+  await query(`INSERT INTO login_attempts (attempt_key,failures,window_started_at,blocked_until,updated_at)
+    VALUES ($1,1,NOW(),NULL,NOW())
+    ON CONFLICT(attempt_key) DO UPDATE SET
+      failures=CASE WHEN login_attempts.window_started_at < NOW()-INTERVAL '15 minutes' THEN 1 ELSE login_attempts.failures+1 END,
+      window_started_at=CASE WHEN login_attempts.window_started_at < NOW()-INTERVAL '15 minutes' THEN NOW() ELSE login_attempts.window_started_at END,
+      blocked_until=CASE WHEN (CASE WHEN login_attempts.window_started_at < NOW()-INTERVAL '15 minutes' THEN 1 ELSE login_attempts.failures+1 END)>=5
+        THEN NOW()+INTERVAL '15 minutes' ELSE NULL END,updated_at=NOW()`, [key]);
+}
+
+export async function consumeOrderCreationQuota(ip) {
+  const key = crypto.createHash('sha256').update(`public-order|${ip}`).digest('hex');
+  const result = await query(`INSERT INTO api_rate_limits (limit_key,requests,window_started_at,updated_at)
+    VALUES ($1,1,NOW(),NOW())
+    ON CONFLICT(limit_key) DO UPDATE SET
+      requests=CASE WHEN api_rate_limits.window_started_at < NOW()-INTERVAL '15 minutes' THEN 1 ELSE api_rate_limits.requests+1 END,
+      window_started_at=CASE WHEN api_rate_limits.window_started_at < NOW()-INTERVAL '15 minutes' THEN NOW() ELSE api_rate_limits.window_started_at END,
+      updated_at=NOW()
+    RETURNING requests`, [key]);
+  if (Number(result.rows[0].requests) > 30) {
+    const error = new Error('Muitos pedidos enviados deste dispositivo. Aguarde alguns minutos e tente novamente.');
+    error.status = 429;
+    throw error;
+  }
+  if (Math.random() < 0.01) {
+    query("DELETE FROM api_rate_limits WHERE updated_at < NOW()-INTERVAL '1 day'").catch(() => {});
+  }
+}
+
+export async function writeAuditLog({ storeId = null, actorId = null, action, entityType, entityId = null, metadata = {} }) {
+  await query(`INSERT INTO audit_logs (store_id,actor_id,action,entity_type,entity_id,metadata)
+    VALUES ($1,$2,$3,$4,$5,$6::jsonb)`, [storeId, actorId, action, entityType, entityId, JSON.stringify(metadata)]);
 }

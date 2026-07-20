@@ -27,6 +27,26 @@ class AdminApi {
   createStore(data) { return this.request('/admin/stores', { method: 'POST', body: JSON.stringify(data) }); }
   updateStatus(id, status) { return this.request(`/admin/stores/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }); }
   updateBranding(id, colors) { return this.request(`/admin/stores/${id}/branding`, { method: 'PATCH', body: JSON.stringify(colors) }); }
+  deleteStore(id, password) { return this.request(`/admin/stores/${id}`, { method: 'DELETE', body: JSON.stringify({ password }) }); }
+  catalogLibrary(search = '') { return this.request(`/admin/catalog-library?limit=48&search=${encodeURIComponent(search)}`); }
+  startCatalogScan(data) { return this.request('/admin/catalog-library/scans', { method: 'POST', body: JSON.stringify(data) }); }
+  deleteCatalogAsset(ean) { return this.request(`/admin/catalog-library/${encodeURIComponent(ean)}`, { method: 'DELETE' }); }
+  integrationProviders() { return this.request('/admin/integration-providers'); }
+  integrations() { return this.request('/admin/integrations'); }
+  saveIntegration(storeId, data) { return this.request(`/admin/stores/${storeId}/integration`, { method: 'PUT', body: JSON.stringify(data) }); }
+  createIntegrationAgent(storeId, data = {}) { return this.request(`/admin/stores/${storeId}/integration/agent`, { method: 'POST', body: JSON.stringify(data) }); }
+  async downloadIntegrationAgent() {
+    const response = await fetch(`${API_URL}/admin/integration-agent/download`, {
+      headers: this.token ? { Authorization: `Bearer ${this.token}` } : {}
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      const error = new Error(data.error || 'Nao foi possivel baixar o instalador');
+      error.status = response.status;
+      throw error;
+    }
+    return response.blob();
+  }
 }
 
 export const api = new AdminApi();

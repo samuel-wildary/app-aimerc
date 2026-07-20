@@ -4,10 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node --watch src/server.js",
+    "dev": "node --env-file-if-exists=.env.local --watch src/server.js",
     "start": "node src/server.js",
     "test": "node --test",
-    "migrate:postgres": "node scripts/migrate-sqlite-to-postgres.js"
+    "migrate:legacy-sqlite": "node scripts/migrate-sqlite-to-postgres.js",
+    "migrate:image-library": "node --env-file-if-exists=.env.local scripts/migrate-image-library.js"
   },
   "dependencies": {
     "cors": "^2.8.5",

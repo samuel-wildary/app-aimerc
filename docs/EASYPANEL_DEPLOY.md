@@ -4,67 +4,73 @@
 
 Crie tres aplicativos a partir do mesmo repositorio GitHub:
 
-| Servico | Diretorio | Dockerfile | Porta interna |
+| Servico | Caminho de build | Dockerfile | Porta interna |
 | --- | --- | --- | --- |
-| API | `backend` | `backend/Dockerfile` | `3000` |
-| Painel do supermercado | `supermarket-dashboard` | `supermarket-dashboard/Dockerfile` | `80` |
-| Administracao SaaS | `saas-admin` | `saas-admin/Dockerfile` | `80` |
+| API | `/backend` | `backend/Dockerfile` | `3000` |
+| Painel do supermercado | `/supermarket-dashboard` | `supermarket-dashboard/Dockerfile` | `80` |
+| Administracao SaaS | `/saas-admin` | `saas-admin/Dockerfile` | `80` |
 
-No modo Docker Compose do EasyPanel, importe diretamente o arquivo `docker-compose.yml` da raiz.
-O arquivo `easypanel-compose.yml` permanece como referencia equivalente.
+Cada frontend e uma imagem estatica separada. O supermercado nunca recebe acesso ao painel SaaS.
+
+## PostgreSQL
+
+O PostgreSQL e a unica persistencia de execucao. Use preferencialmente o endereco privado do servico PostgreSQL dentro do EasyPanel. Se o banco for acessado por IP publico, habilite TLS e use `sslmode=require`.
+
+Antes da primeira implantacao desta versao:
+
+1. Faca backup do PostgreSQL e do volume `/app/data` atual.
+2. Mantenha o volume antigo conectado somente para a importacao unica dos SQLite legados.
+3. Implante uma unica replica do backend.
+4. Confirme no log `Importando dados legados para PostgreSQL` e depois `AiMerc backend PostgreSQL running`.
+5. Confirme `/api/health` com `persistence: postgresql`.
+6. Valide login, lojas, catalogo, imagens, pedidos e banners antes de remover o volume legado.
+
+Depois que o marcador `/app/data/.postgres-migrated-v2` existir, o backend nao le nem grava SQLite. Novas replicas compartilham somente o PostgreSQL.
 
 ## Variaveis da API
 
-Configure no EasyPanel:
-
 ```env
-PORT=3000
 NODE_ENV=production
-AIMERC_TOKEN_SECRET=UMA_CHAVE_ALEATORIA_FORTE
-AIMERC_ALLOWED_ORIGINS=http://31.97.252.6:4201,http://31.97.252.6:4202
-AIMERC_PUBLIC_API_URL=https://wildhub-aimerc-backend-app.5mos1l.easypanel.host/api
+PORT=3000
+DATABASE_URL=postgres://USUARIO:SENHA@HOST_INTERNO:5432/aimerc?sslmode=require
+AIMERC_TOKEN_SECRET=CHAVE_ALEATORIA_COM_PELO_MENOS_32_CARACTERES
+AIMERC_TOKEN_SECRET_PREVIOUS=
+AIMERC_ALLOWED_ORIGINS=https://painel.seudominio.com.br,https://admin.seudominio.com.br
+AIMERC_PUBLIC_API_URL=https://api.seudominio.com.br/api
+AIMERC_TRUST_PROXY_HOPS=1
+AIMERC_DB_POOL_MAX=10
 AIMERC_ADMIN_NAME=Administrador AiMerc
 AIMERC_ADMIN_EMAIL=admin@seudominio.com.br
-AIMERC_ADMIN_PASSWORD=UMA_SENHA_FORTE_COM_12_OU_MAIS_CARACTERES
-DATABASE_URL=postgres://USUARIO:SENHA@31.97.252.6:5540/aimerc?sslmode=disable
-FIREBASE_SERVICE_ACCOUNT_BASE64=JSON_DA_CONTA_FIREBASE_CODIFICADO_EM_BASE64
+AIMERC_ADMIN_PASSWORD=SENHA_FORTE_COM_12_OU_MAIS_CARACTERES
+FIREBASE_SERVICE_ACCOUNT_BASE64=JSON_FIREBASE_CODIFICADO_EM_BASE64
 ```
 
-Nao grave a senha real em arquivos versionados. Use o painel de variaveis secretas do EasyPanel.
-As credenciais `AIMERC_ADMIN_*` atualizam a conta master existente sempre que o backend inicia.
+Cadastre senhas e chaves como segredos do EasyPanel. `AIMERC_ADMIN_*` cria ou atualiza a conta master ao iniciar. Durante uma rotacao, mova a chave antiga para `AIMERC_TOKEN_SECRET_PREVIOUS`; remova-a quando as sessoes antigas expirarem.
 
-## URL da API nos frontends
+## Frontends
 
-Adicione como argumento de build nos dois frontends:
+Nos dois servicos, configure como argumento de build, nao apenas como variavel de execucao:
 
 ```env
-VITE_API_URL=https://wildhub-aimerc-backend-app.5mos1l.easypanel.host/api
+VITE_API_URL=https://api.seudominio.com.br/api
 ```
 
-## Firebase no Docker
+Depois de alterar esse valor, execute uma nova implantacao para recompilar o JavaScript. O endereco precisa ser HTTPS para evitar bloqueio de conteudo misto.
 
-Converta o JSON da conta de servico em Base64 no PowerShell:
+## Firebase
+
+Converta a conta de servico para Base64 no PowerShell:
 
 ```powershell
 [Convert]::ToBase64String([IO.File]::ReadAllBytes("C:\caminho\firebase-service-account.json"))
 ```
 
-Cadastre o resultado no EasyPanel como a variavel secreta `FIREBASE_SERVICE_ACCOUNT_BASE64`.
-Nao salve o JSON nem o Base64 no repositorio.
+Cadastre o resultado em `FIREBASE_SERVICE_ACCOUNT_BASE64`. Nao salve o JSON nem o Base64 no repositorio.
 
-## Persistencia inicial
+## Verificacao
 
-O backend usa o volume persistente `aimerc_data` montado em `/app/data`. Na primeira inicializacao,
-se o volume estiver vazio e `DATABASE_URL` estiver configurada, o container restaura automaticamente
-os cadastros, catalogo e pedidos do PostgreSQL para o volume antes de iniciar a API.
+```text
+GET https://api.seudominio.com.br/api/health
+```
 
-Nao publique o servico sem esse volume, pois uma recriacao sem restauracao apagaria pedidos recentes.
-
-O PostgreSQL informado recebe a migracao dos dados atuais, mas a troca do driver principal deve ser
-validada antes de remover o volume SQLite. Ate essa validacao, mantenha ambos e use apenas uma replica
-do backend para evitar concorrencia sobre o arquivo SQLite.
-
-## Recomendacao de seguranca
-
-Troque o acesso por IP por dominios HTTPS antes de publicar o aplicativo Android. Android e navegadores
-podem bloquear trafego HTTP e credenciais nao devem trafegar sem TLS.
+O endpoint so retorna sucesso quando o PostgreSQL responde. Em producao, CORS aceita apenas as origens declaradas em `AIMERC_ALLOWED_ORIGINS`.

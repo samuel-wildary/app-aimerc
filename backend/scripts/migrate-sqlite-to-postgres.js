@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
 import pg from 'pg';
@@ -77,6 +78,7 @@ CREATE TABLE IF NOT EXISTS products (
 );
 CREATE TABLE IF NOT EXISTS orders (
   store_id TEXT NOT NULL REFERENCES stores(id) ON DELETE CASCADE, id TEXT NOT NULL, tracking_token TEXT,
+  tracking_token_hash TEXT,
   customer_name TEXT NOT NULL, customer_phone TEXT NOT NULL, customer_address TEXT NOT NULL DEFAULT '',
   customer_cep TEXT NOT NULL DEFAULT '', customer_street TEXT NOT NULL DEFAULT '', customer_number TEXT NOT NULL DEFAULT '',
   customer_complement TEXT NOT NULL DEFAULT '', customer_neighborhood TEXT NOT NULL DEFAULT '', customer_city TEXT NOT NULL DEFAULT '',
@@ -124,6 +126,7 @@ CREATE TABLE IF NOT EXISTS banner_images (
   image_data BYTEA NOT NULL, byte_size INTEGER NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), PRIMARY KEY (store_id,id)
 );
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS tracking_token_hash TEXT;
 CREATE INDEX IF NOT EXISTS products_store_active_category_idx ON products(store_id,active,category);
 CREATE INDEX IF NOT EXISTS orders_store_created_idx ON orders(store_id,created_at DESC);
 CREATE INDEX IF NOT EXISTS product_images_store_idx ON product_images(store_id);
@@ -155,10 +158,16 @@ try {
     const withStore = table => rows(db, table).map(item => ({ store_id: store.id, ...item }));
 
     const products = withStore('products');
-    const orders = withStore('orders');
+    const orders = withStore('orders').map(order => ({
+      ...order,
+      tracking_token_hash: order.tracking_token
+        ? crypto.createHash('sha256').update(String(order.tracking_token)).digest('hex')
+        : null,
+      tracking_token: null
+    }));
     const orderItems = withStore('order_items');
     totals.products += await upsertRows(client, 'products', ['store_id', 'id', 'sku', 'barcode', 'name', 'category', 'price', 'old_price', 'stock', 'unit', 'image', 'promo', 'active', 'updated_at'], products, ['store_id', 'id']);
-    totals.orders += await upsertRows(client, 'orders', ['store_id', 'id', 'tracking_token', 'customer_name', 'customer_phone', 'customer_address', 'customer_cep', 'customer_street', 'customer_number', 'customer_complement', 'customer_neighborhood', 'customer_city', 'customer_state', 'customer_reference', 'fulfillment_type', 'payment_method', 'change_for', 'notes', 'scheduled_to', 'subtotal', 'delivery_fee', 'total', 'status', 'cancelled_by', 'cancelled_at', 'cancel_reason', 'created_at', 'updated_at'], orders, ['store_id', 'id']);
+    totals.orders += await upsertRows(client, 'orders', ['store_id', 'id', 'tracking_token', 'tracking_token_hash', 'customer_name', 'customer_phone', 'customer_address', 'customer_cep', 'customer_street', 'customer_number', 'customer_complement', 'customer_neighborhood', 'customer_city', 'customer_state', 'customer_reference', 'fulfillment_type', 'payment_method', 'change_for', 'notes', 'scheduled_to', 'subtotal', 'delivery_fee', 'total', 'status', 'cancelled_by', 'cancelled_at', 'cancel_reason', 'created_at', 'updated_at'], orders, ['store_id', 'id']);
     totals.orderItems += await upsertRows(client, 'order_items', ['store_id', 'id', 'order_id', 'product_id', 'name', 'unit', 'quantity', 'price', 'total'], orderItems, ['store_id', 'id']);
     await upsertRows(client, 'banners', ['store_id', 'id', 'eyebrow', 'title', 'subtitle', 'image', 'active', 'position', 'created_at', 'updated_at'], withStore('banners'), ['store_id', 'id']);
     await upsertRows(client, 'push_campaigns', ['store_id', 'id', 'title', 'body', 'audience', 'status', 'scheduled_at', 'sent_at', 'success_count', 'failure_count', 'send_error', 'created_at', 'updated_at'], withStore('push_campaigns'), ['store_id', 'id']);

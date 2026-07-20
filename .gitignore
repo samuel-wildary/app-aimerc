@@ -3,6 +3,7 @@
 **/build/
 **/.gradle/
 **/.idea/
+**/.postgres-dev/
 **/local.properties
 backend/data/*.sqlite*
 backend/data/stores/*.sqlite*
@@ -15,7 +16,7 @@ backend/secrets/
 *.jks
 *.keystore
 **/CREDENCIAIS.txt
-window.xml
+window*.xml
 queiroz-*.png
 .env
 .env.*

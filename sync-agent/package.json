@@ -1,0 +1,19 @@
+{
+  "name": "aimerc-sync-agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node --env-file-if-exists=.env src/index.js",
+    "once": "node --env-file-if-exists=.env src/index.js --once",
+    "test": "node --test",
+    "build:windows": "node build-windows.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0",
+    "postject": "^1.0.0-alpha.6"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

@@ -1,66 +1,65 @@
 # Arquitetura AiMerc
 
-## Separacao do produto
+## Superficies
 
-O AiMerc possui quatro superficies independentes:
-
-1. App Android do consumidor.
-2. Dashboard operacional de cada supermercado.
+1. App Android individual de cada supermercado.
+2. Dashboard operacional do supermercado.
 3. Painel Control exclusivo do dono do SaaS.
-4. Backend e worker de integracao.
+4. Backend central e workers de integracao.
 
-O cliente do supermercado nunca recebe acesso ao painel Control.
+O Android e os dois paineis falam somente com a API HTTPS. Nenhum deles recebe credencial do PostgreSQL, Firebase Admin, ERP ou Asaas.
+
+```text
+Android / Dashboard / SaaS
+            |
+          HTTPS
+            |
+       Backend Node.js
+            |
+    pool de conexoes PostgreSQL
+            |
+ lojas, usuarios, produtos, imagens, pedidos, banners e campanhas
+```
+
+Docker empacota e executa os servicos; ele nao e o protocolo de comunicacao do aplicativo. O Android usa requisicoes HTTPS para o dominio publico do backend.
 
 ## Persistencia multiempresa
 
-- `backend/data/master.sqlite`: lojas, usuarios, planos e assinaturas.
-- `backend/data/stores/{storeId}.sqlite`: produtos, estoque, pedidos e itens de uma unica loja.
-- O token do gestor contem o `storeId` e o backend nunca aceita outro `storeId` enviado pela dashboard.
-- Uma loja nao consegue consultar ou alterar dados de outra loja.
+- PostgreSQL e a unica fonte oficial de dados.
+- Todas as tabelas operacionais possuem `store_id`.
+- O token do gestor contem o `storeId`; a API ignora qualquer tenant enviado pelo navegador.
+- Consultas e alteracoes sempre filtram pelo tenant autenticado.
+- Imagens sao armazenadas em `BYTEA` e servidas pela API com cache HTTP.
+- Pedido e baixa/devolucao de estoque ocorrem na mesma transacao e usam bloqueio de linha.
 
-Os arquivos SQLite sao adequados para desenvolvimento local e primeiros pilotos. Em producao com varias instancias, migrar o banco master para PostgreSQL e avaliar PostgreSQL por tenant ou schemas isolados.
+## Autenticacao e protecao
 
-## Autenticacao
-
-- Senhas: PBKDF2 com salt individual.
-- Sessao: token assinado com HMAC e validade de 12 horas.
+- Senhas novas: `scrypt` com salt individual; hashes PBKDF2 antigos sao atualizados no proximo login.
+- Sessao: token HMAC com validade limitada e suporte a rotacao de chave.
 - Perfis: `PLATFORM_ADMIN` e `STORE_MANAGER`.
-- Endpoints de pedidos, produtos, sincronizacao e SaaS exigem o perfil correto.
-
-Defina `AIMERC_TOKEN_SECRET` em producao. Nunca use o segredo local padrao fora do computador de desenvolvimento.
+- Login e criacao publica de pedidos possuem limites persistidos no PostgreSQL.
+- Tokens de acompanhamento de pedido ficam armazenados apenas como SHA-256.
+- CORS de producao aceita somente origens declaradas e a API envia HSTS e cabecalhos de seguranca.
+- Android release exige HTTPS, desabilita backup e criptografa o cadastro salvo no aparelho.
 
 ## Fluxo do pedido
 
 ```text
-Android -> catalogo publico da loja -> carrinho -> checkout
-        -> API valida loja, estoque e pedido minimo
-        -> transacao grava pedido e baixa estoque
-        -> dashboard recebe pedido
+Android -> API valida loja, itens, estoque e pedido minimo
+        -> transacao cria pedido e baixa estoque
+        -> dashboard acompanha e altera o status
+        -> Android consulta o status usando token exclusivo do pedido
         -> RECEIVED -> PICKING -> READY -> OUT_FOR_DELIVERY -> DONE
 ```
 
-Pedidos de retirada passam de `READY` diretamente para `DONE`.
+O aplicativo pode cancelar somente no periodo configurado e enquanto o pedido estiver em `RECEIVED`. Cancelamentos validos devolvem o estoque na mesma transacao.
 
 ## Sincronizacao
 
-O worker autentica como gestor e envia produtos para `/api/sync/products`.
-
-- Upsert por SKU.
-- Atualiza preco, estoque, imagem, promocao e disponibilidade.
-- CSV de demonstracao aceita campos entre aspas.
-- Integracoes reais de ERP devem ficar em `sync-worker`, nunca no Android.
+O worker autentica como gestor e envia produtos para `/api/sync/products`. A integracao de ERP fica no backend/worker, nunca dentro do APK.
 
 ## Pagamentos
 
-- Consumidor: dinheiro ou cartao na entrega/retirada.
+- Consumidor: dinheiro, cartao ou Pix na entrega/retirada.
 - Supermercado: mensalidade recorrente do SaaS.
-- A estrutura local de assinaturas esta pronta.
-- A criacao real de cobrancas e webhooks do Asaas depende das credenciais e do ambiente Asaas do proprietario.
-
-## Seguranca de ambiente
-
-- CORS limitado aos paineis locais ou a `AIMERC_ALLOWED_ORIGINS`.
-- Limite basico de requisicoes.
-- Cabecalhos de seguranca no backend.
-- Android debug permite HTTP para `10.0.2.2`.
-- Android release bloqueia HTTP; producao deve usar HTTPS.
+- Cobrancas Asaas e webhooks exigem credenciais configuradas somente no backend.

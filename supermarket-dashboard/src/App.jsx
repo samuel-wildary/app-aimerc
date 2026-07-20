@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ArrowRight,
   BarChart3,
@@ -9,6 +9,10 @@ import {
   ChevronRight,
   CircleDollarSign,
   Clock3,
+  Eye,
+  EyeOff,
+  ImagePlus,
+  ImageOff,
   LayoutDashboard,
   Images,
   LogOut,
@@ -21,10 +25,12 @@ import {
   Plus,
   Printer,
   RefreshCw,
+  Save,
   Search,
   ShoppingBasket,
   Sparkles,
   Store,
+  Tags,
   Trash2,
   Truck,
   UserRound,
@@ -55,6 +61,26 @@ const navItems = [
 
 const money = value => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(value || 0));
 const shortTime = value => new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit' }).format(new Date(value));
+
+async function prepareCatalogImage(file) {
+  if (!file || !file.type.startsWith('image/')) throw new Error('Selecione um arquivo de imagem valido');
+  const bitmap = await createImageBitmap(file);
+  const maxSide = 1_400;
+  const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
+  const width = Math.max(1, Math.round(bitmap.width * scale));
+  const height = Math.max(1, Math.round(bitmap.height * scale));
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext('2d');
+  context.fillStyle = '#ffffff';
+  context.fillRect(0, 0, width, height);
+  context.drawImage(bitmap, 0, 0, width, height);
+  bitmap.close();
+  const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/webp', .84));
+  if (!blob) throw new Error('Nao foi possivel otimizar a imagem');
+  return new File([blob], `${file.name.replace(/\.[^.]+$/, '') || 'produto'}.webp`, { type: 'image/webp' });
+}
 
 function readableText(hex) {
   const value = String(hex || '#000000').replace('#', '');
@@ -255,13 +281,91 @@ function Overview({ summary, orders, products, selected, setSelected, createDemo
   );
 }
 
-function Catalog({ products, query, setQuery }) {
+function ProductEditor({ product, categories, onClose, onSaved }) {
+  const [form, setForm] = useState({
+    catalogName: product.catalogName || product.name,
+    catalogCategory: product.catalogCategory || product.category,
+    description: product.description || '',
+    catalogVisible: product.catalogVisible
+  });
+  const [imageFile, setImageFile] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const preview = useMemo(() => imageFile ? URL.createObjectURL(imageFile) : product.image, [imageFile, product.image]);
+
+  useEffect(() => () => {
+    if (imageFile && preview) URL.revokeObjectURL(preview);
+  }, [imageFile, preview]);
+
+  async function submit(event) {
+    event.preventDefault();
+    setSaving(true);
+    setError('');
+    try {
+      await api.updateProductCatalog(product.id, form);
+      if (imageFile) await api.uploadProductImage(product.id, await prepareCatalogImage(imageFile));
+      await onSaved();
+      onClose();
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return <div className="catalog-editor-backdrop" onMouseDown={event => event.target === event.currentTarget && onClose()}>
+    <form className="catalog-editor" onSubmit={submit}>
+      <header><div><p className="overline">Edicao da vitrine</p><h2>Personalizar produto</h2><span>Preco e estoque continuam vindo da integracao.</span></div><button type="button" className="icon-button" onClick={onClose} aria-label="Fechar"><X size={18} /></button></header>
+      <div className="catalog-editor-body">
+        <section className="product-image-editor">
+          <div className="product-image-preview" style={{ backgroundImage: preview ? `url(${preview})` : 'none' }}><ImagePlus size={30} /></div>
+          <label className="image-upload-button"><ImagePlus size={17} /> Trocar imagem<input type="file" accept="image/jpeg,image/png,image/webp,image/avif" onChange={event => setImageFile(event.target.files?.[0] || null)} /></label>
+          <small>A imagem sera otimizada em WebP antes do envio. Recomendado: fundo neutro e produto centralizado.</small>
+        </section>
+        <section className="catalog-fields">
+          <label>Nome exibido no aplicativo<input value={form.catalogName} onChange={event => setForm(current => ({ ...current, catalogName: event.target.value }))} maxLength="160" required /></label>
+          <label>Categoria<input list="catalog-category-options" value={form.catalogCategory} onChange={event => setForm(current => ({ ...current, catalogCategory: event.target.value }))} maxLength="100" placeholder="Ex.: Carnes, Frutas ou Padaria" required /></label>
+          <datalist id="catalog-category-options">{categories.map(category => <option value={category.name} key={category.name} />)}</datalist>
+          <label>Descricao do produto<textarea value={form.description} onChange={event => setForm(current => ({ ...current, description: event.target.value }))} maxLength="1000" placeholder="Detalhes, corte, origem, peso ou observacoes para o cliente." /></label>
+          <div className="source-reference"><span>Informacao recebida da integracao</span><strong>{product.sourceName}</strong><small>{product.sourceCategory} · EAN {product.barcode || 'nao informado'}</small></div>
+          <div className="commercial-lock"><div><span>Preco atual</span><strong>{money(product.price)}</strong></div><div><span>Estoque</span><strong>{product.stock} {product.unit}</strong></div></div>
+          <label className="visibility-toggle"><input type="checkbox" checked={form.catalogVisible} onChange={event => setForm(current => ({ ...current, catalogVisible: event.target.checked }))} />{form.catalogVisible ? <Eye size={18} /> : <EyeOff size={18} />}<span><strong>{form.catalogVisible ? 'Visivel no aplicativo' : 'Oculto no aplicativo'}</strong><small>Voce pode ocultar sem excluir o item da integracao.</small></span></label>
+        </section>
+      </div>
+      {error && <div className="form-error">{error}</div>}
+      <footer><button type="button" className="catalog-cancel" onClick={onClose}>Cancelar</button><button className="primary" disabled={saving}><Save size={17} />{saving ? 'Salvando...' : 'Salvar alteracoes'}</button></footer>
+    </form>
+  </div>;
+}
+
+function Catalog({ products, categories, query, setQuery, category, setCategory, onChanged }) {
+  const [editing, setEditing] = useState(null);
+  const [page, setPage] = useState(1);
+  const [imageFilter, setImageFilter] = useState('all');
+  const pageSize = 60;
+  const withImage = products.filter(product => product.hasImage).length;
+  const withoutImage = products.length - withImage;
+  const filteredProducts = imageFilter === 'with'
+    ? products.filter(product => product.hasImage)
+    : imageFilter === 'without'
+      ? products.filter(product => !product.hasImage)
+      : products;
+  const totalPages = Math.max(1, Math.ceil(filteredProducts.length / pageSize));
+  const visibleProducts = filteredProducts.slice((page - 1) * pageSize, page * pageSize);
+
+  useEffect(() => setPage(1), [query, category, imageFilter]);
+
   return (
     <section className="panel catalog-panel">
-      <div className="panel-heading catalog-heading"><div><p className="overline">Estoque da loja</p><h2>Catalogo sincronizado</h2></div><span className="counter">{products.length}</span></div>
-      <div className="catalog-toolbar"><label className="search-box"><Search size={18} /><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Buscar por nome, SKU, codigo ou categoria" /></label><span className="sync-time"><i /> Sincronizado agora</span></div>
-      <div className="table-wrap"><table><thead><tr><th>Produto</th><th>SKU</th><th>Categoria</th><th>Preco</th><th>Estoque</th><th>Situacao</th></tr></thead><tbody>{products.map(product => <tr key={product.id}><td><div className="product-cell"><div className="product-thumb" style={{ backgroundImage: `url(${product.image})` }} /><strong>{product.name}</strong></div></td><td><code>{product.sku}</code></td><td>{product.category}</td><td><strong>{money(product.price)}</strong></td><td>{product.stock} {product.unit}</td><td><span className={`stock-status ${product.stock <= 5 ? 'low' : ''}`}><i />{product.stock <= 5 ? 'Estoque baixo' : 'Disponivel'}</span></td></tr>)}</tbody></table></div>
-      {!products.length && <EmptyState title="Nenhum produto encontrado" text="Tente outro nome, codigo ou categoria." />}
+      <div className="panel-heading catalog-heading"><div><p className="overline">Vitrine e estoque</p><h2>Catalogo da loja</h2><p className="catalog-intro">Organize categorias, corrija descricoes e use fotos proprias sem perder preco e estoque sincronizados.</p></div><span className="counter">{filteredProducts.length}</span></div>
+      <div className="catalog-toolbar"><label className="search-box"><Search size={18} /><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Buscar por nome, SKU, EAN ou categoria" /></label><label className="category-select"><Tags size={17} /><select value={category} onChange={event => setCategory(event.target.value)}><option value="Todos">Todas as categorias</option>{categories.map(item => <option value={item.name} key={item.name}>{item.name} ({item.total})</option>)}</select></label></div>
+      <div className="image-filter-bar"><span>Fotos do catalogo</span><div><button className={imageFilter === 'all' ? 'active' : ''} onClick={() => setImageFilter('all')}>Todos <b>{products.length}</b></button><button className={imageFilter === 'with' ? 'active' : ''} onClick={() => setImageFilter('with')}><Images size={14} /> Com imagem <b>{withImage}</b></button><button className={imageFilter === 'without' ? 'active warning' : 'warning'} onClick={() => setImageFilter('without')}><ImageOff size={14} /> Sem imagem <b>{withoutImage}</b></button></div></div>
+      <div className="category-chips"><button className={category === 'Todos' ? 'active' : ''} onClick={() => setCategory('Todos')}>Todas</button>{categories.map(item => <button className={category === item.name ? 'active' : ''} onClick={() => setCategory(item.name)} key={item.name}>{item.name}<span>{item.total}</span></button>)}</div>
+      <div className="catalog-sync-note"><RefreshCw size={16} /><span><strong>Sincronizacao protegida</strong> Preco, promocao e quantidade vêm da API. Foto, categoria e texto personalizados permanecem salvos.</span></div>
+      <div className="table-wrap"><table><thead><tr><th>Produto</th><th>SKU / EAN</th><th>Categoria</th><th>Preco</th><th>Estoque</th><th>Vitrine</th><th /></tr></thead><tbody>{visibleProducts.map(product => <tr key={product.id} className={!product.catalogVisible ? 'product-hidden' : ''}><td><div className="product-cell"><div className={`product-thumb ${product.hasImage ? '' : 'missing'}`} style={{ backgroundImage: product.hasImage && product.image ? `url(${product.image})` : 'none' }}>{!product.hasImage && <ImageOff size={17} />}</div><div><strong>{product.name}</strong>{product.catalogName && <small>Nome personalizado</small>}{!product.hasImage && <small className="missing-image-label">Imagem pendente</small>}</div></div></td><td><code>{product.barcode || product.sku}</code></td><td><span className="category-pill">{product.category}</span></td><td><strong>{money(product.price)}</strong></td><td>{product.stock} {product.unit}</td><td><span className={`stock-status ${product.catalogVisible ? '' : 'hidden'}`}>{product.catalogVisible ? <Eye size={14} /> : <EyeOff size={14} />}{product.catalogVisible ? 'Publicado' : 'Oculto'}</span></td><td><button className="edit-product-button" onClick={() => setEditing(product)}><Pencil size={15} /> Editar</button></td></tr>)}</tbody></table></div>
+      {filteredProducts.length > pageSize && <div className="catalog-pagination"><span>Mostrando {(page - 1) * pageSize + 1}-{Math.min(page * pageSize, filteredProducts.length)} de {filteredProducts.length}</span><div><button disabled={page === 1} onClick={() => setPage(current => Math.max(1, current - 1))}>Anterior</button><strong>{page} / {totalPages}</strong><button disabled={page === totalPages} onClick={() => setPage(current => Math.min(totalPages, current + 1))}>Proxima</button></div></div>}
+      {!filteredProducts.length && <EmptyState title={imageFilter === 'without' ? 'Todos os produtos possuem imagem' : 'Nenhum produto encontrado'} text={imageFilter === 'without' ? 'Nao existem pendencias de foto neste filtro.' : 'Tente outro nome, codigo ou categoria.'} />}
+      {editing && <ProductEditor product={editing} categories={categories} onClose={() => setEditing(null)} onSaved={onChanged} />}
     </section>
   );
 }
@@ -515,12 +619,14 @@ export default function App() {
   const [summary, setSummary] = useState(null);
   const [orders, setOrders] = useState([]);
   const [products, setProducts] = useState([]);
+  const [categories, setCategories] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [report, setReport] = useState(null);
   const [banners, setBanners] = useState([]);
   const [campaigns, setCampaigns] = useState([]);
   const [automations, setAutomations] = useState([]);
   const [query, setQuery] = useState('');
+  const [category, setCategory] = useState('Todos');
   const [customerQuery, setCustomerQuery] = useState('');
   const [selected, setSelected] = useState(null);
   const [error, setError] = useState('');
@@ -533,11 +639,12 @@ export default function App() {
     if (!api.token) return;
     setRefreshing(true);
     try {
-      const [summaryData, ordersData, productsData, bannersData, customersData, reportData, campaignsData, automationsData] = await Promise.all([api.summary(), api.orders(), api.products(query), api.banners(), api.customers(customerQuery), api.reports(), api.pushCampaigns(), api.pushAutomations()]);
+      const [summaryData, ordersData, productsData, categoriesData, bannersData, customersData, reportData, campaignsData, automationsData] = await Promise.all([api.summary(), api.orders(), api.products(query, category), api.productCategories(), api.banners(), api.customers(customerQuery), api.reports(), api.pushCampaigns(), api.pushAutomations()]);
       setSummary(summaryData);
       setSession(current => current || { user: summaryData.user, store: summaryData.store });
       setOrders(ordersData);
       setProducts(productsData);
+      setCategories(categoriesData);
       setBanners(bannersData);
       setCustomers(customersData);
       setReport(reportData);
@@ -551,7 +658,7 @@ export default function App() {
     } finally {
       setRefreshing(false);
     }
-  }, [query, customerQuery]);
+  }, [query, category, customerQuery]);
 
   useEffect(() => {
     if (!api.token) return;
@@ -564,7 +671,7 @@ export default function App() {
     if (!session || active !== 'catalog') return;
     const timeout = window.setTimeout(load, 250);
     return () => window.clearTimeout(timeout);
-  }, [query, active, session, load]);
+  }, [query, category, active, session, load]);
 
   useEffect(() => {
     if (!session || active !== 'customers') return;
@@ -683,7 +790,7 @@ export default function App() {
         <div className="page-content">
           {active === 'overview' && <Overview summary={summary} orders={orders} products={products} selected={selected} setSelected={setSelected} createDemo={createDemo} creatingDemo={creatingDemo} />}
           {active === 'orders' && <OrdersPanel orders={orders} selected={selected} setSelected={setSelected} />}
-          {active === 'catalog' && <Catalog products={products} query={query} setQuery={setQuery} />}
+          {active === 'catalog' && <Catalog products={products} categories={categories} query={query} setQuery={setQuery} category={category} setCategory={setCategory} onChanged={load} />}
           {active === 'delivery' && <Delivery orders={orders} selected={selected} setSelected={setSelected} />}
           {active === 'customers' && <Customers customers={customers} query={customerQuery} setQuery={setCustomerQuery} />}
           {active === 'reports' && <Reports report={report} />}

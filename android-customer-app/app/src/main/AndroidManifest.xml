@@ -4,7 +4,7 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
-        android:allowBackup="true"
+        android:allowBackup="false"
         android:icon="@drawable/ic_aimerc_logo"
         android:label="AiMerc"
         android:usesCleartextTraffic="${usesCleartextTraffic}"
