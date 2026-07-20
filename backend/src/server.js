@@ -182,7 +182,7 @@ function normalizeProduct(item) {
     barcode: optionalText(item.barcode, 80),
     name: requiredText(item.name, 'Nome do produto'),
     category: requiredText(item.category, 'Categoria', 100),
-    price: positiveNumber(item.price, 'Preco'),
+    price: positiveNumber(item.price, 'Preco', { min: 0 }),
     oldPrice: item.oldPrice == null || item.oldPrice === '' ? null : positiveNumber(item.oldPrice, 'Preco anterior'),
     stock: positiveNumber(item.stock, 'Estoque', { min: 0 }),
     unit: oneOf(item.unit || 'UN', ['UN', 'KG', 'L', 'CX', 'PCT'], 'Unidade'),
@@ -292,7 +292,7 @@ app.post('/api/auth/login', asyncRoute(async (req, res) => {
 
 app.get('/api/public/stores/:slug/catalog', asyncRoute(async (req, res) => {
   const store = await publicStore(req);
-  const products = (await listProducts(store.id, { q: req.query.q, category: req.query.category })).map(product => publicProduct(req, store, product));
+  const products = (await listProducts(store.id, { q: req.query.q, category: req.query.category, sellable: true })).map(product => publicProduct(req, store, product));
   const categories = [...new Set(products.map(product => product.category))];
   const categoryPriority = ['Mercearia', 'Bebidas', 'Hortifruti', 'Laticinios', 'Frios e Embutidos', 'Padaria', 'Frigorifico', 'Peixaria', 'Congelados', 'Biscoitos', 'Doces e Snacks', 'Limpeza', 'Higiene e Beleza', 'Casa e Bazar'];
   categories.sort((left, right) => {
@@ -321,7 +321,7 @@ app.get('/api/public/catalog-library/:ean/image', asyncRoute(async (req, res) =>
 
 app.get('/api/public/stores/:slug/products', asyncRoute(async (req, res) => {
   const store = await publicStore(req);
-  res.json((await listProducts(store.id, { q: req.query.q, category: req.query.category })).map(product => publicProduct(req, store, product)));
+  res.json((await listProducts(store.id, { q: req.query.q, category: req.query.category, sellable: true })).map(product => publicProduct(req, store, product)));
 }));
 
 app.get('/api/public/stores/:slug/products/:productId/image', asyncRoute(async (req, res) => {
@@ -438,7 +438,8 @@ app.get('/api/products', requireAuth('STORE_MANAGER'), asyncRoute(async (req, re
   const products = await listProducts(req.user.storeId, {
     q: req.query.q,
     category: req.query.category,
-    includeHidden: true
+    includeHidden: true,
+    includeInactive: true
   });
   res.json(products.map(product => publicProduct(req, store, product)));
 }));

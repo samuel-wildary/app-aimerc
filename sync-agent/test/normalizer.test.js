@@ -52,13 +52,14 @@ test('aceita nomes de campos personalizados sem recompilar o agente', () => {
   assert.equal(product.stock, 8);
 });
 
-test('ignora preco comercial invalido sem bloquear os demais produtos', () => {
+test('preserva produto com preco e estoque zerados para o catalogo administrativo', () => {
   const products = normalizeProducts([
-    { id_produto: 1, produto: 'Produto sem preco', vl_produto: 0, qtd_produto: 5, ativo: true },
+    { id_produto: 1, produto: 'Produto sem preco', vl_produto: 0, qtd_produto: 0, ativo: true },
     { id_produto: 2, produto: 'Produto valido', vl_produto: 4.5, qtd_produto: 8, ativo: true }
   ], 'SOLIDCON');
 
-  assert.equal(products.length, 1);
-  assert.equal(products[0].sku, '2');
-  assert.equal(products[0].price, 4.5);
+  assert.equal(products.length, 2);
+  assert.equal(products[0].price, 0);
+  assert.equal(products[0].stock, 0);
+  assert.equal(products[1].price, 4.5);
 });

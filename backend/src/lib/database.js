@@ -426,6 +426,7 @@ export async function listProducts(storeId, filters = {}) {
   const values = [storeId];
   if (!filters.includeInactive) clauses.push('p.active=1');
   if (!filters.includeHidden) clauses.push('p.catalog_visible=1');
+  if (filters.sellable) clauses.push('p.price>=0.001');
   if (filters.category && filters.category !== 'Todos') {
     values.push(filters.category);
     clauses.push(`COALESCE(NULLIF(p.catalog_category,''),p.source_category,p.category)=$${values.length}`);
@@ -730,7 +731,7 @@ export async function createOrder(store, input) {
     for (const item of input.items) quantities.set(item.productId, (quantities.get(item.productId) || 0) + item.quantity);
     const normalizedItems = [...quantities].map(([productId, quantity]) => ({ productId, quantity }));
     const productIds = normalizedItems.map(item => item.productId);
-    const productsResult = await client.query(`SELECT * FROM products WHERE store_id=$1 AND id=ANY($2::text[]) AND active=1 FOR UPDATE`,
+    const productsResult = await client.query(`SELECT * FROM products WHERE store_id=$1 AND id=ANY($2::text[]) AND active=1 AND price>=0.001 FOR UPDATE`,
       [store.id, productIds]);
     const products = new Map(productsResult.rows.map(row => [row.id, row]));
     const items = normalizedItems.map(item => {
