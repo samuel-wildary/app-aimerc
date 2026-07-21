@@ -139,10 +139,15 @@ const SCAN_SOURCES = [
   ['PAO_DE_ACUCAR_ALL', 'Pao de Acucar completo'],
   ['SAO_LUIZ_ALL', 'Mercadinho Sao Luiz completo'],
   ['PINHEIRO_ALL', 'Pinheiro completo'],
-  ['ATACADAO_ALL', 'Atacadao completo'],
+  ['ATACADAO_ALL', 'Atacadao completo em lotes'],
   ['CARREFOUR_SEARCH', 'Carrefour por termo'],
   ['CUSTOM_URL', 'URL personalizada']
 ];
+
+const SCAN_LIMITS = {
+  ATACADAO_ALL: 50_000,
+  DEFAULT: 5_000
+};
 
 function bytes(value) {
   const amount = Number(value || 0);
@@ -197,8 +202,18 @@ function CatalogLibrary() {
   }
 
   const job = library?.job;
-  const percentage = job?.total > 0 ? Math.min(100, Math.round((job.current / job.total) * 100)) : (job?.status === 'COMPLETED' ? 100 : 0);
+  const completed = job?.status === 'COMPLETED';
+  const percentage = completed ? 100 : (job?.total > 0 ? Math.min(100, Math.round((job.current / job.total) * 100)) : 0);
   const needsValue = ['CARREFOUR_SEARCH', 'CUSTOM_URL'].includes(form.sourceType);
+  const maxLimit = SCAN_LIMITS[form.sourceType] || SCAN_LIMITS.DEFAULT;
+  function chooseSource(sourceType) {
+    setForm(current => ({
+      ...current,
+      sourceType,
+      limit: sourceType === 'ATACADAO_ALL' ? 50000 : Math.min(Number(current.limit) || 120, SCAN_LIMITS.DEFAULT),
+      concurrency: sourceType === 'ATACADAO_ALL' ? Math.min(Math.max(Number(current.concurrency) || 8, 1), 10) : current.concurrency
+    }));
+  }
   return <div className="catalog-page">
     <section className="catalog-hero">
       <div><p className="eyebrow">Patrimonio de catalogo</p><h2>Imagens certas, produtos reconhecidos.</h2><p>Varra fontes homologadas e construa uma biblioteca central por EAN para enriquecer todos os supermercados.</p></div>
@@ -214,9 +229,9 @@ function CatalogLibrary() {
     <section className="catalog-control-grid">
       <form className="panel scan-form" onSubmit={start}>
         <div className="panel-head"><div><p className="eyebrow">Nova coleta</p><h2>Configurar varredura</h2></div><span className="scan-lock"><ShieldCheck size={15}/> Somente administrador</span></div>
-        <label>Fonte de produtos<select value={form.sourceType} onChange={event => setForm(current => ({ ...current, sourceType: event.target.value }))}>{SCAN_SOURCES.map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+        <label>Fonte de produtos<select value={form.sourceType} onChange={event => chooseSource(event.target.value)}>{SCAN_SOURCES.map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select></label>
         {needsValue && <label>{form.sourceType === 'CUSTOM_URL' ? 'URL HTTPS do supermercado' : 'Termo para pesquisar'}<input value={form.value} onChange={event => setForm(current => ({ ...current, value: event.target.value }))} placeholder={form.sourceType === 'CUSTOM_URL' ? 'https://loja.exemplo.com/produtos' : 'Ex.: cafe, arroz, limpeza'} required /></label>}
-        <div className="scan-fields"><label>Quantidade maxima<input type="number" min="1" max="5000" value={form.limit} onChange={event => setForm(current => ({ ...current, limit: event.target.value }))}/></label><label>Processos simultaneos<input type="number" min="1" max="12" value={form.concurrency} onChange={event => setForm(current => ({ ...current, concurrency: event.target.value }))}/></label></div>
+        <div className="scan-fields"><label>Quantidade maxima<input type="number" min="1" max={maxLimit} value={form.limit} onChange={event => setForm(current => ({ ...current, limit: event.target.value }))}/></label><label>Processos simultaneos<input type="number" min="1" max="12" value={form.concurrency} onChange={event => setForm(current => ({ ...current, concurrency: event.target.value }))}/></label></div>
         <div className="scan-note"><CircleAlert size={17}/><span>A coleta usa o servico especializado na porta 4300. O resultado final e copiado para o banco central do AiMerc.</span></div>
         <button className="accent scan-start" disabled={starting || running || !library?.collector?.online}><Play size={18}/>{running ? 'Varredura em andamento' : starting ? 'Iniciando...' : 'Iniciar varredura'}</button>
       </form>

@@ -61,7 +61,7 @@ const ATACADAO_BASE_URL = 'https://secure.atacadao.com.br';
 const ATACADAO_API_URL = `${ATACADAO_BASE_URL}/api/catalog_system/pub/products/search`;
 const ATACADAO_PAGE_SIZE = 50;
 const DEFAULT_ATACADAO_PRODUCT_LIMIT = 120;
-const MAX_ATACADAO_PRODUCT_LIMIT = 5000;
+const MAX_ATACADAO_PRODUCT_LIMIT = 50000;
 const DEFAULT_ATACADAO_CONCURRENCY = 6;
 const MAX_ATACADAO_CONCURRENCY = 12;
 

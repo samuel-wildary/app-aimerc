@@ -75,7 +75,8 @@ async function appendEvent(id, message) {
 
 function scraperPayload(input) {
   const sourceType = String(input.sourceType || '').toUpperCase();
-  const requestedLimit = clamp(input.limit, 100, 1, 5_000);
+  const maxLimit = sourceType === 'ATACADAO_ALL' ? 50_000 : 5_000;
+  const requestedLimit = clamp(input.limit, 100, 1, maxLimit);
   const concurrency = clamp(input.concurrency, 6, 1, 12);
   const sourceValue = String(input.value || '').trim();
   const presets = {
@@ -99,7 +100,7 @@ function scraperPayload(input) {
 }
 
 async function importLatestAssets(job) {
-  const limit = Math.min(job.requestedLimit, 5_000);
+  const limit = Math.min(job.requestedLimit, job.sourceType === 'ATACADAO_ALL' ? 50_000 : 5_000);
   let offset = 0;
   let imported = 0;
   let examined = 0;
