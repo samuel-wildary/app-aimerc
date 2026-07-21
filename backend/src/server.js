@@ -327,13 +327,15 @@ app.get('/api/public/stores/:slug/products', asyncRoute(async (req, res) => {
 app.get('/api/public/stores/:slug/products/:productId/image', asyncRoute(async (req, res) => {
   const store = await publicStore(req);
   const product = await getProduct(store.id, req.params.productId);
-  if (!product?.image) throw new ApiError(404, 'Imagem do produto nao encontrada');
+  if (!product) throw new ApiError(404, 'Produto nao encontrado');
   try {
     const image = await productImage(store.id, product);
+    if (!image) throw new ApiError(404, 'Imagem do produto nao encontrada');
     res.setHeader('Content-Type', image.contentType);
     res.setHeader('Cache-Control', 'public, max-age=86400, stale-while-revalidate=604800');
     res.send(image.data);
   } catch (error) {
+    if (error instanceof ApiError) throw error;
     console.error(`Falha ao carregar imagem ${product.barcode || product.id}:`, error.message);
     throw new ApiError(502, 'Imagem temporariamente indisponivel');
   }
