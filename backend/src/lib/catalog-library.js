@@ -83,6 +83,7 @@ function scraperPayload(input) {
     PAO_DE_ACUCAR_ALL: { type: 'pao_de_acucar_all', value: String(requestedLimit) },
     SAO_LUIZ_ALL: { type: 'sao_luiz_all', value: String(requestedLimit) },
     PINHEIRO_ALL: { type: 'pinheiro_all', value: String(requestedLimit) },
+    ATACADAO_ALL: { type: 'atacadao_all', value: String(requestedLimit) },
     CARREFOUR_SEARCH: { type: 'keyword', value: sourceValue },
     CUSTOM_URL: { type: 'url', value: sourceValue }
   };

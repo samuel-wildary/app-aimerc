@@ -139,6 +139,7 @@ const SCAN_SOURCES = [
   ['PAO_DE_ACUCAR_ALL', 'Pao de Acucar completo'],
   ['SAO_LUIZ_ALL', 'Mercadinho Sao Luiz completo'],
   ['PINHEIRO_ALL', 'Pinheiro completo'],
+  ['ATACADAO_ALL', 'Atacadao completo'],
   ['CARREFOUR_SEARCH', 'Carrefour por termo'],
   ['CUSTOM_URL', 'URL personalizada']
 ];
