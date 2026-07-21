@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import { hashPassword } from './auth.js';
 import { initializePostgres, query, transaction } from './postgres.js';
+import { normalizeCategory } from './categories.js';
 
 function isoNow() {
   return new Date().toISOString();
@@ -47,17 +48,17 @@ function mapStore(row) {
 
 export function mapProduct(row) {
   const sourceName = row.source_name || row.name;
-  const sourceCategory = row.source_category || row.category;
+  const sourceCategory = normalizeCategory(row.source_category || row.category);
   return {
     id: row.id,
     sku: row.sku,
     barcode: row.barcode,
     name: row.catalog_name || sourceName,
     sourceName,
-    category: row.catalog_category || sourceCategory,
+    category: normalizeCategory(row.catalog_category || sourceCategory),
     sourceCategory,
     catalogName: row.catalog_name || '',
-    catalogCategory: row.catalog_category || '',
+    catalogCategory: row.catalog_category ? normalizeCategory(row.catalog_category) : '',
     description: row.description || '',
     price: Number(row.price),
     oldPrice: row.old_price == null ? null : Number(row.old_price),
@@ -427,10 +428,6 @@ export async function listProducts(storeId, filters = {}) {
   if (!filters.includeInactive) clauses.push('p.active=1');
   if (!filters.includeHidden) clauses.push('p.catalog_visible=1');
   if (filters.sellable) clauses.push('p.price>=0.001');
-  if (filters.category && filters.category !== 'Todos') {
-    values.push(filters.category);
-    clauses.push(`COALESCE(NULLIF(p.catalog_category,''),p.source_category,p.category)=$${values.length}`);
-  }
   if (filters.q) {
     values.push(`%${String(filters.q).toLowerCase()}%`);
     const index = values.length;
@@ -442,7 +439,12 @@ export async function listProducts(storeId, filters = {}) {
       SELECT 1 FROM catalog_assets ca WHERE ca.ean=p.barcode
     ) AS has_catalog_image FROM products p WHERE ${clauses.join(' AND ')}
     ORDER BY p.promo DESC,CASE WHEN p.image != '' THEN 0 ELSE 1 END,COALESCE(NULLIF(p.catalog_name,''),p.source_name,p.name)`, values);
-  return result.rows.map(mapProduct);
+  const products = result.rows.map(mapProduct);
+  if (filters.category && filters.category !== 'Todos') {
+    const category = normalizeCategory(filters.category);
+    return products.filter(product => product.category === category);
+  }
+  return products;
 }
 
 export async function getProduct(storeId, productId) {
@@ -498,7 +500,12 @@ export async function updateProductCatalog(storeId, productId, input) {
 export async function listProductCategories(storeId) {
   const result = await query(`SELECT COALESCE(NULLIF(catalog_category,''),source_category,category) AS name,
     COUNT(*)::int AS total FROM products WHERE store_id=$1 GROUP BY 1 ORDER BY 1`, [storeId]);
-  return result.rows.map(row => ({ name: row.name || 'Sem categoria', total: Number(row.total) }));
+  const totals = new Map();
+  for (const row of result.rows) {
+    const name = normalizeCategory(row.name);
+    totals.set(name, (totals.get(name) || 0) + Number(row.total));
+  }
+  return [...totals].map(([name, total]) => ({ name, total })).sort((left, right) => left.name.localeCompare(right.name, 'pt-BR'));
 }
 
 function mapStoreIntegration(row) {

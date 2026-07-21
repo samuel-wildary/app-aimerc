@@ -75,6 +75,7 @@ import {
 import { createToken, passwordNeedsUpgrade, requireAuth, verifyPassword } from './lib/auth.js';
 import { integrationProvider, integrationProviders, publicIntegrationProvider } from './lib/integration-providers.js';
 import { encryptIntegrationSecret } from './lib/store-integration.js';
+import { normalizeCategory } from './lib/categories.js';
 import { ApiError, normalizeEmail, oneOf, optionalText, positiveNumber, requiredText, slugify } from './lib/validation.js';
 
 const app = express();
@@ -181,7 +182,7 @@ function normalizeProduct(item) {
     sku: requiredText(item.sku, 'SKU', 80),
     barcode: optionalText(item.barcode, 80),
     name: requiredText(item.name, 'Nome do produto'),
-    category: requiredText(item.category, 'Categoria', 100),
+    category: normalizeCategory(requiredText(item.category, 'Categoria', 100)),
     price: positiveNumber(item.price, 'Preco', { min: 0 }),
     oldPrice: item.oldPrice == null || item.oldPrice === '' ? null : positiveNumber(item.oldPrice, 'Preco anterior'),
     stock: positiveNumber(item.stock, 'Estoque', { min: 0 }),
@@ -455,7 +456,7 @@ app.patch('/api/products/:productId/catalog', requireAuth('STORE_MANAGER'), asyn
   await managerStore(req);
   const product = await updateProductCatalog(req.user.storeId, req.params.productId, {
     catalogName: optionalText(req.body.catalogName, 160),
-    catalogCategory: optionalText(req.body.catalogCategory, 100),
+    catalogCategory: req.body.catalogCategory ? normalizeCategory(optionalText(req.body.catalogCategory, 100)) : '',
     description: optionalText(req.body.description, 1_000),
     catalogVisible: req.body.catalogVisible !== false
   });
