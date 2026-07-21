@@ -1,4 +1,5 @@
 import pg from 'pg';
+import crypto from 'node:crypto';
 
 const { Pool } = pg;
 const databaseUrl = String(process.env.DATABASE_URL || '').trim();
@@ -382,10 +383,122 @@ CREATE INDEX IF NOT EXISTS integration_agents_seen_idx ON integration_agents(las
 CREATE INDEX IF NOT EXISTS integration_runs_store_started_idx ON integration_runs(store_id, started_at DESC);
 `;
 
+const VIRTUAL_IMAGES = {
+  VIRTUAL_ALHO: {
+    description: 'Alho Roxo',
+    url: 'https://images.unsplash.com/photo-1540148426945-6cf22a6b2383?auto=format&fit=crop&w=400&h=400&q=80'
+  },
+  VIRTUAL_BATATA: {
+    description: 'Batata Inglesa',
+    url: 'https://images.unsplash.com/photo-1518977676601-b53f82aba655?auto=format&fit=crop&w=400&h=400&q=80'
+  },
+  VIRTUAL_CEBOLA: {
+    description: 'Cebola Branca',
+    url: 'https://images.unsplash.com/photo-1618512496248-a07fe8376604?auto=format&fit=crop&w=400&h=400&q=80'
+  },
+  VIRTUAL_CENOURA: {
+    description: 'Cenoura Especial',
+    url: 'https://images.unsplash.com/photo-1598170845058-32b996a67876?auto=format&fit=crop&w=400&h=400&q=80'
+  },
+  VIRTUAL_TOMATE: {
+    description: 'Tomate Longa Vida',
+    url: 'https://images.unsplash.com/photo-1518977822534-7049a61ee0c2?auto=format&fit=crop&w=400&h=400&q=80'
+  },
+  VIRTUAL_BANANA: {
+    description: 'Banana Prata',
+    url: 'https://images.unsplash.com/photo-1571771894821-ce9b6c11b08e?auto=format&fit=crop&w=400&h=400&q=80'
+  },
+  VIRTUAL_MACA: {
+    description: 'Maçã Nacional',
+    url: 'https://images.unsplash.com/photo-1560806887-1e4cd0b6cbd6?auto=format&fit=crop&w=400&h=400&q=80'
+  },
+  VIRTUAL_LARANJA: {
+    description: 'Laranja Pêra',
+    url: 'https://images.unsplash.com/photo-1611080626919-7cf5a9dbab5b?auto=format&fit=crop&w=400&h=400&q=80'
+  },
+  VIRTUAL_LIMAO: {
+    description: 'Limão Taiti',
+    url: 'https://images.unsplash.com/photo-1590502593747-42a996133562?auto=format&fit=crop&w=400&h=400&q=80'
+  },
+  VIRTUAL_MAMAO: {
+    description: 'Mamão Formosa',
+    url: 'https://images.unsplash.com/photo-1526318896980-cf78c088247c?auto=format&fit=crop&w=400&h=400&q=80'
+  },
+  VIRTUAL_ABACAXI: {
+    description: 'Abacaxi Pérola',
+    url: 'https://images.unsplash.com/photo-1550258987-190a2d41a8ba?auto=format&fit=crop&w=400&h=400&q=80'
+  },
+  VIRTUAL_UVA: {
+    description: 'Uva Roxa',
+    url: 'https://images.unsplash.com/photo-1537640538966-79f369143f8f?auto=format&fit=crop&w=400&h=400&q=80'
+  },
+  VIRTUAL_ALFACE: {
+    description: 'Alface Hidropônica',
+    url: 'https://images.unsplash.com/photo-1622484211148-716598e04044?auto=format&fit=crop&w=400&h=400&q=80'
+  },
+  VIRTUAL_CARNE_MOIDA: {
+    description: 'Carne Moída de Segunda',
+    url: 'https://images.unsplash.com/photo-1588168333986-5078641a52d8?auto=format&fit=crop&w=400&h=400&q=80'
+  },
+  VIRTUAL_CARNE_BIFE: {
+    description: 'Bife Bovino Especial',
+    url: 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=400&h=400&q=80'
+  },
+  VIRTUAL_FRANGO_PEITO: {
+    description: 'Peito de Frango Resfriado',
+    url: 'https://images.unsplash.com/photo-1604503468506-a8da13d82791?auto=format&fit=crop&w=400&h=400&q=80'
+  },
+  VIRTUAL_LINGUICA: {
+    description: 'Linguiça Toscana',
+    url: 'https://images.unsplash.com/photo-1541532713592-79a0317b6b77?auto=format&fit=crop&w=400&h=400&q=80'
+  },
+  VIRTUAL_OVOS: {
+    description: 'Ovos Brancos Tipo Grande',
+    url: 'https://images.unsplash.com/photo-1516448424440-573236e39ab3?auto=format&fit=crop&w=400&h=400&q=80'
+  }
+};
+
+async function seedVirtualAssets() {
+  for (const [ean, info] of Object.entries(VIRTUAL_IMAGES)) {
+    try {
+      const existsRes = await pool.query('SELECT 1 FROM catalog_assets WHERE ean = $1 LIMIT 1', [ean]);
+      if (existsRes.rowCount > 0) continue; // Já cadastrado!
+
+      console.log(`[SEED] Baixando imagem padrao para ${info.description} (${ean})...`);
+      const response = await fetch(info.url, {
+        signal: AbortSignal.timeout(30_000)
+      });
+      if (!response.ok) {
+        console.error(`[SEED] Falha HTTP ao baixar ${info.description}: ${response.status}`);
+        continue;
+      }
+      
+      const buffer = Buffer.from(await response.arrayBuffer());
+      const contentType = response.headers.get('content-type') || 'image/jpeg';
+      const checksum = crypto.createHash('sha256').update(buffer).digest('hex');
+
+      await pool.query(
+        `INSERT INTO catalog_assets (ean, description, content_type, image_data, checksum, byte_size, source_name, source_url)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         ON CONFLICT (ean) DO NOTHING`,
+        [ean, info.description, contentType, buffer, checksum, buffer.length, 'Padrao Sistema', info.url]
+      );
+      console.log(`[SEED] Imagem padrao para ${info.description} cadastrada com sucesso.`);
+    } catch (err) {
+      console.error(`[SEED] Erro ao cadastrar ${info.description}:`, err.message);
+    }
+  }
+}
+
 let initialization;
 
 export function initializePostgres() {
-  initialization ||= pool.query(schema);
+  if (!initialization) {
+    initialization = (async () => {
+      await pool.query(schema);
+      seedVirtualAssets().catch(err => console.error('[SEED] Erro em seedVirtualAssets:', err.message));
+    })();
+  }
   return initialization;
 }
 

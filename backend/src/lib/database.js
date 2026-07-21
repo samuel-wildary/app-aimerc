@@ -442,7 +442,20 @@ export async function listProducts(storeId, filters = {}) {
       SELECT 1 FROM catalog_assets ca WHERE ca.ean=p.barcode
     ) AS has_catalog_image FROM products p WHERE ${clauses.join(' AND ')}
     ORDER BY p.promo DESC,CASE WHEN p.image != '' THEN 0 ELSE 1 END,COALESCE(NULLIF(p.catalog_name,''),p.source_name,p.name)`, values);
-  const products = result.rows.map(mapProduct);
+  const virtualEansRes = await query("SELECT ean FROM catalog_assets WHERE ean LIKE 'VIRTUAL_%'");
+  const activeVirtualEans = new Set(virtualEansRes.rows.map(row => row.ean));
+
+  const products = result.rows.map(row => {
+    const product = mapProduct(row);
+    if (!product.hasCatalogImage) {
+      const virtualEan = getVirtualEan(product.name, product.category);
+      if (virtualEan && activeVirtualEans.has(virtualEan)) {
+        product.hasCatalogImage = true;
+      }
+    }
+    return product;
+  });
+
   if (filters.category && filters.category !== 'Todos') {
     const category = normalizeCategory(filters.category);
     return products.filter(product => product.category === category);
@@ -456,7 +469,18 @@ export async function getProduct(storeId, productId) {
   ) AS has_stored_image,EXISTS(
     SELECT 1 FROM catalog_assets ca WHERE ca.ean=p.barcode
     ) AS has_catalog_image FROM products p WHERE p.store_id=$1 AND p.id=$2`, [storeId, productId])).rows[0];
-  return row ? mapProduct(row) : null;
+  if (!row) return null;
+  const product = mapProduct(row);
+  if (!product.hasCatalogImage) {
+    const virtualEan = getVirtualEan(product.name, product.category);
+    if (virtualEan) {
+      const virtualExists = await query("SELECT 1 FROM catalog_assets WHERE ean = $1 LIMIT 1", [virtualEan]);
+      if (virtualExists.rowCount > 0) {
+        product.hasCatalogImage = true;
+      }
+    }
+  }
+  return product;
 }
 
 export async function upsertProducts(storeId, items) {
@@ -960,4 +984,54 @@ export async function consumeOrderCreationQuota(ip) {
 export async function writeAuditLog({ storeId = null, actorId = null, action, entityType, entityId = null, metadata = {} }) {
   await query(`INSERT INTO audit_logs (store_id,actor_id,action,entity_type,entity_id,metadata)
     VALUES ($1,$2,$3,$4,$5,$6::jsonb)`, [storeId, actorId, action, entityType, entityId, JSON.stringify(metadata)]);
+}
+
+export function getVirtualEan(name, category) {
+  const cleanName = String(name || '').toLowerCase();
+  const cleanCategory = String(category || '').toLowerCase();
+  
+  const isHortifruti = cleanCategory.includes('hort') || cleanCategory.includes('verd') || cleanCategory.includes('frut') || cleanCategory.includes('legum');
+  const isMeat = cleanCategory.includes('acougue') || cleanCategory.includes('açougue') || cleanCategory.includes('carne') || cleanCategory.includes('frigorifico') || cleanCategory.includes('frigorífico') || cleanCategory.includes('ave') || cleanCategory.includes('peixe');
+
+  if (isHortifruti) {
+    if (cleanName.includes('alho')) return 'VIRTUAL_ALHO';
+    if (cleanName.includes('batata')) return 'VIRTUAL_BATATA';
+    if (cleanName.includes('cebola')) return 'VIRTUAL_CEBOLA';
+    if (cleanName.includes('cenoura')) return 'VIRTUAL_CENOURA';
+    if (cleanName.includes('tomate')) return 'VIRTUAL_TOMATE';
+    if (cleanName.includes('banana')) return 'VIRTUAL_BANANA';
+    if (cleanName.includes('maca') || cleanName.includes('maçã')) return 'VIRTUAL_MACA';
+    if (cleanName.includes('laranja')) return 'VIRTUAL_LARANJA';
+    if (cleanName.includes('limao') || cleanName.includes('limão')) return 'VIRTUAL_LIMAO';
+    if (cleanName.includes('mamao') || cleanName.includes('mamão')) return 'VIRTUAL_MAMAO';
+    if (cleanName.includes('abacaxi')) return 'VIRTUAL_ABACAXI';
+    if (cleanName.includes('uva')) return 'VIRTUAL_UVA';
+    if (cleanName.includes('alface')) return 'VIRTUAL_ALFACE';
+    if (cleanName.includes('pimentao') || cleanName.includes('pimentão')) return 'VIRTUAL_PIMENTAO';
+    if (cleanName.includes('cheiro verde') || cleanName.includes('coentro')) return 'VIRTUAL_CHEIRO_VERDE';
+    if (cleanName.includes('repolho')) return 'VIRTUAL_REPOLHO';
+    if (cleanName.includes('chuchu')) return 'VIRTUAL_CHUCHU';
+    if (cleanName.includes('abobora') || cleanName.includes('abóbora')) return 'VIRTUAL_ABOBORA';
+    if (cleanName.includes('melancia')) return 'VIRTUAL_MELANCIA';
+    if (cleanName.includes('melao') || cleanName.includes('melão')) return 'VIRTUAL_MELAO';
+    if (cleanName.includes('ovos') || cleanName.includes('ovo')) return 'VIRTUAL_OVOS';
+  }
+  
+  if (isMeat) {
+    if (cleanName.includes('moida') || cleanName.includes('moída')) return 'VIRTUAL_CARNE_MOIDA';
+    if (cleanName.includes('alcatra')) return 'VIRTUAL_CARNE_ALCATRA';
+    if (cleanName.includes('contra file') || cleanName.includes('contra-file') || cleanName.includes('contrafile')) return 'VIRTUAL_CARNE_CONTRA_FILE';
+    if (cleanName.includes('picanha')) return 'VIRTUAL_CARNE_PICANHA';
+    if (cleanName.includes('peito') && (cleanName.includes('frango') || cleanName.includes('ave'))) return 'VIRTUAL_FRANGO_PEITO';
+    if (cleanName.includes('coxa') && (cleanName.includes('frango') || cleanName.includes('ave'))) return 'VIRTUAL_FRANGO_COXA';
+    if (cleanName.includes('costela')) return 'VIRTUAL_CARNE_COSTELA';
+    if (cleanName.includes('bife')) return 'VIRTUAL_CARNE_BIFE';
+    if (cleanName.includes('suina') || cleanName.includes('suína') || cleanName.includes('porco')) return 'VIRTUAL_CARNE_SUINA';
+    if (cleanName.includes('asa') && (cleanName.includes('frango') || cleanName.includes('ave'))) return 'VIRTUAL_FRANGO_ASA';
+    if (cleanName.includes('coracao') || cleanName.includes('coração')) return 'VIRTUAL_FRANGO_CORACAO';
+    if (cleanName.includes('linguiça') || cleanName.includes('linguica')) return 'VIRTUAL_LINGUICA';
+    if (cleanName.includes('salsicha')) return 'VIRTUAL_SALSICHA';
+  }
+
+  return null;
 }

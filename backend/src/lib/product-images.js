@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import dns from 'node:dns/promises';
 import net from 'node:net';
 import { query } from './postgres.js';
+import { getVirtualEan } from './database.js';
 
 const maxImageBytes = 10 * 1024 * 1024;
 const allowedTypes = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif']);
@@ -70,6 +71,13 @@ export async function productImage(storeId, product) {
   if (databaseImage) return databaseImage;
   const catalogImage = await readCatalogImage(product.barcode);
   if (catalogImage) return catalogImage;
+
+  const virtualEan = getVirtualEan(product.name, product.category);
+  if (virtualEan) {
+    const virtualImage = await readCatalogImage(virtualEan);
+    if (virtualImage) return virtualImage;
+  }
+
   if (!product?.image) return null;
 
   const source = await assertSafeSource(product.image);
