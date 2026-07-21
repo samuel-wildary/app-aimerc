@@ -1520,6 +1520,7 @@ async function scrapeAtacadaoAll(value, logCallback, options = {}) {
 }
 
 async function scrapeCarrefourAll(value, logCallback, options = {}) {
+  const onProgress = typeof options.onProgress === 'function' ? options.onProgress : () => {};
   const productLimit = clampInteger(
     value,
     DEFAULT_CARREFOUR_ALL_PRODUCT_LIMIT,
@@ -1534,10 +1535,12 @@ async function scrapeCarrefourAll(value, logCallback, options = {}) {
   );
 
   logCallback(`[INFO] Iniciando varredura completa controlada do Carrefour. Limite: ${productLimit} produtos. Velocidade: ${detailConcurrency} produtos em paralelo.`);
+  onProgress({ phase: 'catalog', current: 0, total: productLimit, remaining: productLimit, saved: 0 });
 
   const categoryLinks = await collectCarrefourCategoryLinks(logCallback);
   if (categoryLinks.length === 0) {
     logCallback(`[AVISO] Nenhuma categoria encontrada para varredura completa.`);
+    onProgress({ phase: 'complete', current: 0, total: 0, remaining: 0, saved: 0 });
     return 0;
   }
 
@@ -1551,9 +1554,11 @@ async function scrapeCarrefourAll(value, logCallback, options = {}) {
 
   for (const categoryUrl of categoryLinks) {
     if (visitedProductUrls.size >= productLimit) break;
+    if (shouldCancel) break;
 
     for (let page = 0; page < MAX_CARREFOUR_PAGES_PER_CATEGORY; page++) {
       if (visitedProductUrls.size >= productLimit) break;
+      if (shouldCancel) break;
 
       const pageUrl = setPageParam(categoryUrl, page);
       const remaining = productLimit - visitedProductUrls.size;
@@ -1568,11 +1573,26 @@ async function scrapeCarrefourAll(value, logCallback, options = {}) {
         requestDelayMs: 0
       });
 
+      onProgress({
+        phase: 'products',
+        current: visitedProductUrls.size,
+        total: productLimit,
+        remaining: Math.max(productLimit - visitedProductUrls.size, 0),
+        saved: totalSaved
+      });
+
       await delay(150);
     }
   }
 
   logCallback(`[FIM] Carrefour completo finalizado. Produtos novos visitados: ${visitedProductUrls.size}. Imagens salvas/atualizadas: ${totalSaved}.`);
+  onProgress({
+    phase: 'complete',
+    current: visitedProductUrls.size,
+    total: visitedProductUrls.size,
+    remaining: 0,
+    saved: totalSaved
+  });
   return totalSaved;
 }
 
@@ -1829,7 +1849,7 @@ export async function runScraper(options, logCallback) {
   logCallback(`[INÍCIO] Iniciando motor de scraping às ${new Date().toLocaleTimeString()}`);
   
   if (type === 'carrefour_all') {
-    return await scrapeCarrefourAll(value, logCallback, { concurrency });
+    return await scrapeCarrefourAll(value, logCallback, { concurrency, onProgress });
   } else if (type === 'pao_de_acucar_all') {
     return await scrapePaoDeAcucarAll(value, logCallback, { concurrency, onProgress });
   } else if (type === 'sao_luiz_all') {
