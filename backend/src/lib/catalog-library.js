@@ -166,6 +166,10 @@ async function monitorJob(id) {
   try {
     while (true) {
       await new Promise(resolve => setTimeout(resolve, 1_500));
+      const jobRow = (await query('SELECT status FROM catalog_scan_jobs WHERE id=$1', [id])).rows[0];
+      if (jobRow && jobRow.status === 'FAILED') {
+        return;
+      }
       const status = await scraperStatus();
       if (!status.online) {
         offlineChecks += 1;
@@ -215,6 +219,22 @@ export async function startCatalogScan(input, actorId) {
     throw error;
   }
   return mapJob((await query('SELECT * FROM catalog_scan_jobs WHERE id=$1', [id])).rows[0]);
+}
+
+export async function cancelCatalogScan(actorId) {
+  const runningJob = (await query("SELECT * FROM catalog_scan_jobs WHERE status IN ('STARTING','RUNNING','IMPORTING') ORDER BY started_at DESC LIMIT 1")).rows[0];
+  if (!runningJob) return null;
+
+  try {
+    await scraperRequest('/api/scrape/cancel', { method: 'POST', timeout: 5000 });
+  } catch (error) {
+    console.error('Failed to send cancel request to scraper:', error.message);
+  }
+
+  await finishJob(runningJob.id, 'FAILED', { phase: 'cancelled', error: 'Cancelado pelo administrador.' });
+  await appendEvent(runningJob.id, 'Varredura cancelada pelo administrador.').catch(() => {});
+
+  return mapJob((await query('SELECT * FROM catalog_scan_jobs WHERE id=$1', [runningJob.id])).rows[0]);
 }
 
 export async function catalogLibraryOverview() {

@@ -30,6 +30,7 @@ class AdminApi {
   deleteStore(id, password) { return this.request(`/admin/stores/${id}`, { method: 'DELETE', body: JSON.stringify({ password }) }); }
   catalogLibrary(search = '') { return this.request(`/admin/catalog-library?limit=48&search=${encodeURIComponent(search)}`); }
   startCatalogScan(data) { return this.request('/admin/catalog-library/scans', { method: 'POST', body: JSON.stringify(data) }); }
+  cancelCatalogScan() { return this.request('/admin/catalog-library/scans/cancel', { method: 'POST' }); }
   deleteCatalogAsset(ean) { return this.request(`/admin/catalog-library/${encodeURIComponent(ean)}`, { method: 'DELETE' }); }
   integrationProviders() { return this.request('/admin/integration-providers'); }
   integrations() { return this.request('/admin/integrations'); }

@@ -170,6 +170,7 @@ function CatalogLibrary() {
   const [form, setForm] = useState({ sourceType: 'CARREFOUR_ALL', value: '', limit: 120, concurrency: 6 });
   const [loading, setLoading] = useState(true);
   const [starting, setStarting] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
   const [error, setError] = useState('');
   const [, tick] = useState(0);
   const running = ['STARTING', 'RUNNING', 'IMPORTING'].includes(library?.job?.status);
@@ -196,11 +197,21 @@ function CatalogLibrary() {
     finally { setStarting(false); }
   }
 
+  async function cancel() {
+    if (!window.confirm('Deseja realmente cancelar a varredura em andamento?')) return;
+    setCancelling(true);
+    setError('');
+    try { await api.cancelCatalogScan(); await load(search); }
+    catch (requestError) { setError(requestError.message); }
+    finally { setCancelling(false); }
+  }
+
   async function remove(ean) {
     if (!window.confirm(`Excluir o EAN ${ean} da biblioteca central?`)) return;
     try { await api.deleteCatalogAsset(ean); await load(search); }
     catch (requestError) { setError(requestError.message); }
   }
+
 
   const job = library?.job;
   const completed = job?.status === 'COMPLETED';
@@ -237,7 +248,15 @@ function CatalogLibrary() {
         {needsValue && <label>{form.sourceType === 'CUSTOM_URL' ? 'URL HTTPS do supermercado' : 'Termo para pesquisar'}<input value={form.value} onChange={event => setForm(current => ({ ...current, value: event.target.value }))} placeholder={form.sourceType === 'CUSTOM_URL' ? 'https://loja.exemplo.com/produtos' : 'Ex.: cafe, arroz, limpeza'} required /></label>}
         <div className="scan-fields"><label>Quantidade maxima<input type="number" min="1" max={maxLimit} value={form.limit} onChange={event => setForm(current => ({ ...current, limit: event.target.value }))}/></label><label>Processos simultaneos<input type="number" min="1" max="12" value={form.concurrency} onChange={event => setForm(current => ({ ...current, concurrency: event.target.value }))}/></label></div>
         <div className="scan-note"><CircleAlert size={17}/><span>A coleta usa o servico especializado na porta 4300. O resultado final e copiado para o banco central do AiMerc.</span></div>
-        <button className="accent scan-start" disabled={starting || running || !library?.collector?.online}><Play size={18}/>{running ? 'Varredura em andamento' : starting ? 'Iniciando...' : 'Iniciar varredura'}</button>
+        {running ? (
+          <button type="button" className="danger-button scan-start" onClick={cancel} disabled={cancelling}>
+            <X size={18}/> {cancelling ? 'Cancelando...' : 'Cancelar varredura'}
+          </button>
+        ) : (
+          <button className="accent scan-start" disabled={starting || !library?.collector?.online}>
+            <Play size={18}/> {starting ? 'Iniciando...' : 'Iniciar varredura'}
+          </button>
+        )}
       </form>
       <section className="panel scan-progress">
         <div className="panel-head"><div><p className="eyebrow">Execucao atual</p><h2>{job ? (running ? 'Coleta em andamento' : 'Ultima varredura') : 'Aguardando primeira coleta'}</h2></div>{job && <span className={`job-status ${String(job.status).toLowerCase()}`}>{job.status}</span>}</div>

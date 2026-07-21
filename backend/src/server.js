@@ -70,7 +70,8 @@ import {
   deleteCatalogAsset,
   getCatalogAssetImage,
   listCatalogAssets,
-  startCatalogScan
+  startCatalogScan,
+  cancelCatalogScan
 } from './lib/catalog-library.js';
 import { createToken, passwordNeedsUpgrade, requireAuth, verifyPassword } from './lib/auth.js';
 import { integrationProvider, integrationProviders, publicIntegrationProvider } from './lib/integration-providers.js';
@@ -870,6 +871,13 @@ app.post('/api/admin/catalog-library/scans', requireAuth('PLATFORM_ADMIN'), asyn
   await writeAuditLog({ actorId: req.user.sub, action: 'CATALOG_SCAN_STARTED', entityType: 'CATALOG_SCAN', entityId: job.id,
     metadata: { sourceType: job.sourceType, requestedLimit: job.requestedLimit } });
   res.status(202).json(job);
+}));
+
+app.post('/api/admin/catalog-library/scans/cancel', requireAuth('PLATFORM_ADMIN'), asyncRoute(async (req, res) => {
+  const job = await cancelCatalogScan(req.user.sub);
+  if (!job) throw new ApiError(400, 'Nenhuma varredura em andamento para cancelar');
+  await writeAuditLog({ actorId: req.user.sub, action: 'CATALOG_SCAN_CANCELLED', entityType: 'CATALOG_SCAN', entityId: job.id });
+  res.json(job);
 }));
 
 app.delete('/api/admin/catalog-library/:ean', requireAuth('PLATFORM_ADMIN'), asyncRoute(async (req, res) => {
