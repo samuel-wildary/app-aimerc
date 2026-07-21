@@ -52,7 +52,7 @@ const PINHEIRO_FILIAL_ID = 1;
 const PINHEIRO_CD_ID = 1;
 const PINHEIRO_PAGE_SIZE = 100;
 const DEFAULT_PINHEIRO_PRODUCT_LIMIT = 120;
-const MAX_PINHEIRO_PRODUCT_LIMIT = 50000;
+const MAX_PINHEIRO_PRODUCT_LIMIT = 5000;
 const DEFAULT_PINHEIRO_CONCURRENCY = 8;
 const MAX_PINHEIRO_CONCURRENCY = 12;
 const PINHEIRO_LOJA_USER = 'loja';
@@ -61,9 +61,14 @@ const ATACADAO_BASE_URL = 'https://secure.atacadao.com.br';
 const ATACADAO_API_URL = `${ATACADAO_BASE_URL}/api/catalog_system/pub/products/search`;
 const ATACADAO_PAGE_SIZE = 50;
 const DEFAULT_ATACADAO_PRODUCT_LIMIT = 120;
-const MAX_ATACADAO_PRODUCT_LIMIT = 50000;
+const MAX_ATACADAO_PRODUCT_LIMIT = 5000;
 const DEFAULT_ATACADAO_CONCURRENCY = 6;
 const MAX_ATACADAO_CONCURRENCY = 12;
+
+export let shouldCancel = false;
+export function cancelScrape() {
+  shouldCancel = true;
+}
 
 function delay(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -82,6 +87,9 @@ async function runWithConcurrency(items, concurrency, worker) {
     let subtotal = 0;
 
     while (nextIndex < items.length) {
+      if (shouldCancel) {
+        break;
+      }
       const currentIndex = nextIndex++;
       subtotal += await worker(items[currentIndex], currentIndex);
     }
@@ -186,7 +194,7 @@ async function downloadImage(url, logCallback) {
 async function saveImageAsset(ean, imageData, mimeType, imageUrl, sourceSite, position, logCallback) {
   try {
     await db.query(
-      `INSERT INTO scraper_product_image_assets (ean, image_data, mime_type, image_url, source_site, position)
+      `INSERT INTO product_image_assets (ean, image_data, mime_type, image_url, source_site, position)
        VALUES ($1, $2, $3, $4, $5, $6)
        ON CONFLICT (ean, image_url)
        DO UPDATE SET
@@ -240,7 +248,7 @@ async function saveToDatabase(ean, imageData, mimeType, imageUrl, sourceSite, lo
   try {
     const cleanProductName = normalizeProductName(productName) || productNameFromUrl(productUrl);
     const queryText = `
-      INSERT INTO scraper_product_images (ean, image_data, mime_type, image_url, source_site, product_url, product_name)
+      INSERT INTO product_images (ean, image_data, mime_type, image_url, source_site, product_url, product_name)
       VALUES ($1, $2, $3, $4, $5, $6, $7)
       ON CONFLICT (ean) 
       DO UPDATE SET 
@@ -248,8 +256,8 @@ async function saveToDatabase(ean, imageData, mimeType, imageUrl, sourceSite, lo
         mime_type = EXCLUDED.mime_type, 
         image_url = EXCLUDED.image_url, 
         source_site = EXCLUDED.source_site,
-        product_url = COALESCE(EXCLUDED.product_url, scraper_product_images.product_url),
-        product_name = COALESCE(EXCLUDED.product_name, scraper_product_images.product_name),
+        product_url = COALESCE(EXCLUDED.product_url, product_images.product_url),
+        product_name = COALESCE(EXCLUDED.product_name, product_images.product_name),
         scraped_at = CURRENT_TIMESTAMP;
     `;
     
@@ -263,7 +271,7 @@ async function saveToDatabase(ean, imageData, mimeType, imageUrl, sourceSite, lo
 }
 
 async function productExists(ean) {
-  const result = await db.query('SELECT 1 FROM scraper_product_images WHERE ean = $1 LIMIT 1', [ean]);
+  const result = await db.query('SELECT 1 FROM product_images WHERE ean = $1 LIMIT 1', [ean]);
   return result.rows.length > 0;
 }
 
@@ -271,7 +279,7 @@ async function attachProductUrlToExistingEAN(ean, productUrl) {
   if (!productUrl) return;
 
   await db.query(
-    `UPDATE scraper_product_images
+    `UPDATE product_images
      SET product_url = $2
      WHERE ean = $1 AND (product_url IS NULL OR product_url = '')`,
     [ean, productUrl]
@@ -283,7 +291,7 @@ async function attachNameToExistingEAN(ean, productName) {
   if (!cleanProductName) return;
 
   await db.query(
-    `UPDATE scraper_product_images
+    `UPDATE product_images
      SET product_name = $2
      WHERE ean = $1 AND (product_name IS NULL OR product_name = '')`,
     [ean, cleanProductName]
@@ -308,7 +316,7 @@ async function markProductPageProcessed(productUrl, status, ean = null) {
 async function getExistingCarrefourProductUrls(logCallback) {
   try {
     const result = await db.query(
-      `SELECT product_url FROM scraper_product_images
+      `SELECT product_url FROM product_images
        WHERE product_url LIKE 'https://mercado.carrefour.com.br/produto/%'
        UNION
        SELECT product_url FROM scraped_product_pages
@@ -325,7 +333,7 @@ async function getExistingCarrefourProductUrls(logCallback) {
 async function getExistingPaoProductUrls(logCallback) {
   try {
     const result = await db.query(
-      `SELECT product_url FROM scraper_product_images
+      `SELECT product_url FROM product_images
        WHERE product_url LIKE 'https://www.paodeacucar.com/produto/%'
        UNION
        SELECT product_url FROM scraped_product_pages
@@ -664,7 +672,7 @@ async function saoLuizGetWithRetry(client, path, config = {}) {
 async function getExistingSaoLuizProductUrls(logCallback) {
   try {
     const result = await db.query(
-      `SELECT product_url FROM scraper_product_images
+      `SELECT product_url FROM product_images
        WHERE product_url LIKE 'https://mercadinhossaoluiz.com.br/loja/355/%'
        UNION
        SELECT product_url FROM scraped_product_pages
@@ -756,7 +764,7 @@ async function fetchSaoLuizCategoryPage(client, category, page) {
 async function saveSaoLuizImagesForExistingProduct(ean, imageUrls, logCallback) {
   let position = 0;
   const current = await db.query(
-    'SELECT COALESCE(MAX(position), -1)::int AS position FROM scraper_product_image_assets WHERE ean = $1',
+    'SELECT COALESCE(MAX(position), -1)::int AS position FROM product_image_assets WHERE ean = $1',
     [ean]
   );
   position = current.rows[0].position + 1;
@@ -1155,7 +1163,7 @@ async function pinheiroGetWithRetry(client, path, config = {}) {
 async function getExistingPinheiroProductUrls(logCallback) {
   try {
     const result = await db.query(
-      `SELECT product_url FROM scraper_product_images
+      `SELECT product_url FROM product_images
        WHERE product_url LIKE 'https://www.lojaonline.pinheirosupermercado.com.br/produto/%'
        UNION
        SELECT product_url FROM scraped_product_pages
@@ -1195,16 +1203,15 @@ async function getPinheiroProductImages(client, product) {
 
 async function savePinheiroImagesForExistingProduct(ean, imageUrls, logCallback) {
   const current = await db.query(
-    'SELECT COALESCE(MAX(position), -1)::int AS position FROM scraper_product_image_assets WHERE ean = $1',
+    'SELECT COALESCE(MAX(position), -1)::int AS position FROM product_image_assets WHERE ean = $1',
     [ean]
   );
   let position = current.rows[0].position + 1;
-  let saved = 0;
 
   for (const imageUrl of imageUrls) {
     const downloaded = await downloadImage(imageUrl, logCallback);
     if (!downloaded) continue;
-    const savedAsset = await saveImageAsset(
+    await saveImageAsset(
       ean,
       downloaded.buffer,
       downloaded.mimeType,
@@ -1213,9 +1220,7 @@ async function savePinheiroImagesForExistingProduct(ean, imageUrls, logCallback)
       position++,
       logCallback
     );
-    if (savedAsset) saved += 1;
   }
-  return saved;
 }
 
 async function scrapePinheiroProduct(client, product, logCallback) {
@@ -1239,10 +1244,10 @@ async function scrapePinheiroProduct(client, product, logCallback) {
   if (await productExists(ean)) {
     await attachProductUrlToExistingEAN(ean, productUrl);
     await attachNameToExistingEAN(ean, productName);
-    const updated = await savePinheiroImagesForExistingProduct(ean, imageUrls, logCallback);
+    await savePinheiroImagesForExistingProduct(ean, imageUrls, logCallback);
     await markProductPageProcessed(productUrl, 'exists', ean);
-    logCallback(`[ATUALIZADO] EAN ${ean} ja existe. ${updated} imagem(ns) do Pinheiro foram conferidas.`);
-    return updated ? 1 : 0;
+    logCallback(`[PULADO] EAN ${ean} ja existe. Imagens extras do Pinheiro foram conferidas.`);
+    return 0;
   }
 
   logCallback(`[PRODUTO] ${productName || 'Sem nome'} | EAN: ${ean} | imagens: ${imageUrls.length}`);
@@ -1268,7 +1273,8 @@ async function scrapePinheiroAll(value, logCallback, options = {}) {
 
   const client = await createPinheiroApiClient();
   const departments = await getPinheiroDepartments(client);
-  logCallback(`[INFO] Pinheiro: ${departments.length} departamentos encontrados. Modo completo vai revisitar produtos existentes para atualizar imagens.`);
+  const skippedProductUrls = await getExistingPinheiroProductUrls(logCallback);
+  logCallback(`[INFO] Pinheiro: ${departments.length} departamentos encontrados e ${skippedProductUrls.size} produtos ja processados.`);
 
   const candidates = [];
   const seenProductIds = new Set();
@@ -1299,14 +1305,14 @@ async function scrapePinheiroAll(value, logCallback, options = {}) {
         if (candidates.length >= productLimit) break;
         const productId = String(product.produto_id || product.id || '');
         const productUrl = pinheiroProductUrl(product);
-        if (!productId || seenProductIds.has(productId) || !productUrl) continue;
+        if (!productId || seenProductIds.has(productId) || skippedProductUrls.has(productUrl)) continue;
         seenProductIds.add(productId);
         candidates.push(product);
       }
     }
   }
 
-  logCallback(`[INFO] Catalogo do Pinheiro mapeado. ${candidates.length} produtos serao processados/atualizados.`);
+  logCallback(`[INFO] Catalogo do Pinheiro mapeado. ${candidates.length} produtos novos serao processados.`);
   let completed = 0;
   let saved = 0;
   onProgress({ phase: 'products', current: 0, total: candidates.length, remaining: candidates.length, saved: 0 });
@@ -1323,7 +1329,7 @@ async function scrapePinheiroAll(value, logCallback, options = {}) {
   });
 
   onProgress({ phase: 'complete', current: candidates.length, total: candidates.length, remaining: 0, saved: totalSaved });
-  logCallback(`[FIM] Pinheiro finalizado. Produtos consultados: ${candidates.length}. Produtos salvos/atualizados: ${totalSaved}.`);
+  logCallback(`[FIM] Pinheiro finalizado. Produtos consultados: ${candidates.length}. Produtos novos salvos: ${totalSaved}.`);
   return totalSaved;
 }
 
@@ -1380,38 +1386,117 @@ async function scrapeAtacadaoAll(value, logCallback, options = {}) {
   logCallback(`[INFO] Iniciando Atacadao Completo. Limite: ${productLimit}. Velocidade: ${concurrency} produtos em paralelo.`);
   onProgress({ phase: 'catalog', current: 0, total: productLimit, remaining: productLimit, saved: 0 });
 
-  for (let from = 0; candidates.length < productLimit; from += ATACADAO_PAGE_SIZE) {
-    const to = from + ATACADAO_PAGE_SIZE - 1;
-    logCallback(`[CATALOGO] Atacadao produtos ${from + 1}-${to + 1} | selecionados: ${candidates.length}/${productLimit}`);
-
-    let products;
-    try {
-      const response = await axios.get(ATACADAO_API_URL, {
-        params: { _from: from, _to: to },
-        headers: { ...DEFAULT_HEADERS, Accept: 'application/json', Referer: `${ATACADAO_BASE_URL}/` },
-        timeout: 30000,
-        maxRedirects: 5
-      });
-      products = Array.isArray(response.data) ? response.data : [];
-    } catch (error) {
-      if (error.response?.status === 416) break;
-      throw new Error(`Falha ao consultar o catalogo do Atacadao: ${error.message}`);
-    }
-
-    if (!products.length) break;
-
-    for (const candidate of atacadaoCandidates(products)) {
-      if (candidates.length >= productLimit) break;
-      if (seenEANs.has(candidate.ean)) continue;
-      seenEANs.add(candidate.ean);
-      candidates.push(candidate);
-    }
-
-    onProgress({
-      phase: 'catalog', current: candidates.length, total: productLimit,
-      remaining: Math.max(productLimit - candidates.length, 0), saved: 0
+  logCallback(`[INFO] Carregando a árvore de categorias do Atacadão para contornar limites...`);
+  let leafPaths = [];
+  try {
+    const treeResponse = await axios.get(`${ATACADAO_BASE_URL}/api/catalog_system/pub/category/tree/2`, {
+      headers: DEFAULT_HEADERS,
+      timeout: 20000
     });
-    if (products.length < ATACADAO_PAGE_SIZE) break;
+    
+    function getLeafCategoryPaths(categories) {
+      const paths = [];
+      function traverse(item) {
+        if (Array.isArray(item.children) && item.children.length > 0) {
+          item.children.forEach(traverse);
+        } else if (item.url) {
+          try {
+            const path = new URL(item.url).pathname.replace(/^\/|\/$/g, '');
+            if (path && !paths.includes(path)) {
+              paths.push(path);
+            }
+          } catch (e) {}
+        }
+      }
+      categories.forEach(traverse);
+      return paths;
+    }
+
+    leafPaths = getLeafCategoryPaths(treeResponse.data);
+    logCallback(`[INFO] Árvore de categorias carregada. Encontradas ${leafPaths.length} categorias folha.`);
+  } catch (error) {
+    logCallback(`[AVISO] Falha ao obter árvore de categorias: ${error.message}. Usando busca geral (limite VTEX ativo)...`);
+  }
+
+  if (leafPaths.length > 0) {
+    for (const categoryPath of leafPaths) {
+      if (candidates.length >= productLimit) break;
+      if (shouldCancel) break;
+
+      logCallback(`[CATEGORIA] Varrendo produtos de: ${categoryPath} | Coletados: ${candidates.length}/${productLimit}`);
+      
+      for (let from = 0; candidates.length < productLimit; from += ATACADAO_PAGE_SIZE) {
+        if (shouldCancel) break;
+        const to = from + ATACADAO_PAGE_SIZE - 1;
+        
+        let products;
+        try {
+          const response = await axios.get(`${ATACADAO_BASE_URL}/api/catalog_system/pub/products/search/${categoryPath}`, {
+            params: { _from: from, _to: to },
+            headers: { ...DEFAULT_HEADERS, Accept: 'application/json', Referer: `${ATACADAO_BASE_URL}/` },
+            timeout: 30000
+          });
+          products = Array.isArray(response.data) ? response.data : [];
+        } catch (error) {
+          if (error.response?.status === 416) break;
+          logCallback(`[AVISO] Erro ao consultar produtos na categoria ${categoryPath}: ${error.message}`);
+          break;
+        }
+
+        if (!products.length) break;
+
+        for (const candidate of atacadaoCandidates(products)) {
+          if (candidates.length >= productLimit) break;
+          if (seenEANs.has(candidate.ean)) continue;
+          seenEANs.add(candidate.ean);
+          candidates.push(candidate);
+        }
+
+        onProgress({
+          phase: 'catalog', current: candidates.length, total: productLimit,
+          remaining: Math.max(productLimit - candidates.length, 0), saved: 0
+        });
+
+        if (products.length < ATACADAO_PAGE_SIZE) break;
+        await delay(60); // Evitar bloqueio de IP
+      }
+    }
+  } else {
+    for (let from = 0; candidates.length < productLimit; from += ATACADAO_PAGE_SIZE) {
+      if (shouldCancel) break;
+      const to = from + ATACADAO_PAGE_SIZE - 1;
+      logCallback(`[CATALOGO] Atacadao produtos ${from + 1}-${to + 1} | selecionados: ${candidates.length}/${productLimit}`);
+
+      let products;
+      try {
+        const response = await axios.get(ATACADAO_API_URL, {
+          params: { _from: from, _to: to },
+          headers: { ...DEFAULT_HEADERS, Accept: 'application/json', Referer: `${ATACADAO_BASE_URL}/` },
+          timeout: 30000,
+          maxRedirects: 5
+        });
+        products = Array.isArray(response.data) ? response.data : [];
+      } catch (error) {
+        if (error.response?.status === 416) break;
+        throw new Error(`Falha ao consultar o catalogo do Atacadao: ${error.message}`);
+      }
+
+      if (!products.length) break;
+
+      for (const candidate of atacadaoCandidates(products)) {
+        if (candidates.length >= productLimit) break;
+        if (seenEANs.has(candidate.ean)) continue;
+        seenEANs.add(candidate.ean);
+        candidates.push(candidate);
+      }
+
+      onProgress({
+        phase: 'catalog', current: candidates.length, total: productLimit,
+        remaining: Math.max(productLimit - candidates.length, 0), saved: 0
+      });
+      if (products.length < ATACADAO_PAGE_SIZE) break;
+      await delay(60);
+    }
   }
 
   let completed = 0;
@@ -1555,6 +1640,10 @@ async function scrapeHTMLPage(targetUrl, logCallback, options = {}) {
     if (jsonLdProducts.length > 0) {
       logCallback(`[INFO] Encontrados ${jsonLdProducts.length} produtos estruturados via JSON-LD. Baixando imagens...`);
       for (const product of jsonLdProducts) {
+        if (shouldCancel) {
+          logCallback('[SISTEMA] Varredura cancelada pelo usuário.');
+          break;
+        }
         // Check standard fields for EAN-13
         const eanText = product.gtin13 || product.gtin || product.sku || product.mpn;
         const ean = extractEAN(String(eanText || ''));
@@ -1625,6 +1714,10 @@ async function scrapeHTMLPage(targetUrl, logCallback, options = {}) {
       logCallback(`[INFO] Total de imagens encontradas na página: ${images.length}`);
       
       for (let i = 0; i < images.length; i++) {
+        if (shouldCancel) {
+          logCallback('[SISTEMA] Varredura cancelada pelo usuário.');
+          break;
+        }
         const img = images[i];
         const src = $(img).attr('src') || $(img).attr('data-src') || $(img).attr('data-lazy-src');
         const alt = $(img).attr('alt') || '';
@@ -1660,6 +1753,10 @@ async function scrapeHTMLPage(targetUrl, logCallback, options = {}) {
     } else {
       // Process card by card to guarantee correct mapping
       for (let i = 0; i < productCards.length; i++) {
+        if (shouldCancel) {
+          logCallback('[SISTEMA] Varredura cancelada pelo usuário.');
+          break;
+        }
         const card = productCards[i];
         const cardHtml = $(card).html();
         
@@ -1726,6 +1823,7 @@ async function scrapeHTMLPage(targetUrl, logCallback, options = {}) {
  * Main scraper dispatcher
  */
 export async function runScraper(options, logCallback) {
+  shouldCancel = false;
   const { type, value, concurrency, onProgress } = options; // type: 'url' ou 'keyword', value: URL ou palavra-chave
   
   logCallback(`[INÍCIO] Iniciando motor de scraping às ${new Date().toLocaleTimeString()}`);

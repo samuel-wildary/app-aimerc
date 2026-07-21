@@ -6,7 +6,7 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import db from './db.js';
-import { runScraper } from './scraper.js';
+import { runScraper, cancelScrape } from './scraper.js';
 
 dotenv.config();
 
@@ -416,6 +416,21 @@ app.post('/api/scrape', async (req, res) => {
   })();
 
   res.json({ success: true, message: 'Scraping iniciado em segundo plano.' });
+});
+
+// 4.5. Cancel Scraping Job
+app.post('/api/scrape/cancel', async (req, res) => {
+  if (!isScrapingActive) {
+    return res.status(400).json({ error: 'Nenhuma varredura ativa para cancelar.' });
+  }
+  
+  try {
+    cancelScrape();
+    broadcastLog('[SISTEMA] Solicitando cancelamento da varredura...');
+    res.json({ success: true, message: 'Cancelamento solicitado com sucesso.' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // 5. Delete an image record
