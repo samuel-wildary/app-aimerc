@@ -427,7 +427,10 @@ export async function listProducts(storeId, filters = {}) {
   const values = [storeId];
   if (!filters.includeInactive) clauses.push('p.active=1');
   if (!filters.includeHidden) clauses.push('p.catalog_visible=1');
-  if (filters.sellable) clauses.push('p.price>=0.001');
+  if (filters.sellable) {
+    clauses.push('p.price>=0.001');
+    clauses.push('p.stock<>0');
+  }
   if (filters.q) {
     values.push(`%${String(filters.q).toLowerCase()}%`);
     const index = values.length;

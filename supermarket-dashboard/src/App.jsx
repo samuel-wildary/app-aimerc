@@ -345,11 +345,14 @@ function Catalog({ products, categories, query, setQuery, category, setCategory,
   const pageSize = 60;
   const withImage = products.filter(product => product.hasImage).length;
   const withoutImage = products.length - withImage;
+  const outOfStock = products.filter(product => Number(product.stock) === 0).length;
   const filteredProducts = imageFilter === 'with'
     ? products.filter(product => product.hasImage)
     : imageFilter === 'without'
       ? products.filter(product => !product.hasImage)
-      : products;
+      : imageFilter === 'out_of_stock'
+        ? products.filter(product => Number(product.stock) === 0)
+        : products;
   const totalPages = Math.max(1, Math.ceil(filteredProducts.length / pageSize));
   const visibleProducts = filteredProducts.slice((page - 1) * pageSize, page * pageSize);
 
@@ -359,12 +362,28 @@ function Catalog({ products, categories, query, setQuery, category, setCategory,
     <section className="panel catalog-panel">
       <div className="panel-heading catalog-heading"><div><p className="overline">Vitrine e estoque</p><h2>Catalogo da loja</h2><p className="catalog-intro">Organize categorias, corrija descricoes e use fotos proprias sem perder preco e estoque sincronizados.</p></div><span className="counter">{filteredProducts.length}</span></div>
       <div className="catalog-toolbar"><label className="search-box"><Search size={18} /><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Buscar por nome, SKU, EAN ou categoria" /></label><label className="category-select"><Tags size={17} /><select value={category} onChange={event => setCategory(event.target.value)}><option value="Todos">Todas as categorias</option>{categories.map(item => <option value={item.name} key={item.name}>{item.name} ({item.total})</option>)}</select></label></div>
-      <div className="image-filter-bar"><span>Fotos do catalogo</span><div><button className={imageFilter === 'all' ? 'active' : ''} onClick={() => setImageFilter('all')}>Todos <b>{products.length}</b></button><button className={imageFilter === 'with' ? 'active' : ''} onClick={() => setImageFilter('with')}><Images size={14} /> Com imagem <b>{withImage}</b></button><button className={imageFilter === 'without' ? 'active warning' : 'warning'} onClick={() => setImageFilter('without')}><ImageOff size={14} /> Sem imagem <b>{withoutImage}</b></button></div></div>
+      <div className="image-filter-bar"><span>Fotos do catalogo</span><div><button className={imageFilter === 'all' ? 'active' : ''} onClick={() => setImageFilter('all')}>Todos <b>{products.length}</b></button><button className={imageFilter === 'with' ? 'active' : ''} onClick={() => setImageFilter('with')}><Images size={14} /> Com imagem <b>{withImage}</b></button><button className={imageFilter === 'without' ? 'active warning' : 'warning'} onClick={() => setImageFilter('without')}><ImageOff size={14} /> Sem imagem <b>{withoutImage}</b></button><button className={imageFilter === 'out_of_stock' ? 'active danger' : 'danger'} onClick={() => setImageFilter('out_of_stock')}><Boxes size={14} /> Estoque zerado <b>{outOfStock}</b></button></div></div>
       <div className="category-chips"><button className={category === 'Todos' ? 'active' : ''} onClick={() => setCategory('Todos')}>Todas</button>{categories.map(item => <button className={category === item.name ? 'active' : ''} onClick={() => setCategory(item.name)} key={item.name}>{item.name}<span>{item.total}</span></button>)}</div>
       <div className="catalog-sync-note"><RefreshCw size={16} /><span><strong>Sincronizacao protegida</strong> Preco, promocao e quantidade vêm da API. Foto, categoria e texto personalizados permanecem salvos.</span></div>
-      <div className="table-wrap"><table><thead><tr><th>Produto</th><th>SKU / EAN</th><th>Categoria</th><th>Preco</th><th>Estoque</th><th>Vitrine</th><th /></tr></thead><tbody>{visibleProducts.map(product => <tr key={product.id} className={!product.catalogVisible ? 'product-hidden' : ''}><td><div className="product-cell"><div className={`product-thumb ${product.hasImage ? '' : 'missing'}`} style={{ backgroundImage: product.hasImage && product.image ? `url(${product.image})` : 'none' }}>{!product.hasImage && <ImageOff size={17} />}</div><div><strong>{product.name}</strong>{product.catalogName && <small>Nome personalizado</small>}{!product.hasImage && <small className="missing-image-label">Imagem pendente</small>}</div></div></td><td><code>{product.barcode || product.sku}</code></td><td><span className="category-pill">{product.category}</span></td><td><strong>{money(product.price)}</strong></td><td>{product.stock} {product.unit}</td><td><span className={`stock-status ${product.catalogVisible ? '' : 'hidden'}`}>{product.catalogVisible ? <Eye size={14} /> : <EyeOff size={14} />}{product.catalogVisible ? 'Publicado' : 'Oculto'}</span></td><td><button className="edit-product-button" onClick={() => setEditing(product)}><Pencil size={15} /> Editar</button></td></tr>)}</tbody></table></div>
+      <div className="table-wrap"><table><thead><tr><th>Produto</th><th>SKU / EAN</th><th>Categoria</th><th>Preco</th><th>Estoque</th><th>Vitrine</th><th /></tr></thead><tbody>{visibleProducts.map(product => {
+        let statusClass = 'stock-status';
+        let statusText = 'Publicado';
+        let statusIcon = <Eye size={14} />;
+        
+        if (!product.catalogVisible) {
+          statusClass = 'stock-status hidden';
+          statusText = 'Oculto';
+          statusIcon = <EyeOff size={14} />;
+        } else if (Number(product.stock) === 0) {
+          statusClass = 'stock-status low';
+          statusText = 'Estoque zerado';
+          statusIcon = <EyeOff size={14} />;
+        }
+        
+        return <tr key={product.id} className={!product.catalogVisible ? 'product-hidden' : ''}><td><div className="product-cell"><div className={`product-thumb ${product.hasImage ? '' : 'missing'}`} style={{ backgroundImage: product.hasImage && product.image ? `url(${product.image})` : 'none' }}>{!product.hasImage && <ImageOff size={17} />}</div><div><strong>{product.name}</strong>{product.catalogName && <small>Nome personalizado</small>}{!product.hasImage && <small className="missing-image-label">Imagem pendente</small>}</div></div></td><td><code>{product.barcode || product.sku}</code></td><td><span className="category-pill">{product.category}</span></td><td><strong>{money(product.price)}</strong></td><td>{product.stock} {product.unit}</td><td><span className={statusClass}>{statusIcon}{statusText}</span></td><td><button className="edit-product-button" onClick={() => setEditing(product)}><Pencil size={15} /> Editar</button></td></tr>;
+      })}</tbody></table></div>
       {filteredProducts.length > pageSize && <div className="catalog-pagination"><span>Mostrando {(page - 1) * pageSize + 1}-{Math.min(page * pageSize, filteredProducts.length)} de {filteredProducts.length}</span><div><button disabled={page === 1} onClick={() => setPage(current => Math.max(1, current - 1))}>Anterior</button><strong>{page} / {totalPages}</strong><button disabled={page === totalPages} onClick={() => setPage(current => Math.min(totalPages, current + 1))}>Proxima</button></div></div>}
-      {!filteredProducts.length && <EmptyState title={imageFilter === 'without' ? 'Todos os produtos possuem imagem' : 'Nenhum produto encontrado'} text={imageFilter === 'without' ? 'Nao existem pendencias de foto neste filtro.' : 'Tente outro nome, codigo ou categoria.'} />}
+      {!filteredProducts.length && <EmptyState title={imageFilter === 'without' ? 'Todos os produtos possuem imagem' : imageFilter === 'out_of_stock' ? 'Nenhum produto com estoque zerado' : 'Nenhum produto encontrado'} text={imageFilter === 'without' ? 'Nao existem pendencias de foto neste filtro.' : imageFilter === 'out_of_stock' ? 'Todos os produtos ativos possuem estoque disponível.' : 'Tente outro nome, codigo ou categoria.'} />}
       {editing && <ProductEditor product={editing} categories={categories} onClose={() => setEditing(null)} onSaved={onChanged} />}
     </section>
   );

@@ -109,7 +109,7 @@ export async function fetchStoreProducts(integration) {
         category: String(valueAtPath(source, mapping.categoryPath) || 'Sem categoria').trim(),
         price: promo ? promotionalPrice : regularPrice,
         oldPrice: promo ? regularPrice : null,
-        stock: Math.max(0, numberValue(valueAtPath(source, mapping.stockPath))),
+        stock: numberValue(valueAtPath(source, mapping.stockPath)),
         unit: String(valueAtPath(source, mapping.unitPath) || 'UN').toUpperCase(),
         image: '',
         promo,
