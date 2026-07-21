@@ -205,6 +205,9 @@ function CatalogLibrary() {
   const job = library?.job;
   const completed = job?.status === 'COMPLETED';
   const percentage = completed ? 100 : (job?.total > 0 ? Math.min(100, Math.round((job.current / job.total) * 100)) : 0);
+  const displayProcessed = completed && Number(job?.current || 0) === 0 ? Number(job?.imported || 0) : Number(job?.current || 0);
+  const totalIsScanGoal = completed && Number(job?.total || 0) === Number(job?.requestedLimit || 0);
+  const totalLabel = totalIsScanGoal ? 'meta da coleta' : 'encontrados';
   const needsValue = ['CARREFOUR_SEARCH', 'CUSTOM_URL'].includes(form.sourceType);
   const maxLimit = SCAN_LIMITS[form.sourceType] || SCAN_LIMITS.DEFAULT;
   function chooseSource(sourceType) {
@@ -238,7 +241,7 @@ function CatalogLibrary() {
       </form>
       <section className="panel scan-progress">
         <div className="panel-head"><div><p className="eyebrow">Execucao atual</p><h2>{job ? (running ? 'Coleta em andamento' : 'Ultima varredura') : 'Aguardando primeira coleta'}</h2></div>{job && <span className={`job-status ${String(job.status).toLowerCase()}`}>{job.status}</span>}</div>
-        {job ? <><div className="progress-orbit"><div className="progress-number"><strong>{percentage}%</strong><span>{job.phase}</span></div></div><div className="progress-track"><i style={{width:`${percentage}%`}}/></div><div className="progress-stats"><span><b>{job.current}</b> processados</span><span><b>{job.total}</b> encontrados</span><span><b>{job.saved}</b> salvos</span><span><b>{job.imported}</b> importados</span></div><div className="event-list">{(job.events || []).slice(-3).reverse().map((event,index) => <div key={`${event.at}-${index}`}><i/><span>{event.message}<small>{new Date(event.at).toLocaleTimeString('pt-BR')}</small></span></div>)}</div>{job.error && <div className="error">{job.error}</div>}</> : <div className="scan-empty"><Images size={32}/><strong>Nenhuma varredura registrada</strong><span>Escolha uma fonte e inicie a construcao da biblioteca.</span></div>}
+        {job ? <><div className="progress-orbit"><div className="progress-number"><strong>{percentage}%</strong><span>{job.phase}</span></div></div><div className="progress-track"><i style={{width:`${percentage}%`}}/></div><div className="progress-stats"><span><b>{displayProcessed}</b> processados</span><span><b>{job.total}</b> {totalLabel}</span><span><b>{job.saved}</b> salvos</span><span><b>{job.imported}</b> importados</span></div><div className="event-list">{(job.events || []).slice(-3).reverse().map((event,index) => <div key={`${event.at}-${index}`}><i/><span>{event.message}<small>{new Date(event.at).toLocaleTimeString('pt-BR')}</small></span></div>)}</div>{job.error && <div className="error">{job.error}</div>}</> : <div className="scan-empty"><Images size={32}/><strong>Nenhuma varredura registrada</strong><span>Escolha uma fonte e inicie a construcao da biblioteca.</span></div>}
       </section>
     </section>
     <section className="panel asset-library">
