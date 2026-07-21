@@ -148,6 +148,8 @@ const SCAN_LIMITS = {
   ATACADAO_ALL: 50_000,
   PINHEIRO_ALL: 50_000,
   CARREFOUR_ALL: 50_000,
+  PAO_DE_ACUCAR_ALL: 50_000,
+  SAO_LUIZ_ALL: 50_000,
   DEFAULT: 5_000
 };
 
@@ -226,8 +228,8 @@ function CatalogLibrary() {
     setForm(current => ({
       ...current,
       sourceType,
-      limit: ['ATACADAO_ALL', 'PINHEIRO_ALL', 'CARREFOUR_ALL'].includes(sourceType) ? 50000 : Math.min(Number(current.limit) || 120, SCAN_LIMITS.DEFAULT),
-      concurrency: ['ATACADAO_ALL', 'PINHEIRO_ALL', 'CARREFOUR_ALL'].includes(sourceType) ? Math.min(Math.max(Number(current.concurrency) || 8, 1), 10) : current.concurrency
+      limit: ['ATACADAO_ALL', 'PINHEIRO_ALL', 'CARREFOUR_ALL', 'PAO_DE_ACUCAR_ALL', 'SAO_LUIZ_ALL'].includes(sourceType) ? 50000 : Math.min(Number(current.limit) || 120, SCAN_LIMITS.DEFAULT),
+      concurrency: ['ATACADAO_ALL', 'PINHEIRO_ALL', 'CARREFOUR_ALL', 'PAO_DE_ACUCAR_ALL', 'SAO_LUIZ_ALL'].includes(sourceType) ? Math.min(Math.max(Number(current.concurrency) || 8, 1), 10) : current.concurrency
     }));
   }
   return <div className="catalog-page">
