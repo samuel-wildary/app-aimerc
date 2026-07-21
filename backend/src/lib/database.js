@@ -450,7 +450,7 @@ export async function getProduct(storeId, productId) {
     SELECT 1 FROM product_images pi WHERE pi.store_id=p.store_id AND pi.product_id=p.id
   ) AS has_stored_image,EXISTS(
     SELECT 1 FROM catalog_assets ca WHERE ca.ean=p.barcode
-  ) AS has_catalog_image FROM products p WHERE p.store_id=$1 AND p.id=$2 AND p.active=1`, [storeId, productId])).rows[0];
+    ) AS has_catalog_image FROM products p WHERE p.store_id=$1 AND p.id=$2`, [storeId, productId])).rows[0];
   return row ? mapProduct(row) : null;
 }
 
@@ -464,7 +464,8 @@ export async function upsertProducts(storeId, items) {
       const batch = items.slice(offset, offset + 500);
       const values = [];
       const rows = batch.map((item, rowIndex) => {
-        const id = item.barcode || item.sku;
+        // EANs can be shared by ERP variants; SKU is the stable identity inside a store.
+        const id = `${storeId}:${item.sku}`;
         const cells = [storeId, id, item.sku, item.barcode, item.name, item.category, item.name, item.category, item.price, item.oldPrice,
           item.stock, item.unit, item.image, item.promo ? 1 : 0, item.active === false ? 0 : 1, now];
         values.push(...cells);
