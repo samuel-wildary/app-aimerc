@@ -11,9 +11,13 @@
     "migrate:image-library": "node --env-file-if-exists=.env.local scripts/migrate-image-library.js"
   },
   "dependencies": {
+    "axios": "^1.18.1",
+    "cheerio": "^1.2.0",
     "cors": "^2.8.5",
+    "dotenv": "^16.6.1",
     "express": "^4.19.2",
     "firebase-admin": "^14.1.0",
-    "pg": "^8.16.3"
+    "pg": "^8.16.3",
+    "ws": "^8.21.1"
   }
 }

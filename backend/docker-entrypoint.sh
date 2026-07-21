@@ -36,4 +36,13 @@ if [ -n "$installer_url" ]; then
   fi
 fi
 
+echo "Iniciando coletor central de catalogo na porta ${SCRAPER_PORT:-4300}..."
+SCRAPER_PORT="${SCRAPER_PORT:-4300}" node src/catalog-collector/server.js &
+collector_pid=$!
+
+cleanup() {
+  kill "$collector_pid" 2>/dev/null || true
+}
+trap cleanup EXIT INT TERM
+
 exec npm start
