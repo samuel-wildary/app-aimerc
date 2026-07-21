@@ -1199,11 +1199,12 @@ async function savePinheiroImagesForExistingProduct(ean, imageUrls, logCallback)
     [ean]
   );
   let position = current.rows[0].position + 1;
+  let saved = 0;
 
   for (const imageUrl of imageUrls) {
     const downloaded = await downloadImage(imageUrl, logCallback);
     if (!downloaded) continue;
-    await saveImageAsset(
+    const savedAsset = await saveImageAsset(
       ean,
       downloaded.buffer,
       downloaded.mimeType,
@@ -1212,7 +1213,9 @@ async function savePinheiroImagesForExistingProduct(ean, imageUrls, logCallback)
       position++,
       logCallback
     );
+    if (savedAsset) saved += 1;
   }
+  return saved;
 }
 
 async function scrapePinheiroProduct(client, product, logCallback) {
@@ -1236,10 +1239,10 @@ async function scrapePinheiroProduct(client, product, logCallback) {
   if (await productExists(ean)) {
     await attachProductUrlToExistingEAN(ean, productUrl);
     await attachNameToExistingEAN(ean, productName);
-    await savePinheiroImagesForExistingProduct(ean, imageUrls, logCallback);
+    const updated = await savePinheiroImagesForExistingProduct(ean, imageUrls, logCallback);
     await markProductPageProcessed(productUrl, 'exists', ean);
-    logCallback(`[PULADO] EAN ${ean} ja existe. Imagens extras do Pinheiro foram conferidas.`);
-    return 0;
+    logCallback(`[ATUALIZADO] EAN ${ean} ja existe. ${updated} imagem(ns) do Pinheiro foram conferidas.`);
+    return updated ? 1 : 0;
   }
 
   logCallback(`[PRODUTO] ${productName || 'Sem nome'} | EAN: ${ean} | imagens: ${imageUrls.length}`);
@@ -1265,8 +1268,7 @@ async function scrapePinheiroAll(value, logCallback, options = {}) {
 
   const client = await createPinheiroApiClient();
   const departments = await getPinheiroDepartments(client);
-  const skippedProductUrls = await getExistingPinheiroProductUrls(logCallback);
-  logCallback(`[INFO] Pinheiro: ${departments.length} departamentos encontrados e ${skippedProductUrls.size} produtos ja processados.`);
+  logCallback(`[INFO] Pinheiro: ${departments.length} departamentos encontrados. Modo completo vai revisitar produtos existentes para atualizar imagens.`);
 
   const candidates = [];
   const seenProductIds = new Set();
@@ -1297,14 +1299,14 @@ async function scrapePinheiroAll(value, logCallback, options = {}) {
         if (candidates.length >= productLimit) break;
         const productId = String(product.produto_id || product.id || '');
         const productUrl = pinheiroProductUrl(product);
-        if (!productId || seenProductIds.has(productId) || skippedProductUrls.has(productUrl)) continue;
+        if (!productId || seenProductIds.has(productId) || !productUrl) continue;
         seenProductIds.add(productId);
         candidates.push(product);
       }
     }
   }
 
-  logCallback(`[INFO] Catalogo do Pinheiro mapeado. ${candidates.length} produtos novos serao processados.`);
+  logCallback(`[INFO] Catalogo do Pinheiro mapeado. ${candidates.length} produtos serao processados/atualizados.`);
   let completed = 0;
   let saved = 0;
   onProgress({ phase: 'products', current: 0, total: candidates.length, remaining: candidates.length, saved: 0 });
@@ -1321,7 +1323,7 @@ async function scrapePinheiroAll(value, logCallback, options = {}) {
   });
 
   onProgress({ phase: 'complete', current: candidates.length, total: candidates.length, remaining: 0, saved: totalSaved });
-  logCallback(`[FIM] Pinheiro finalizado. Produtos consultados: ${candidates.length}. Produtos novos salvos: ${totalSaved}.`);
+  logCallback(`[FIM] Pinheiro finalizado. Produtos consultados: ${candidates.length}. Produtos salvos/atualizados: ${totalSaved}.`);
   return totalSaved;
 }
 
