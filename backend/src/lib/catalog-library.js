@@ -152,8 +152,8 @@ async function importLatestAssets(job) {
 async function finishJob(id, status, values = {}) {
   const imported = Number(values.imported || 0);
   await query(`UPDATE catalog_scan_jobs SET status=$2,phase=$3,imported_count=$4,error_message=$5,
-    current_count=CASE WHEN $2='COMPLETED' AND current_count=0 THEN $4 ELSE current_count END,
-    saved_count=CASE WHEN $2='COMPLETED' AND saved_count=0 THEN $4 ELSE saved_count END,
+    current_count=CASE WHEN $2::varchar='COMPLETED' AND current_count=0 THEN $4 ELSE current_count END,
+    saved_count=CASE WHEN $2::varchar='COMPLETED' AND saved_count=0 THEN $4 ELSE saved_count END,
     finished_at=NOW(),updated_at=NOW() WHERE id=$1`, [id, status, values.phase || status.toLowerCase(), imported, values.error || '']);
 }
 
