@@ -140,6 +140,8 @@ const SCAN_SOURCES = [
   ['SAO_LUIZ_ALL', 'Mercadinho Sao Luiz completo'],
   ['PINHEIRO_ALL', 'Pinheiro completo em lotes'],
   ['ATACADAO_ALL', 'Atacadao completo em lotes'],
+  ['GUARA_ALL', 'Supermercado Guara completo'],
+  ['SUPER_DO_POVO_ALL', 'Super do Povo completo'],
   ['CARREFOUR_SEARCH', 'Carrefour por termo'],
   ['CUSTOM_URL', 'URL personalizada']
 ];
@@ -150,6 +152,8 @@ const SCAN_LIMITS = {
   CARREFOUR_ALL: 50_000,
   PAO_DE_ACUCAR_ALL: 50_000,
   SAO_LUIZ_ALL: 50_000,
+  GUARA_ALL: 50_000,
+  SUPER_DO_POVO_ALL: 50_000,
   DEFAULT: 5_000
 };
 
@@ -160,17 +164,21 @@ function bytes(value) {
   return `${(amount / 1024 / 1024 / 1024).toFixed(2)} GB`;
 }
 
-function elapsed(startedAt, finishedAt) {
-  if (!startedAt) return '0s';
-  const seconds = Math.max(0, Math.floor((new Date(finishedAt || Date.now()).getTime() - new Date(startedAt).getTime()) / 1000));
+function elapsed(start, finish) {
+  if (!start) return 'Nao iniciado';
+  const startTime = new Date(start).getTime();
+  const endTime = finish ? new Date(finish).getTime() : Date.now();
+  const seconds = Math.max(0, Math.floor((endTime - startTime) / 1000));
+  if (seconds < 60) return `${seconds}s`;
   const minutes = Math.floor(seconds / 60);
-  return minutes ? `${minutes}min ${seconds % 60}s` : `${seconds}s`;
+  const remainingSeconds = seconds % 60;
+  return `${minutes}m ${remainingSeconds}s`;
 }
 
 function CatalogLibrary() {
   const [library, setLibrary] = useState(null);
   const [search, setSearch] = useState('');
-  const [form, setForm] = useState({ sourceType: 'CARREFOUR_ALL', value: '', limit: 50000, concurrency: 12 });
+  const [form, setForm] = useState({ sourceType: 'CARREFOUR_ALL', value: '', limit: 50000, concurrency: 8 });
   const [loading, setLoading] = useState(true);
   const [starting, setStarting] = useState(false);
   const [cancelling, setCancelling] = useState(false);

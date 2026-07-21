@@ -75,7 +75,7 @@ async function appendEvent(id, message) {
 
 function scraperPayload(input) {
   const sourceType = String(input.sourceType || '').toUpperCase();
-  const maxLimit = ['ATACADAO_ALL', 'PINHEIRO_ALL', 'CARREFOUR_ALL', 'PAO_DE_ACUCAR_ALL', 'SAO_LUIZ_ALL'].includes(sourceType) ? 50_000 : 5_000;
+  const maxLimit = ['ATACADAO_ALL', 'PINHEIRO_ALL', 'CARREFOUR_ALL', 'PAO_DE_ACUCAR_ALL', 'SAO_LUIZ_ALL', 'GUARA_ALL', 'SUPER_DO_POVO_ALL'].includes(sourceType) ? 50_000 : 5_000;
   const requestedLimit = clamp(input.limit, 100, 1, maxLimit);
   const concurrency = clamp(input.concurrency, 6, 1, 12);
   const sourceValue = String(input.value || '').trim();
@@ -85,6 +85,8 @@ function scraperPayload(input) {
     SAO_LUIZ_ALL: { type: 'sao_luiz_all', value: String(requestedLimit) },
     PINHEIRO_ALL: { type: 'pinheiro_all', value: String(requestedLimit) },
     ATACADAO_ALL: { type: 'atacadao_all', value: String(requestedLimit) },
+    GUARA_ALL: { type: 'guara_all', value: String(requestedLimit) },
+    SUPER_DO_POVO_ALL: { type: 'super_do_povo_all', value: String(requestedLimit) },
     CARREFOUR_SEARCH: { type: 'keyword', value: sourceValue },
     CUSTOM_URL: { type: 'url', value: sourceValue }
   };
@@ -100,7 +102,7 @@ function scraperPayload(input) {
 }
 
 async function importLatestAssets(job) {
-  const limit = Math.min(job.requestedLimit, ['ATACADAO_ALL', 'PINHEIRO_ALL', 'CARREFOUR_ALL', 'PAO_DE_ACUCAR_ALL', 'SAO_LUIZ_ALL'].includes(job.sourceType) ? 50_000 : 5_000);
+  const limit = Math.min(job.requestedLimit, ['ATACADAO_ALL', 'PINHEIRO_ALL', 'CARREFOUR_ALL', 'PAO_DE_ACUCAR_ALL', 'SAO_LUIZ_ALL', 'GUARA_ALL', 'SUPER_DO_POVO_ALL'].includes(job.sourceType) ? 50_000 : 5_000);
   let offset = 0;
   let imported = 0;
   let examined = 0;

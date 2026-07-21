@@ -1,5 +1,6 @@
 import axios from 'axios';
 import * as cheerio from 'cheerio';
+import crypto from 'crypto';
 import db from './db.js';
 
 // Realistic browser headers to bypass simple scraping blocks
@@ -64,6 +65,20 @@ const DEFAULT_ATACADAO_PRODUCT_LIMIT = 120;
 const MAX_ATACADAO_PRODUCT_LIMIT = 50000;
 const DEFAULT_ATACADAO_CONCURRENCY = 6;
 const MAX_ATACADAO_CONCURRENCY = 12;
+
+const GUARA_BASE_URL = 'https://www.supermercadoguara.com.br';
+const GUARA_API_URL = 'https://apiecommerce.regexsolutions.com.br/ecommerce/produto/lista';
+const GUARA_KEY = 'eba4c904146ade03ae6e34ac521c8129b8954dd1a68a20f8fe814913d6a25ff1';
+const DEFAULT_GUARA_PRODUCT_LIMIT = 120;
+const MAX_GUARA_PRODUCT_LIMIT = 50000;
+const DEFAULT_GUARA_CONCURRENCY = 8;
+const MAX_GUARA_CONCURRENCY = 12;
+
+const SUPER_DO_POVO_BASE_URL = 'https://loja.superdopovo.com.br';
+const DEFAULT_SUPER_DO_POVO_PRODUCT_LIMIT = 120;
+const MAX_SUPER_DO_POVO_PRODUCT_LIMIT = 50000;
+const DEFAULT_SUPER_DO_POVO_CONCURRENCY = 8;
+const MAX_SUPER_DO_POVO_CONCURRENCY = 12;
 
 export let shouldCancel = false;
 export function cancelScrape() {
@@ -1839,6 +1854,371 @@ async function scrapeHTMLPage(targetUrl, logCallback, options = {}) {
   }
 }
 
+function decryptAESCryptoJS(ciphertextBase64, passphrase) {
+  const ciphertextBuffer = Buffer.from(ciphertextBase64, 'base64');
+  
+  if (ciphertextBuffer.slice(0, 8).toString('binary') !== 'Salted__') {
+    throw new Error('Invalid CryptoJS ciphertext format');
+  }
+  
+  const salt = ciphertextBuffer.slice(8, 16);
+  const encryptedData = ciphertextBuffer.slice(16);
+  
+  const keySize = 32;
+  const ivSize = 16;
+  const derived = Buffer.alloc(keySize + ivSize);
+  
+  let block = Buffer.alloc(0);
+  let offset = 0;
+  while (offset < (keySize + ivSize)) {
+    const hasher = crypto.createHash('md5');
+    hasher.update(block);
+    hasher.update(passphrase, 'utf8');
+    hasher.update(salt);
+    block = hasher.digest();
+    block.copy(derived, offset);
+    offset += block.length;
+  }
+  
+  const key = derived.slice(0, keySize);
+  const iv = derived.slice(keySize, keySize + ivSize);
+  
+  const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
+  let decrypted = decipher.update(encryptedData);
+  decrypted = Buffer.concat([decrypted, decipher.final()]);
+  return decrypted.toString('utf8');
+}
+
+function fromBase64(e) {
+  return decodeURIComponent(Buffer.from(e, 'base64').toString('binary'));
+}
+
+async function scrapeGuaraAll(value, logCallback, options = {}) {
+  const onProgress = typeof options.onProgress === 'function' ? options.onProgress : () => {};
+  const productLimit = clampInteger(value, DEFAULT_GUARA_PRODUCT_LIMIT, 1, MAX_GUARA_PRODUCT_LIMIT);
+  const concurrency = clampInteger(options.concurrency, DEFAULT_GUARA_CONCURRENCY, 1, MAX_GUARA_CONCURRENCY);
+
+  logCallback(`[INFO] Iniciando Supermercado Guará Completo. Limite: ${productLimit}. Velocidade: ${concurrency} em paralelo.`);
+  onProgress({ phase: 'catalog', current: 0, total: productLimit, remaining: productLimit, saved: 0 });
+
+  let bootstrapData;
+  try {
+    const lzRes = await axios.get('https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.4.4/lz-string.min.js', { timeout: 15000 });
+    const LZString = new Function(lzRes.data + '; return LZString;')();
+
+    const htmlRes = await axios.get(`${GUARA_BASE_URL}/`, {
+      headers: DEFAULT_HEADERS,
+      timeout: 15000
+    });
+
+    const regex = /<script\b[^>]*\bid=["']ng-state["'][^>]*>([\s\S]*?)<\/script>/gi;
+    const match = regex.exec(htmlRes.data);
+    if (!match) throw new Error('Estado ng-state não encontrado na página inicial do Guará');
+    const state = JSON.parse(match[1]);
+
+    const prefix = 'L2Vjb21tZXJjZS91c3VhcmlvRmlkZWxpZGFkZS9lY29tbWVyY2UvYm9vdHN0cmFwU2l0ZV8x';
+    const parts = [];
+    let h = 0;
+    while (true) {
+      const partKey = `${prefix}-part-${h}`;
+      if (partKey in state) {
+        parts.push(fromBase64(state[partKey]));
+        h++;
+      } else {
+        break;
+      }
+    }
+
+    const joined = parts.join('');
+    const decompressed = LZString.decompressFromBase64(joined);
+    const decryptedBootstrap = decryptAESCryptoJS(decompressed, GUARA_KEY);
+    bootstrapData = JSON.parse(decryptedBootstrap);
+  } catch (error) {
+    logCallback(`[ERRO] Falha ao autenticar/iniciar sessão no Guará: ${error.message}`);
+    onProgress({ phase: 'complete', current: 0, total: 0, remaining: 0, saved: 0 });
+    return 0;
+  }
+
+  const token = bootstrapData.usuario?.token;
+  const sessao = bootstrapData.sessao;
+  if (!token || !sessao) {
+    logCallback(`[ERRO] Token ou sessão não identificados no Guará.`);
+    onProgress({ phase: 'complete', current: 0, total: 0, remaining: 0, saved: 0 });
+    return 0;
+  }
+
+  const categories = bootstrapData.categorias || [];
+  logCallback(`[INFO] Guará: ${categories.length} categorias principais identificadas.`);
+
+  const candidates = [];
+  const seenEANs = new Set();
+
+  async function fetchGuaraProductsForPayload(basePayload) {
+    let tokenPaginaAtual = "";
+    for (let page = 0; candidates.length < productLimit; page++) {
+      if (shouldCancel) break;
+
+      const payload = { ...basePayload, page, tokenPaginaAtual };
+      const headers = {
+        ...DEFAULT_HEADERS,
+        'accept': 'application/json, text/plain, */*',
+        'content-type': 'application/json',
+        'authorization': token,
+        'uid': '09e71743-b1d2-454a-b175-6c09f2af5ee4',
+        'origem': 'site',
+        'aud': 'lojaonlinte',
+        'sessao': sessao,
+        'uidsecao': 'debe3e5b-61b4-4afe-a494-cd49bb5d975c',
+        'eversion': 'v060526.1',
+        'sessao-ssr': '20260602135006'
+      };
+
+      if (payload.tokenPaginaAtual) {
+        headers['x-token-pagina-anterior'] = payload.tokenPaginaAtual;
+        delete payload.tokenPaginaAtual;
+      }
+      headers['x-payload'] = encodeURIComponent(JSON.stringify(payload));
+
+      let prodsData;
+      try {
+        const prodRes = await axios.post(GUARA_API_URL, payload, { headers, timeout: 20000 });
+        if (!prodRes.data?.encrypted) break;
+        const decryptedText = decryptAESCryptoJS(Buffer.from(prodRes.data.encrypted, 'base64').toString('base64'), GUARA_KEY);
+        prodsData = JSON.parse(decryptedText);
+      } catch (err) {
+        logCallback(`[AVISO] Erro na consulta de produtos Guará: ${err.message}`);
+        break;
+      }
+
+      const items = prodsData.produtos || prodsData.itens || [];
+      if (!items.length) break;
+
+      for (const item of items) {
+        if (candidates.length >= productLimit) break;
+        const ean = normalizePaoEAN(item.ean || item.codigoBarras);
+        if (!ean || seenEANs.has(ean)) continue;
+        seenEANs.add(ean);
+
+        const productName = normalizeProductName(item.descricaoApp || item.descricao_app);
+        const imageUrls = collectImageUrls([item.imagemFull, item.imagem], GUARA_BASE_URL);
+        const productUrl = item.descricaoURL ? `${GUARA_BASE_URL}/produto/${item.descricaoURL}` : null;
+
+        if (imageUrls.length) {
+          candidates.push({ ean, imageUrls, productName, productUrl });
+        }
+      }
+
+      onProgress({
+        phase: 'catalog', current: candidates.length, total: productLimit,
+        remaining: Math.max(productLimit - candidates.length, 0), saved: 0
+      });
+
+      tokenPaginaAtual = prodsData.tokenPaginaAtual || "";
+      if (!tokenPaginaAtual) break;
+      await delay(50);
+    }
+  }
+
+  await fetchGuaraProductsForPayload({ filialId: 2051, perPage: 50, ordenacao: 0, tokenPaginaAtual: "" });
+
+  if (categories.length > 0 && candidates.length < productLimit) {
+    for (const cat of categories) {
+      if (candidates.length >= productLimit || shouldCancel) break;
+      logCallback(`[CATALOGO] Mapeando categoria Guará: ${cat.descricao || cat.id}`);
+      await fetchGuaraProductsForPayload({ filialId: 2051, perPage: 50, ordenacao: 0, categoriaId: +cat.id, tokenPaginaAtual: "" });
+      
+      if (cat.categorias && cat.categorias.length > 0) {
+        for (const subCat of cat.categorias) {
+          if (candidates.length >= productLimit || shouldCancel) break;
+          await fetchGuaraProductsForPayload({ filialId: 2051, perPage: 50, ordenacao: 0, categoriaId: +subCat.id, tokenPaginaAtual: "" });
+        }
+      }
+    }
+  }
+
+  logCallback(`[INFO] Catálogo do Guará mapeado. ${candidates.length} produtos encontrados.`);
+
+  let completed = 0;
+  let saved = 0;
+  onProgress({ phase: 'products', current: 0, total: candidates.length, remaining: candidates.length, saved: 0 });
+
+  const totalSaved = await runWithConcurrency(candidates, concurrency, async candidate => {
+    const result = await scrapeGuaraProduct(candidate, logCallback);
+    completed++;
+    saved += result;
+    onProgress({
+      phase: 'products', current: completed, total: candidates.length,
+      remaining: Math.max(candidates.length - completed, 0), saved
+    });
+    return result;
+  });
+
+  onProgress({ phase: 'complete', current: candidates.length, total: candidates.length, remaining: 0, saved: totalSaved });
+  logCallback(`[FIM] Supermercado Guará finalizado. Produtos consultados: ${candidates.length}. Novas imagens salvas: ${totalSaved}.`);
+  return totalSaved;
+}
+
+async function scrapeGuaraProduct(candidate, logCallback) {
+  const { ean, imageUrls, productName, productUrl } = candidate;
+
+  if (await productExists(ean)) {
+    await attachProductUrlToExistingEAN(ean, productUrl);
+    await attachNameToExistingEAN(ean, productName);
+    logCallback(`[PULADO] EAN ${ean} já existe no banco.`);
+    return 0;
+  }
+
+  logCallback(`[PRODUTO] ${productName || 'Sem nome'} | EAN: ${ean} | imagens: ${imageUrls.length}`);
+  const saved = await saveProductImages(
+    ean,
+    imageUrls,
+    'supermercadoguara.com.br',
+    logCallback,
+    productUrl,
+    productName
+  );
+  return saved ? 1 : 0;
+}
+
+async function scrapeSuperDoPovoAll(value, logCallback, options = {}) {
+  const onProgress = typeof options.onProgress === 'function' ? options.onProgress : () => {};
+  const productLimit = clampInteger(value, DEFAULT_SUPER_DO_POVO_PRODUCT_LIMIT, 1, MAX_SUPER_DO_POVO_PRODUCT_LIMIT);
+  const concurrency = clampInteger(options.concurrency, DEFAULT_SUPER_DO_POVO_CONCURRENCY, 1, MAX_SUPER_DO_POVO_CONCURRENCY);
+
+  logCallback(`[INFO] Iniciando Super do Povo Completo. Limite: ${productLimit}. Velocidade: ${concurrency} em paralelo.`);
+  onProgress({ phase: 'catalog', current: 0, total: productLimit, remaining: productLimit, saved: 0 });
+
+  let tokenCookie = "";
+  try {
+    const preSecret = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+    const codeRes = await axios.post(`${SUPER_DO_POVO_BASE_URL}/auth/proxy/secret-code`, {
+      company_id: 18,
+      pre_secret: preSecret
+    }, { headers: DEFAULT_HEADERS, timeout: 15000 });
+
+    const { key, code } = codeRes.data;
+    const loginRes = await axios.post(`${SUPER_DO_POVO_BASE_URL}/auth/proxy/secret-login`, {
+      key: key,
+      company_id: 18,
+      pre_secret: code
+    }, { headers: DEFAULT_HEADERS, timeout: 15000 });
+
+    const setCookie = loginRes.headers['set-cookie'];
+    if (!setCookie || setCookie.length === 0) throw new Error('Cookie de sessão não retornado pelo servidor');
+    tokenCookie = setCookie[0].split(';')[0];
+  } catch (error) {
+    logCallback(`[ERRO] Falha ao autenticar no Super do Povo: ${error.message}`);
+    onProgress({ phase: 'complete', current: 0, total: 0, remaining: 0, saved: 0 });
+    return 0;
+  }
+
+  let categories = [];
+  try {
+    const catsRes = await axios.get(`${SUPER_DO_POVO_BASE_URL}/api/v1/categories`, {
+      params: { shop_id: 24 },
+      headers: { ...DEFAULT_HEADERS, 'Cookie': tokenCookie },
+      timeout: 15000
+    });
+    categories = Array.isArray(catsRes.data) ? catsRes.data : [];
+    logCallback(`[INFO] Super do Povo: ${categories.length} categorias/departamentos encontrados.`);
+  } catch (error) {
+    logCallback(`[AVISO] Falha ao listar categorias do Super do Povo: ${error.message}`);
+  }
+
+  const candidates = [];
+  const seenEANs = new Set();
+
+  async function fetchSuperDoPovoProducts(params) {
+    try {
+      const res = await axios.get(`${SUPER_DO_POVO_BASE_URL}/api/v3/products`, {
+        params: { shop_id: 24, limit: 2000, ...params },
+        headers: { ...DEFAULT_HEADERS, 'Cookie': tokenCookie },
+        timeout: 30000
+      });
+
+      const items = Array.isArray(res.data) ? res.data : [];
+      for (const item of items) {
+        if (candidates.length >= productLimit) break;
+        const ean = normalizePaoEAN(item.ean);
+        if (!ean || seenEANs.has(ean)) continue;
+        seenEANs.add(ean);
+
+        const productName = normalizeProductName(item.title || item.description);
+        const rawImages = [item.high_quality_image, item.image, ...(Array.isArray(item.images) ? item.images : [])];
+        const imageUrls = collectImageUrls(rawImages, SUPER_DO_POVO_BASE_URL);
+        const productUrl = item.product_id ? `${SUPER_DO_POVO_BASE_URL}/product/${item.product_id}/${item.description ? encodeURIComponent(item.description.replace(/\s+/g, '-')) : ''}` : null;
+
+        if (imageUrls.length) {
+          candidates.push({ ean, imageUrls, productName, productUrl });
+        }
+      }
+
+      onProgress({
+        phase: 'catalog', current: candidates.length, total: productLimit,
+        remaining: Math.max(productLimit - candidates.length, 0), saved: 0
+      });
+    } catch (err) {
+      logCallback(`[AVISO] Erro ao buscar produtos Super do Povo: ${err.message}`);
+    }
+  }
+
+  await fetchSuperDoPovoProducts({ show_only_best_promotion_products: 1 });
+  await fetchSuperDoPovoProducts({ sort_best_sellers: 1 });
+
+  for (const cat of categories) {
+    if (candidates.length >= productLimit || shouldCancel) break;
+    logCallback(`[CATALOGO] Mapeando Super do Povo: ${cat.name || cat.id}`);
+    if (cat.type === 'world') {
+      await fetchSuperDoPovoProducts({ world_id: cat.id });
+    } else {
+      await fetchSuperDoPovoProducts({ category_id: cat.id });
+    }
+  }
+
+  logCallback(`[INFO] Catálogo do Super do Povo mapeado. ${candidates.length} produtos encontrados.`);
+
+  let completed = 0;
+  let saved = 0;
+  onProgress({ phase: 'products', current: 0, total: candidates.length, remaining: candidates.length, saved: 0 });
+
+  const totalSaved = await runWithConcurrency(candidates, concurrency, async candidate => {
+    const result = await scrapeSuperDoPovoProduct(candidate, logCallback);
+    completed++;
+    saved += result;
+    onProgress({
+      phase: 'products', current: completed, total: candidates.length,
+      remaining: Math.max(candidates.length - completed, 0), saved
+    });
+    return result;
+  });
+
+  onProgress({ phase: 'complete', current: candidates.length, total: candidates.length, remaining: 0, saved: totalSaved });
+  logCallback(`[FIM] Super do Povo finalizado. Produtos consultados: ${candidates.length}. Novas imagens salvas: ${totalSaved}.`);
+  return totalSaved;
+}
+
+async function scrapeSuperDoPovoProduct(candidate, logCallback) {
+  const { ean, imageUrls, productName, productUrl } = candidate;
+
+  if (await productExists(ean)) {
+    await attachProductUrlToExistingEAN(ean, productUrl);
+    await attachNameToExistingEAN(ean, productName);
+    logCallback(`[PULADO] EAN ${ean} já existe no banco.`);
+    return 0;
+  }
+
+  logCallback(`[PRODUTO] ${productName || 'Sem nome'} | EAN: ${ean} | imagens: ${imageUrls.length}`);
+  const saved = await saveProductImages(
+    ean,
+    imageUrls,
+    'loja.superdopovo.com.br',
+    logCallback,
+    productUrl,
+    productName
+  );
+  return saved ? 1 : 0;
+}
+
 /**
  * Main scraper dispatcher
  */
@@ -1858,6 +2238,10 @@ export async function runScraper(options, logCallback) {
     return await scrapePinheiroAll(value, logCallback, { concurrency, onProgress });
   } else if (type === 'atacadao_all') {
     return await scrapeAtacadaoAll(value, logCallback, { concurrency, onProgress });
+  } else if (type === 'guara_all') {
+    return await scrapeGuaraAll(value, logCallback, { concurrency, onProgress });
+  } else if (type === 'super_do_povo_all') {
+    return await scrapeSuperDoPovoAll(value, logCallback, { concurrency, onProgress });
   } else if (type === 'keyword') {
     // Default supermarket is Carrefour Brazil
     return await scrapeCarrefour(value, logCallback);
@@ -1866,11 +2250,15 @@ export async function runScraper(options, logCallback) {
       const parsedUrl = new URL(value);
       const domain = parsedUrl.hostname;
       
-      // Auto-detect if it's a VTEX search or page.
-      // If the URL has search paths or is a VTEX site, let's check.
+      if (domain.includes('supermercadoguara.com.br')) {
+        logCallback(`[INFO] URL do Supermercado Guará detectada. Usando API de catálogo em lotes.`);
+        return await scrapeGuaraAll(value, logCallback, { concurrency, onProgress });
+      }
+      if (domain.includes('superdopovo.com.br')) {
+        logCallback(`[INFO] URL do Super do Povo detectada. Usando API de catálogo em lotes.`);
+        return await scrapeSuperDoPovoAll(value, logCallback, { concurrency, onProgress });
+      }
       if (domain.includes('carrefour.com.br')) {
-        // If it's a search URL on Carrefour, e.g. https://www.carrefour.com.br/busca/arroz
-        // We can extract the keyword and run the API query (which is more reliable)
         const match = value.match(/\/busca\/([^/?#]+)/);
         if (match && match[1]) {
           const keyword = decodeURIComponent(match[1]);
