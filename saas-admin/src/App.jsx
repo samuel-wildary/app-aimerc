@@ -138,7 +138,7 @@ const SCAN_SOURCES = [
   ['CARREFOUR_ALL', 'Carrefour completo'],
   ['PAO_DE_ACUCAR_ALL', 'Pao de Acucar completo'],
   ['SAO_LUIZ_ALL', 'Mercadinho Sao Luiz completo'],
-  ['PINHEIRO_ALL', 'Pinheiro completo'],
+  ['PINHEIRO_ALL', 'Pinheiro completo em lotes'],
   ['ATACADAO_ALL', 'Atacadao completo em lotes'],
   ['CARREFOUR_SEARCH', 'Carrefour por termo'],
   ['CUSTOM_URL', 'URL personalizada']
@@ -146,6 +146,7 @@ const SCAN_SOURCES = [
 
 const SCAN_LIMITS = {
   ATACADAO_ALL: 50_000,
+  PINHEIRO_ALL: 50_000,
   DEFAULT: 5_000
 };
 
@@ -210,8 +211,8 @@ function CatalogLibrary() {
     setForm(current => ({
       ...current,
       sourceType,
-      limit: sourceType === 'ATACADAO_ALL' ? 50000 : Math.min(Number(current.limit) || 120, SCAN_LIMITS.DEFAULT),
-      concurrency: sourceType === 'ATACADAO_ALL' ? Math.min(Math.max(Number(current.concurrency) || 8, 1), 10) : current.concurrency
+      limit: ['ATACADAO_ALL', 'PINHEIRO_ALL'].includes(sourceType) ? 50000 : Math.min(Number(current.limit) || 120, SCAN_LIMITS.DEFAULT),
+      concurrency: ['ATACADAO_ALL', 'PINHEIRO_ALL'].includes(sourceType) ? Math.min(Math.max(Number(current.concurrency) || 8, 1), 10) : current.concurrency
     }));
   }
   return <div className="catalog-page">
