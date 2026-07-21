@@ -168,7 +168,7 @@ function elapsed(startedAt, finishedAt) {
 function CatalogLibrary() {
   const [library, setLibrary] = useState(null);
   const [search, setSearch] = useState('');
-  const [form, setForm] = useState({ sourceType: 'CARREFOUR_ALL', value: '', limit: 120, concurrency: 6 });
+  const [form, setForm] = useState({ sourceType: 'CARREFOUR_ALL', value: '', limit: 50000, concurrency: 12 });
   const [loading, setLoading] = useState(true);
   const [starting, setStarting] = useState(false);
   const [cancelling, setCancelling] = useState(false);
