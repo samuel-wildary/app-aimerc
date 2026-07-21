@@ -37,7 +37,7 @@ async function testConnection() {
 
 async function createTableIfNotExist() {
   const queryText = `
-    CREATE TABLE IF NOT EXISTS product_images (
+    CREATE TABLE IF NOT EXISTS scraper_product_images (
       id SERIAL PRIMARY KEY,
       ean VARCHAR(14) NOT NULL UNIQUE,
       image_data BYTEA NOT NULL,
@@ -48,15 +48,15 @@ async function createTableIfNotExist() {
       source_site VARCHAR(100),
       scraped_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
-    ALTER TABLE product_images ADD COLUMN IF NOT EXISTS product_name TEXT;
-    ALTER TABLE product_images ADD COLUMN IF NOT EXISTS product_url TEXT;
-    CREATE INDEX IF NOT EXISTS idx_images_ean ON product_images(ean);
-    CREATE INDEX IF NOT EXISTS idx_images_product_name ON product_images(product_name);
-    CREATE INDEX IF NOT EXISTS idx_images_product_url ON product_images(product_url);
+    ALTER TABLE scraper_product_images ADD COLUMN IF NOT EXISTS product_name TEXT;
+    ALTER TABLE scraper_product_images ADD COLUMN IF NOT EXISTS product_url TEXT;
+    CREATE INDEX IF NOT EXISTS idx_images_ean ON scraper_product_images(ean);
+    CREATE INDEX IF NOT EXISTS idx_images_product_name ON scraper_product_images(product_name);
+    CREATE INDEX IF NOT EXISTS idx_images_product_url ON scraper_product_images(product_url);
 
-    CREATE TABLE IF NOT EXISTS product_image_assets (
+    CREATE TABLE IF NOT EXISTS scraper_product_image_assets (
       id SERIAL PRIMARY KEY,
-      ean VARCHAR(14) NOT NULL REFERENCES product_images(ean) ON DELETE CASCADE,
+      ean VARCHAR(14) NOT NULL REFERENCES scraper_product_images(ean) ON DELETE CASCADE,
       image_data BYTEA NOT NULL,
       mime_type VARCHAR(30) NOT NULL,
       image_url TEXT NOT NULL,
@@ -65,7 +65,7 @@ async function createTableIfNotExist() {
       scraped_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       UNIQUE (ean, image_url)
     );
-    CREATE INDEX IF NOT EXISTS idx_product_image_assets_ean ON product_image_assets(ean);
+    CREATE INDEX IF NOT EXISTS idx_product_image_assets_ean ON scraper_product_image_assets(ean);
 
     CREATE TABLE IF NOT EXISTS scraped_product_pages (
       product_url TEXT PRIMARY KEY,

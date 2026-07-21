@@ -150,8 +150,8 @@ app.get('/api/catalog/:ean', requireCatalogApiKey, async (req, res) => {
            ) FILTER (WHERE a.id IS NOT NULL AND a.image_url IS DISTINCT FROM p.image_url),
            '[]'::json
          ) AS extra_images
-       FROM product_images p
-       LEFT JOIN product_image_assets a ON a.ean = p.ean
+       FROM scraper_product_images p
+       LEFT JOIN scraper_product_image_assets a ON a.ean = p.ean
        WHERE p.ean = $1
        GROUP BY p.ean, p.product_name, p.image_url`,
       [ean]
@@ -190,7 +190,7 @@ app.get('/api/catalog/:ean/image', async (req, res) => {
 
   try {
     const result = await db.query(
-      'SELECT image_data, mime_type FROM product_images WHERE ean = $1',
+      'SELECT image_data, mime_type FROM scraper_product_images WHERE ean = $1',
       [ean]
     );
     if (result.rows.length === 0) return res.status(404).json({ error: 'Image not found' });
@@ -213,7 +213,7 @@ app.get('/api/catalog/:ean/images/:assetId', async (req, res) => {
   try {
     const result = await db.query(
       `SELECT image_data, mime_type
-       FROM product_image_assets
+       FROM scraper_product_image_assets
        WHERE id = $1 AND ean = $2`,
       [assetId, ean]
     );
@@ -234,7 +234,7 @@ app.get('/api/status', async (req, res) => {
   
   if (dbConnected) {
     try {
-      const result = await db.query('SELECT COUNT(*) FROM product_images');
+      const result = await db.query('SELECT COUNT(*) FROM scraper_product_images');
       totalImages = parseInt(result.rows[0].count, 10);
     } catch (e) {
       // Ignore count error
@@ -280,7 +280,7 @@ app.get('/api/images', async (req, res) => {
         p.scraped_at,
         COALESCE(g.gallery_images, '[]'::json) AS gallery_images,
         COALESCE(g.image_count, 0) AS image_count
-      FROM product_images p
+      FROM scraper_product_images p
       LEFT JOIN (
         SELECT
           ean,
@@ -289,12 +289,12 @@ app.get('/api/images', async (req, res) => {
             json_build_object('id', id, 'image_url', image_url, 'position', position)
             ORDER BY position, id
           ) AS gallery_images
-        FROM product_image_assets
+        FROM scraper_product_image_assets
         GROUP BY ean
       ) g ON g.ean = p.ean
     `;
     let params = [];
-    let countText = 'SELECT COUNT(*) FROM product_images p';
+    let countText = 'SELECT COUNT(*) FROM scraper_product_images p';
     
     if (search) {
       queryText += ' WHERE p.ean LIKE $1 OR p.source_site LIKE $1 OR p.product_name ILIKE $1 OR p.product_url ILIKE $1';
@@ -331,7 +331,7 @@ app.get('/api/images/:ean', async (req, res) => {
     }
 
     const result = await db.query(
-      'SELECT image_data, mime_type FROM product_images WHERE ean = $1',
+      'SELECT image_data, mime_type FROM scraper_product_images WHERE ean = $1',
       [ean]
     );
 
@@ -357,7 +357,7 @@ app.get('/api/image-assets/:id', async (req, res) => {
     }
 
     const result = await db.query(
-      'SELECT image_data, mime_type FROM product_image_assets WHERE id = $1',
+      'SELECT image_data, mime_type FROM scraper_product_image_assets WHERE id = $1',
       [id]
     );
 
@@ -427,7 +427,7 @@ app.delete('/api/images/:ean', async (req, res) => {
       return res.status(503).json({ error: 'Database disconnected' });
     }
 
-    const result = await db.query('DELETE FROM product_images WHERE ean = $1', [ean]);
+    const result = await db.query('DELETE FROM scraper_product_images WHERE ean = $1', [ean]);
     if (result.rowCount === 0) {
       return res.status(404).json({ error: 'Item não encontrado no banco.' });
     }
@@ -448,7 +448,7 @@ app.get('/api/export', async (req, res) => {
 
     // Select metadata only (exclude large bytea to keep export clean and fast)
     const result = await db.query(
-      'SELECT id, ean, product_name, image_url, product_url, source_site, scraped_at FROM product_images ORDER BY scraped_at DESC'
+      'SELECT id, ean, product_name, image_url, product_url, source_site, scraped_at FROM scraper_product_images ORDER BY scraped_at DESC'
     );
 
     res.setHeader('Content-disposition', 'attachment; filename=ean_images_export.json');

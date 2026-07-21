@@ -186,7 +186,7 @@ async function downloadImage(url, logCallback) {
 async function saveImageAsset(ean, imageData, mimeType, imageUrl, sourceSite, position, logCallback) {
   try {
     await db.query(
-      `INSERT INTO product_image_assets (ean, image_data, mime_type, image_url, source_site, position)
+      `INSERT INTO scraper_product_image_assets (ean, image_data, mime_type, image_url, source_site, position)
        VALUES ($1, $2, $3, $4, $5, $6)
        ON CONFLICT (ean, image_url)
        DO UPDATE SET
@@ -240,7 +240,7 @@ async function saveToDatabase(ean, imageData, mimeType, imageUrl, sourceSite, lo
   try {
     const cleanProductName = normalizeProductName(productName) || productNameFromUrl(productUrl);
     const queryText = `
-      INSERT INTO product_images (ean, image_data, mime_type, image_url, source_site, product_url, product_name)
+      INSERT INTO scraper_product_images (ean, image_data, mime_type, image_url, source_site, product_url, product_name)
       VALUES ($1, $2, $3, $4, $5, $6, $7)
       ON CONFLICT (ean) 
       DO UPDATE SET 
@@ -248,8 +248,8 @@ async function saveToDatabase(ean, imageData, mimeType, imageUrl, sourceSite, lo
         mime_type = EXCLUDED.mime_type, 
         image_url = EXCLUDED.image_url, 
         source_site = EXCLUDED.source_site,
-        product_url = COALESCE(EXCLUDED.product_url, product_images.product_url),
-        product_name = COALESCE(EXCLUDED.product_name, product_images.product_name),
+        product_url = COALESCE(EXCLUDED.product_url, scraper_product_images.product_url),
+        product_name = COALESCE(EXCLUDED.product_name, scraper_product_images.product_name),
         scraped_at = CURRENT_TIMESTAMP;
     `;
     
@@ -263,7 +263,7 @@ async function saveToDatabase(ean, imageData, mimeType, imageUrl, sourceSite, lo
 }
 
 async function productExists(ean) {
-  const result = await db.query('SELECT 1 FROM product_images WHERE ean = $1 LIMIT 1', [ean]);
+  const result = await db.query('SELECT 1 FROM scraper_product_images WHERE ean = $1 LIMIT 1', [ean]);
   return result.rows.length > 0;
 }
 
@@ -271,7 +271,7 @@ async function attachProductUrlToExistingEAN(ean, productUrl) {
   if (!productUrl) return;
 
   await db.query(
-    `UPDATE product_images
+    `UPDATE scraper_product_images
      SET product_url = $2
      WHERE ean = $1 AND (product_url IS NULL OR product_url = '')`,
     [ean, productUrl]
@@ -283,7 +283,7 @@ async function attachNameToExistingEAN(ean, productName) {
   if (!cleanProductName) return;
 
   await db.query(
-    `UPDATE product_images
+    `UPDATE scraper_product_images
      SET product_name = $2
      WHERE ean = $1 AND (product_name IS NULL OR product_name = '')`,
     [ean, cleanProductName]
@@ -308,7 +308,7 @@ async function markProductPageProcessed(productUrl, status, ean = null) {
 async function getExistingCarrefourProductUrls(logCallback) {
   try {
     const result = await db.query(
-      `SELECT product_url FROM product_images
+      `SELECT product_url FROM scraper_product_images
        WHERE product_url LIKE 'https://mercado.carrefour.com.br/produto/%'
        UNION
        SELECT product_url FROM scraped_product_pages
@@ -325,7 +325,7 @@ async function getExistingCarrefourProductUrls(logCallback) {
 async function getExistingPaoProductUrls(logCallback) {
   try {
     const result = await db.query(
-      `SELECT product_url FROM product_images
+      `SELECT product_url FROM scraper_product_images
        WHERE product_url LIKE 'https://www.paodeacucar.com/produto/%'
        UNION
        SELECT product_url FROM scraped_product_pages
@@ -664,7 +664,7 @@ async function saoLuizGetWithRetry(client, path, config = {}) {
 async function getExistingSaoLuizProductUrls(logCallback) {
   try {
     const result = await db.query(
-      `SELECT product_url FROM product_images
+      `SELECT product_url FROM scraper_product_images
        WHERE product_url LIKE 'https://mercadinhossaoluiz.com.br/loja/355/%'
        UNION
        SELECT product_url FROM scraped_product_pages
@@ -756,7 +756,7 @@ async function fetchSaoLuizCategoryPage(client, category, page) {
 async function saveSaoLuizImagesForExistingProduct(ean, imageUrls, logCallback) {
   let position = 0;
   const current = await db.query(
-    'SELECT COALESCE(MAX(position), -1)::int AS position FROM product_image_assets WHERE ean = $1',
+    'SELECT COALESCE(MAX(position), -1)::int AS position FROM scraper_product_image_assets WHERE ean = $1',
     [ean]
   );
   position = current.rows[0].position + 1;
@@ -1155,7 +1155,7 @@ async function pinheiroGetWithRetry(client, path, config = {}) {
 async function getExistingPinheiroProductUrls(logCallback) {
   try {
     const result = await db.query(
-      `SELECT product_url FROM product_images
+      `SELECT product_url FROM scraper_product_images
        WHERE product_url LIKE 'https://www.lojaonline.pinheirosupermercado.com.br/produto/%'
        UNION
        SELECT product_url FROM scraped_product_pages
@@ -1195,7 +1195,7 @@ async function getPinheiroProductImages(client, product) {
 
 async function savePinheiroImagesForExistingProduct(ean, imageUrls, logCallback) {
   const current = await db.query(
-    'SELECT COALESCE(MAX(position), -1)::int AS position FROM product_image_assets WHERE ean = $1',
+    'SELECT COALESCE(MAX(position), -1)::int AS position FROM scraper_product_image_assets WHERE ean = $1',
     [ean]
   );
   let position = current.rows[0].position + 1;
