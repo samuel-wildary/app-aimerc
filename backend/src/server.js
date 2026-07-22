@@ -73,6 +73,7 @@ import {
   startCatalogScan,
   cancelCatalogScan
 } from './lib/catalog-library.js';
+import { seedVirtualAssets } from './lib/postgres.js';
 import { createToken, passwordNeedsUpgrade, requireAuth, verifyPassword } from './lib/auth.js';
 import { integrationProvider, integrationProviders, publicIntegrationProvider } from './lib/integration-providers.js';
 import { encryptIntegrationSecret } from './lib/store-integration.js';
@@ -878,6 +879,12 @@ app.post('/api/admin/catalog-library/scans/cancel', requireAuth('PLATFORM_ADMIN'
   if (!job) throw new ApiError(400, 'Nenhuma varredura em andamento para cancelar');
   await writeAuditLog({ actorId: req.user.sub, action: 'CATALOG_SCAN_CANCELLED', entityType: 'CATALOG_SCAN', entityId: job.id });
   res.json(job);
+}));
+
+app.post('/api/admin/catalog-library/reseed-virtual', requireAuth('PLATFORM_ADMIN'), asyncRoute(async (req, res) => {
+  const seeded = await seedVirtualAssets({ force: true });
+  await writeAuditLog({ actorId: req.user.sub, action: 'CATALOG_VIRTUAL_RESEED', entityType: 'CATALOG_ASSET', metadata: { seeded } });
+  res.json({ success: true, seeded });
 }));
 
 app.delete('/api/admin/catalog-library/:ean', requireAuth('PLATFORM_ADMIN'), asyncRoute(async (req, res) => {

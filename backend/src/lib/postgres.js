@@ -538,11 +538,14 @@ const VIRTUAL_IMAGES = {
   }
 };
 
-async function seedVirtualAssets() {
+export async function seedVirtualAssets({ force = false } = {}) {
+  let seeded = 0;
   for (const [ean, info] of Object.entries(VIRTUAL_IMAGES)) {
     try {
-      const existsRes = await pool.query('SELECT 1 FROM catalog_assets WHERE ean = $1 LIMIT 1', [ean]);
-      if (existsRes.rowCount > 0) continue; // Já cadastrado!
+      if (!force) {
+        const existsRes = await pool.query('SELECT source_url FROM catalog_assets WHERE ean = $1 LIMIT 1', [ean]);
+        if (existsRes.rowCount > 0 && existsRes.rows[0].source_url === info.url) continue;
+      }
 
       console.log(`[SEED] Baixando imagem padrao para ${info.description} (${ean})...`);
       const response = await fetch(info.url, {
@@ -560,14 +563,23 @@ async function seedVirtualAssets() {
       await pool.query(
         `INSERT INTO catalog_assets (ean, description, content_type, image_data, checksum, byte_size, source_name, source_url)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-         ON CONFLICT (ean) DO NOTHING`,
+         ON CONFLICT (ean) DO UPDATE SET
+           description = EXCLUDED.description,
+           content_type = EXCLUDED.content_type,
+           image_data = EXCLUDED.image_data,
+           checksum = EXCLUDED.checksum,
+           byte_size = EXCLUDED.byte_size,
+           source_name = EXCLUDED.source_name,
+           source_url = EXCLUDED.source_url`,
         [ean, info.description, contentType, buffer, checksum, buffer.length, 'Padrao Sistema', info.url]
       );
+      seeded++;
       console.log(`[SEED] Imagem padrao para ${info.description} cadastrada com sucesso.`);
     } catch (err) {
       console.error(`[SEED] Erro ao cadastrar ${info.description}:`, err.message);
     }
   }
+  return seeded;
 }
 
 let initialization;
