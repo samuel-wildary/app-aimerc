@@ -390,111 +390,151 @@ CREATE INDEX IF NOT EXISTS integration_runs_store_started_idx ON integration_run
 const VIRTUAL_IMAGES = {
   VIRTUAL_ALHO: {
     description: 'Alho Roxo',
-    url: 'https://images.unsplash.com/photo-1540148426945-6cf22a6b2383?auto=format&fit=crop&w=400&h=400&q=80'
+    url: 'https://produto-assets-vipcommerce-com-br.br-se1.magaluobjects.com/f80b27b7-5a02-4bb3-accb-ec6a666324da.jpg'
   },
   VIRTUAL_BATATA: {
     description: 'Batata Inglesa',
-    url: 'https://images.unsplash.com/photo-1518977676601-b53f82aba655?auto=format&fit=crop&w=400&h=400&q=80'
+    url: 'https://produto-assets-vipcommerce-com-br.br-se1.magaluobjects.com/a42b083c-6874-4b47-b844-30fb57a0753f.jpg'
   },
   VIRTUAL_CEBOLA: {
     description: 'Cebola Branca',
-    url: 'https://images.unsplash.com/photo-1618512496248-a07fe8376604?auto=format&fit=crop&w=400&h=400&q=80'
+    url: 'https://produto-assets-vipcommerce-com-br.br-se1.magaluobjects.com/9788f5a6-9ab5-4b07-a35f-141de1f0a1ea.jpg'
   },
   VIRTUAL_CENOURA: {
     description: 'Cenoura Especial',
-    url: 'https://images.unsplash.com/photo-1598170845058-32b996a67876?auto=format&fit=crop&w=400&h=400&q=80'
+    url: 'https://produto-assets-vipcommerce-com-br.br-se1.magaluobjects.com/267cc4be-2947-4933-bfb7-3b2d1c68fca5.jpg'
   },
   VIRTUAL_TOMATE: {
     description: 'Tomate Longa Vida',
-    url: 'https://images.unsplash.com/photo-1518977822534-7049a61ee0c2?auto=format&fit=crop&w=400&h=400&q=80'
+    url: 'https://produto-assets-vipcommerce-com-br.br-se1.magaluobjects.com/a0b411d7-27b9-4dc3-b783-d3b255ce7fbc.jpg'
   },
   VIRTUAL_BANANA: {
     description: 'Banana Prata',
-    url: 'https://images.unsplash.com/photo-1571771894821-ce9b6c11b08e?auto=format&fit=crop&w=400&h=400&q=80'
+    url: 'https://produto-assets-vipcommerce-com-br.br-se1.magaluobjects.com/d5a91f53-2d20-4e89-aebf-45b9b940ce97.jpg'
   },
   VIRTUAL_MACA: {
     description: 'Maçã Nacional',
-    url: 'https://images.unsplash.com/photo-1560806887-1e4cd0b6cbd6?auto=format&fit=crop&w=400&h=400&q=80'
+    url: 'https://static.paodeacucar.com/img/uploads/1/261/33026261.jpg'
   },
   VIRTUAL_LARANJA: {
     description: 'Laranja Pêra',
-    url: 'https://images.unsplash.com/photo-1611080626919-7cf5a9dbab5b?auto=format&fit=crop&w=400&h=400&q=80'
+    url: 'https://produto-assets-vipcommerce-com-br.br-se1.magaluobjects.com/a976c72d-3d44-42f2-bd55-90d0b04a7428.jpg'
   },
   VIRTUAL_LIMAO: {
     description: 'Limão Taiti',
-    url: 'https://images.unsplash.com/photo-1590502593747-42a996133562?auto=format&fit=crop&w=400&h=400&q=80'
+    url: 'https://produto-assets-vipcommerce-com-br.br-se1.magaluobjects.com/832c32fa-9d18-472e-831d-b3531fb5cfd5.jpg'
   },
   VIRTUAL_MAMAO: {
     description: 'Mamão Formosa',
-    url: 'https://images.unsplash.com/photo-1526318896980-cf78c088247c?auto=format&fit=crop&w=400&h=400&q=80'
+    url: 'https://produto-assets-vipcommerce-com-br.br-se1.magaluobjects.com/a3167707-1b00-4140-bd03-9543f628c31c.jpg'
   },
   VIRTUAL_ABACAXI: {
     description: 'Abacaxi Pérola',
-    url: 'https://images.unsplash.com/photo-1550258987-190a2d41a8ba?auto=format&fit=crop&w=400&h=400&q=80'
+    url: 'https://produto-assets-vipcommerce-com-br.br-se1.magaluobjects.com/266211e1-834f-48ba-aa16-70d659306de4.jpg'
   },
   VIRTUAL_UVA: {
     description: 'Uva Roxa',
-    url: 'https://images.unsplash.com/photo-1537640538966-79f369143f8f?auto=format&fit=crop&w=400&h=400&q=80'
+    url: 'https://produto-assets-vipcommerce-com-br.br-se1.magaluobjects.com/5b73dcd7-cfcb-4cc9-9f79-24d1561f09bb.jpg'
   },
   VIRTUAL_ALFACE: {
     description: 'Alface Hidropônica',
-    url: 'https://images.unsplash.com/photo-1622484211148-716598e04044?auto=format&fit=crop&w=400&h=400&q=80'
+    url: 'https://produto-assets-vipcommerce-com-br.br-se1.magaluobjects.com/4e3bf60e-5327-4229-b5b3-f38533e8ae16.jpg'
   },
   VIRTUAL_CARNE_MOIDA: {
     description: 'Carne Moída de Segunda',
-    url: 'https://images.unsplash.com/photo-1588168333986-5078641a52d8?auto=format&fit=crop&w=400&h=400&q=80'
+    url: 'https://carrefourbrfood.vtexassets.com/arquivos/ids/206516511/carne-moida-congelada-swift-1kg-1.jpg'
   },
   VIRTUAL_CARNE_BIFE: {
     description: 'Bife Bovino Especial',
-    url: 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=400&h=400&q=80'
+    url: 'https://produto-assets-vipcommerce-com-br.br-se1.magaluobjects.com/e2f073bc-91d1-4ad9-bf98-0c6df0d57187.jpg'
   },
   VIRTUAL_CARNE_LOMBO: {
     description: 'Lombo Especial (Suíno / Bovino)',
-    url: 'https://images.unsplash.com/photo-1432139555190-58524dae6a55?auto=format&fit=crop&w=400&h=400&q=80'
+    url: 'https://static.paodeacucar.com/img/uploads/1/697/33046697.png'
   },
   VIRTUAL_CARNE_MAMINHA: {
     description: 'Maminha Bovina',
-    url: 'https://images.unsplash.com/photo-1558030006-450675393462?auto=format&fit=crop&w=400&h=400&q=80'
+    url: 'https://static.paodeacucar.com/img/uploads/1/343/32912343.png'
   },
   VIRTUAL_CARNE_PICANHA: {
     description: 'Picanha Bovina',
-    url: 'https://images.unsplash.com/photo-1594041680534-e8c8cdebd659?auto=format&fit=crop&w=400&h=400&q=80'
+    url: 'https://produto-assets-vipcommerce-com-br.br-se1.magaluobjects.com/353cb7dc-bac1-4d9c-ad84-956e560e20af.jpg'
   },
   VIRTUAL_CARNE_ALCATRA: {
     description: 'Alcatra Bovina',
-    url: 'https://images.unsplash.com/photo-1603048588665-791ca8aea617?auto=format&fit=crop&w=400&h=400&q=80'
+    url: 'https://static.paodeacucar.com/img/uploads/1/936/32987936.png'
   },
   VIRTUAL_CARNE_CONTRA_FILE: {
     description: 'Contra Filé Bovino',
-    url: 'https://images.unsplash.com/photo-1600891964092-4316c288032e?auto=format&fit=crop&w=400&h=400&q=80'
+    url: 'https://produto-assets-vipcommerce-com-br.br-se1.magaluobjects.com/54f8feda-1fe6-4b3a-8e8f-00114e8bda1b.jpg'
   },
   VIRTUAL_CARNE_COSTELA: {
     description: 'Costela Bovina Especial',
-    url: 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=400&h=400&q=80'
+    url: 'https://produto-assets-vipcommerce-com-br.br-se1.magaluobjects.com/e9fd80bb-2066-4126-82f0-1926e632adbb.jpg'
   },
   VIRTUAL_CARNE_SUINA: {
     description: 'Carne Suína',
-    url: 'https://images.unsplash.com/photo-1432139555190-58524dae6a55?auto=format&fit=crop&w=400&h=400&q=80'
+    url: 'https://produto-assets-vipcommerce-com-br.br-se1.magaluobjects.com/0eaa6803-37b7-4528-8ddb-cb7aee09d9a8.jpg'
   },
   VIRTUAL_FRANGO_PEITO: {
     description: 'Peito de Frango Resfriado',
-    url: 'https://images.unsplash.com/photo-1604503468506-a8da13d82791?auto=format&fit=crop&w=400&h=400&q=80'
+    url: 'https://produto-assets-vipcommerce-com-br.br-se1.magaluobjects.com/665272ff-e608-4078-9516-15dae033fe68.jpg'
   },
   VIRTUAL_FRANGO_COXA: {
     description: 'Coxa e Sobrecoxa de Frango',
-    url: 'https://images.unsplash.com/photo-1587593810167-a84920ea0781?auto=format&fit=crop&w=400&h=400&q=80'
+    url: 'https://produto-assets-vipcommerce-com-br.br-se1.magaluobjects.com/c8fc74b3-fcd7-4b7b-a48c-71d5be488079.jpg'
   },
   VIRTUAL_FRANGO_ASA: {
     description: 'Asa de Frango',
-    url: 'https://images.unsplash.com/photo-1527477396000-e27163b481c2?auto=format&fit=crop&w=400&h=400&q=80'
+    url: 'https://static.paodeacucar.com/img/uploads/1/811/24021811.jpg'
   },
   VIRTUAL_LINGUICA: {
     description: 'Linguiça Toscana',
-    url: 'https://images.unsplash.com/photo-1541532713592-79a0317b6b77?auto=format&fit=crop&w=400&h=400&q=80'
+    url: 'https://static.paodeacucar.com/img/uploads/1/398/32921398.jpg'
   },
   VIRTUAL_OVOS: {
     description: 'Ovos Brancos Tipo Grande',
-    url: 'https://images.unsplash.com/photo-1516448424440-573236e39ab3?auto=format&fit=crop&w=400&h=400&q=80'
+    url: 'https://produto-assets-vipcommerce-com-br.br-se1.magaluobjects.com/264b4c53-b930-4e31-8636-f3cc61ecb8eb.jpg'
+  },
+  VIRTUAL_ATA: {
+    description: 'Ata / Pinha',
+    url: 'https://produto-assets-vipcommerce-com-br.br-se1.magaluobjects.com/d95b2fa5-d5c2-4479-8b53-4783c596aeac.jpg'
+  },
+  VIRTUAL_BERINJELA: {
+    description: 'Berinjela',
+    url: 'https://produto-assets-vipcommerce-com-br.br-se1.magaluobjects.com/c4b8b6ec-7d0e-4f3f-9177-3e1cb59fb7a3.jpg'
+  },
+  VIRTUAL_MACAXEIRA: {
+    description: 'Macaxeira',
+    url: 'https://produto-assets-vipcommerce-com-br.br-se1.magaluobjects.com/235c6a1b-cd14-40a6-b4f3-fb73ea393c76.jpg'
+  },
+  VIRTUAL_CARNE_PATINHO: {
+    description: 'Patinho Bovino',
+    url: 'https://static.paodeacucar.com/img/uploads/1/707/32980707.jpg'
+  },
+  VIRTUAL_CARNE_COXAO_MOLE: {
+    description: 'Coxão Mole',
+    url: 'https://carrefourbrfood.vtexassets.com/arquivos/ids/201003525/bife-coxao-mole-bovino-congelado-iqf-carrefour-selection-500g-1.jpg'
+  },
+  VIRTUAL_CARNE_ACEM: {
+    description: 'Acém',
+    url: 'https://carrefourbrfood.vtexassets.com/arquivos/ids/206545447/5712963_1.jpg'
+  },
+  VIRTUAL_CARNE_MUSCULO: {
+    description: 'Músculo',
+    url: 'https://produto-assets-vipcommerce-com-br.br-se1.magaluobjects.com/f2c4d026-3082-4cf4-8bfe-bf78ee2cce84.jpg'
+  },
+  VIRTUAL_CARNE_BISTECA: {
+    description: 'Bisteca',
+    url: 'https://produto-assets-vipcommerce-com-br.br-se1.magaluobjects.com/0eaa6803-37b7-4528-8ddb-cb7aee09d9a8.jpg'
+  },
+  VIRTUAL_FRANGO_CORACAO: {
+    description: 'Coração',
+    url: 'https://produto-assets-vipcommerce-com-br.br-se1.magaluobjects.com/1a719d36-8e54-47c0-a7d9-2e0618abce02.jpg'
+  },
+  VIRTUAL_CARNE_LAGARTO: {
+    description: 'Lagarto Bovino',
+    url: 'https://produto-assets-vipcommerce-com-br.br-se1.magaluobjects.com/0e632b72-23c2-4a57-9ab9-60197b10298d.jpg'
   }
 };
 

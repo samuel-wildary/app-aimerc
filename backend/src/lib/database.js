@@ -1018,6 +1018,7 @@ export function getVirtualEan(name, category) {
   if (cleanName.includes('cupim')) return 'VIRTUAL_CARNE_CUPIM';
   if (cleanName.includes('bisteca')) return 'VIRTUAL_CARNE_BISTECA';
   if (cleanName.includes('pernil')) return 'VIRTUAL_CARNE_PERNIL';
+  if (cleanName.includes('lagarto')) return 'VIRTUAL_CARNE_LAGARTO';
   if (cleanName.includes('peito') && (cleanName.includes('frango') || cleanName.includes('ave') || cleanName.includes('bovino'))) return 'VIRTUAL_FRANGO_PEITO';
   if (cleanName.includes('coxa') && (cleanName.includes('frango') || cleanName.includes('ave'))) return 'VIRTUAL_FRANGO_COXA';
   if (cleanName.includes('asa') && (cleanName.includes('frango') || cleanName.includes('ave'))) return 'VIRTUAL_FRANGO_ASA';
