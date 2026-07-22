@@ -581,6 +581,26 @@ export async function seedVirtualAssets({ force = false } = {}) {
       console.error(`[SEED] Erro ao cadastrar ${info.description}:`, err.message);
     }
   }
+
+  try {
+    const { getVirtualEan } = await import('./database.js');
+    const productsRes = await pool.query('SELECT store_id, id, name, category FROM products');
+    for (const p of productsRes.rows) {
+      const virtualEan = getVirtualEan(p.name, p.category);
+      if (virtualEan) {
+        await pool.query(`
+          INSERT INTO product_images (store_id, product_id, content_type, image_data, checksum, byte_size, source, updated_at)
+          SELECT $1, $2, ca.content_type, ca.image_data, ca.checksum, ca.byte_size, 'auto-virtual', NOW()
+          FROM catalog_assets ca
+          WHERE ca.ean = $3
+          ON CONFLICT (store_id, product_id) DO NOTHING
+        `, [p.store_id, p.id, virtualEan]);
+      }
+    }
+  } catch (err) {
+    console.error('[SEED] Erro ao vincular imagens nos produtos das lojas:', err.message);
+  }
+
   return seeded;
 }
 
