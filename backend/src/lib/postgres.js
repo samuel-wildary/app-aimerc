@@ -607,7 +607,13 @@ export async function seedVirtualAssets({ force = false } = {}) {
         INSERT INTO product_images (store_id, product_id, content_type, image_data, checksum, byte_size, source, updated_at)
         SELECT p.store_id, p.id, $3, $4, $5, $6, $7, NOW()
         FROM products p
-        WHERE (p.barcode = $1 OR p.sku = $1 OR p.id = $1 OR p.barcode = REPLACE($1, 'PLU_', ''))
+        WHERE (
+          p.barcode = $1 OR p.sku = $1 OR p.id = $1 
+          OR p.barcode = REPLACE($1, 'PLU_', '') 
+          OR p.sku = REPLACE($1, 'PLU_', '') 
+          OR p.id = REPLACE($1, 'PLU_', '')
+          OR p.id = CONCAT('store_85176df6:', REPLACE($1, 'PLU_', ''))
+        )
         ON CONFLICT (store_id, product_id) DO UPDATE SET
           content_type = EXCLUDED.content_type,
           image_data = EXCLUDED.image_data,
