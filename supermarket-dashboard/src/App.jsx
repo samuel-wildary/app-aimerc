@@ -346,13 +346,16 @@ function Catalog({ products, categories, query, setQuery, category, setCategory,
   const withImage = products.filter(product => product.hasImage).length;
   const withoutImage = products.length - withImage;
   const outOfStock = products.filter(product => Number(product.stock) === 0).length;
+  const internalEanCount = products.filter(product => !product.barcode || product.barcode.length < 8 || product.barcode === product.sku).length;
   const filteredProducts = imageFilter === 'with'
     ? products.filter(product => product.hasImage)
     : imageFilter === 'without'
       ? products.filter(product => !product.hasImage)
-      : imageFilter === 'out_of_stock'
-        ? products.filter(product => Number(product.stock) === 0)
-        : products;
+      : imageFilter === 'internal_ean'
+        ? products.filter(product => !product.barcode || product.barcode.length < 8 || product.barcode === product.sku)
+        : imageFilter === 'out_of_stock'
+          ? products.filter(product => Number(product.stock) === 0)
+          : products;
   const totalPages = Math.max(1, Math.ceil(filteredProducts.length / pageSize));
   const visibleProducts = filteredProducts.slice((page - 1) * pageSize, page * pageSize);
 
@@ -362,7 +365,7 @@ function Catalog({ products, categories, query, setQuery, category, setCategory,
     <section className="panel catalog-panel">
       <div className="panel-heading catalog-heading"><div><p className="overline">Vitrine e estoque</p><h2>Catalogo da loja</h2><p className="catalog-intro">Organize categorias, corrija descricoes e use fotos proprias sem perder preco e estoque sincronizados.</p></div><span className="counter">{filteredProducts.length}</span></div>
       <div className="catalog-toolbar"><label className="search-box"><Search size={18} /><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Buscar por nome, SKU, EAN ou categoria" /></label><label className="category-select"><Tags size={17} /><select value={category} onChange={event => setCategory(event.target.value)}><option value="Todos">Todas as categorias</option>{categories.map(item => <option value={item.name} key={item.name}>{item.name} ({item.total})</option>)}</select></label></div>
-      <div className="image-filter-bar"><span>Fotos do catalogo</span><div><button className={imageFilter === 'all' ? 'active' : ''} onClick={() => setImageFilter('all')}>Todos <b>{products.length}</b></button><button className={imageFilter === 'with' ? 'active' : ''} onClick={() => setImageFilter('with')}><Images size={14} /> Com imagem <b>{withImage}</b></button><button className={imageFilter === 'without' ? 'active warning' : 'warning'} onClick={() => setImageFilter('without')}><ImageOff size={14} /> Sem imagem <b>{withoutImage}</b></button><button className={imageFilter === 'out_of_stock' ? 'active danger' : 'danger'} onClick={() => setImageFilter('out_of_stock')}><Boxes size={14} /> Estoque zerado <b>{outOfStock}</b></button></div></div>
+      <div className="image-filter-bar"><span>Fotos do catalogo</span><div><button className={imageFilter === 'all' ? 'active' : ''} onClick={() => setImageFilter('all')}>Todos <b>{products.length}</b></button><button className={imageFilter === 'with' ? 'active' : ''} onClick={() => setImageFilter('with')}><Images size={14} /> Com imagem <b>{withImage}</b></button><button className={imageFilter === 'without' ? 'active warning' : 'warning'} onClick={() => setImageFilter('without')}><ImageOff size={14} /> Sem imagem <b>{withoutImage}</b></button><button className={imageFilter === 'internal_ean' ? 'active' : ''} onClick={() => setImageFilter('internal_ean')}><Tags size={14} /> EAN da empresa <b>{internalEanCount}</b></button><button className={imageFilter === 'out_of_stock' ? 'active danger' : 'danger'} onClick={() => setImageFilter('out_of_stock')}><Boxes size={14} /> Estoque zerado <b>{outOfStock}</b></button></div></div>
       <div className="category-chips"><button className={category === 'Todos' ? 'active' : ''} onClick={() => setCategory('Todos')}>Todas</button>{categories.map(item => <button className={category === item.name ? 'active' : ''} onClick={() => setCategory(item.name)} key={item.name}>{item.name}<span>{item.total}</span></button>)}</div>
       <div className="catalog-sync-note"><RefreshCw size={16} /><span><strong>Sincronizacao protegida</strong> Preco, promocao e quantidade vêm da API. Foto, categoria e texto personalizados permanecem salvos.</span></div>
       <div className="table-wrap"><table><thead><tr><th>Produto</th><th>SKU / EAN</th><th>Categoria</th><th>Preco</th><th>Estoque</th><th>Vitrine</th><th /></tr></thead><tbody>{visibleProducts.map(product => {
