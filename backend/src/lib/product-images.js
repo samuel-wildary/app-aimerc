@@ -76,6 +76,15 @@ export async function productImage(storeId, product) {
   if (virtualEan) {
     const virtualImage = await readCatalogImage(virtualEan);
     if (virtualImage) return virtualImage;
+    try {
+      const { VIRTUAL_IMAGES } = await import('./postgres.js');
+      if (VIRTUAL_IMAGES && VIRTUAL_IMAGES[virtualEan]) {
+        const item = VIRTUAL_IMAGES[virtualEan];
+        const data = Buffer.from(item.svg || item.base64, item.svg ? 'utf8' : 'base64');
+        const contentType = item.svg ? 'image/svg+xml' : (item.contentType || 'image/jpeg');
+        return { contentType, data };
+      }
+    } catch (_) {}
   }
 
   if (!product?.image) return null;

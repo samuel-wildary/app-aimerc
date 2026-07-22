@@ -461,7 +461,7 @@ export async function listProducts(storeId, filters = {}) {
     const product = mapProduct(row);
     if (!product.hasCatalogImage) {
       const virtualEan = getVirtualEan(product.name, product.category);
-      if (virtualEan && activeVirtualEans.has(virtualEan)) {
+      if (virtualEan) {
         product.hasCatalogImage = true;
       }
     }
@@ -1002,6 +1002,8 @@ export function getVirtualEan(name, category) {
   const cleanName = String(name || '').toLowerCase();
   
   // Carnes, Aves, Peixes, Frigorífico & Embutidos
+  if (cleanName.includes('paleta')) return 'VIRTUAL_CARNE_PALETA';
+  if (cleanName.includes('capa do file') || cleanName.includes('capa do filé')) return 'VIRTUAL_CARNE_CAPA_FILE';
   if (cleanName.includes('maminha')) return 'VIRTUAL_CARNE_MAMINHA';
   if (cleanName.includes('lombo')) return 'VIRTUAL_CARNE_LOMBO';
   if (cleanName.includes('picanha')) return 'VIRTUAL_CARNE_PICANHA';
@@ -1032,6 +1034,9 @@ export function getVirtualEan(name, category) {
   if (cleanName.includes('bife') || cleanName.includes('bovino') || cleanName.includes('bovina') || cleanName.includes('carne')) return 'VIRTUAL_CARNE_BIFE';
 
   // Hortifruti (Frutas, Legumes, Verduras)
+  if (/\b(abacate)\b/i.test(cleanName)) return 'VIRTUAL_ABACATE';
+  if (/\b(espinafre)\b/i.test(cleanName)) return 'VIRTUAL_ESPINAFRE';
+  if (/\b(manjericao|manjericão)\b/i.test(cleanName)) return 'VIRTUAL_MANJERICAO';
   if (/\b(batata)\b/i.test(cleanName)) return 'VIRTUAL_BATATA';
   if (/\b(macaxeira|mandioca|aipim)\b/i.test(cleanName)) return 'VIRTUAL_MACAXEIRA';
   if (/\b(ata|pinha|fruta do conde)\b/i.test(cleanName)) return 'VIRTUAL_ATA';
