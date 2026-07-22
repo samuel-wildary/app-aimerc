@@ -7,6 +7,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -433,11 +434,34 @@ private fun CartLineCard(line: CartLine, add: () -> Unit, remove: () -> Unit) {
 private fun CheckoutScreenV2(viewModel: AiMercViewModel, back: () -> Unit, success: () -> Unit) {
     var name by rememberSaveable { mutableStateOf(viewModel.customerName) }; var phone by rememberSaveable { mutableStateOf(viewModel.customerPhone) }; var cep by rememberSaveable { mutableStateOf(viewModel.customerCep) }; var street by rememberSaveable { mutableStateOf(viewModel.customerStreet) }; var number by rememberSaveable { mutableStateOf(viewModel.customerNumber) }; var complement by rememberSaveable { mutableStateOf(viewModel.customerComplement) }; var neighborhood by rememberSaveable { mutableStateOf(viewModel.customerNeighborhood) }; var city by rememberSaveable { mutableStateOf(viewModel.customerCity) }; var state by rememberSaveable { mutableStateOf(viewModel.customerState) }; var reference by rememberSaveable { mutableStateOf(viewModel.customerReference) }; var notes by rememberSaveable { mutableStateOf("") }; var fulfillment by rememberSaveable { mutableStateOf("DELIVERY") }; var payment by rememberSaveable { mutableStateOf("CARD_ON_DELIVERY") }
     val store = viewModel.catalog?.store; val deliveryFee = if (fulfillment == "DELIVERY" && !(store?.freeDeliveryAbove ?: 0.0 > 0 && viewModel.subtotal >= (store?.freeDeliveryAbove ?: 0.0))) store?.deliveryFee ?: 0.0 else 0.0
+    val pickupSlotsList = (store?.pickupSlots ?: "08:00 - 10:00, 10:00 - 12:00, 12:00 - 14:00, 14:00 - 16:00, 16:00 - 18:00, 18:00 - 20:00").split(",").map { it.trim() }.filter { it.isNotBlank() }
+    var selectedPickupSlot by rememberSaveable { mutableStateOf(pickupSlotsList.firstOrNull() ?: "08:00 - 10:00") }
     val validAddress = fulfillment == "PICKUP" || (cep.length == 8 && street.isNotBlank() && number.isNotBlank() && neighborhood.isNotBlank() && city.isNotBlank() && state.length == 2)
     val valid = name.isNotBlank() && phone.isNotBlank() && validAddress
-    Scaffold(containerColor = Canvas, topBar = { SimpleTopBar("Finalizar compra", back) }, bottomBar = { Column(Modifier.background(Color.White).navigationBarsPadding().padding(16.dp)) { Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("Total", color = Muted); Text(currency.format(viewModel.subtotal + deliveryFee), fontWeight = FontWeight.Black, fontSize = 21.sp) }; Button(onClick = { viewModel.submit(CheckoutData(name, phone, cep, street, number, complement, neighborhood, city, state, reference, fulfillment, payment, null, notes), success) }, enabled = valid && !viewModel.submitting, modifier = Modifier.fillMaxWidth().height(52.dp).padding(top = 7.dp), shape = RoundedCornerShape(14.dp), colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Forest)) { Text(if (viewModel.submitting) "Enviando pedido..." else "Confirmar pedido", fontWeight = FontWeight.Black) } } }) { padding ->
+    Scaffold(containerColor = Canvas, topBar = { SimpleTopBar("Finalizar compra", back) }, bottomBar = { Column(Modifier.background(Color.White).navigationBarsPadding().padding(16.dp)) { Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("Total", color = Muted); Text(currency.format(viewModel.subtotal + deliveryFee), fontWeight = FontWeight.Black, fontSize = 21.sp) }; Button(onClick = {
+        val finalNotes = if (fulfillment == "PICKUP" && store?.enablePickupScheduling == true) (if (notes.isBlank()) "Horario de retirada: $selectedPickupSlot" else "$notes | Horario de retirada: $selectedPickupSlot") else notes
+        viewModel.submit(CheckoutData(name, phone, cep, street, number, complement, neighborhood, city, state, reference, fulfillment, payment, null, finalNotes), success)
+    }, enabled = valid && !viewModel.submitting, modifier = Modifier.fillMaxWidth().height(52.dp).padding(top = 7.dp), shape = RoundedCornerShape(14.dp), colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Forest)) { Text(if (viewModel.submitting) "Enviando pedido..." else "Confirmar pedido", fontWeight = FontWeight.Black) } } }) { padding ->
         LazyColumn(Modifier.padding(padding), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(13.dp)) {
             item { CheckoutSection("Como voce quer receber?") { Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { ChoiceChip("Entrega", fulfillment == "DELIVERY") { fulfillment = "DELIVERY" }; ChoiceChip("Retirada", fulfillment == "PICKUP") { fulfillment = "PICKUP" } } } }
+            if (fulfillment == "PICKUP") {
+                item {
+                    CheckoutSection("Agendamento de retirada na loja") {
+                        if (store?.enablePickupScheduling == true) {
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text("Selecione a faixa de horario para buscar na loja:", color = Color(0xFF52615A), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    pickupSlotsList.forEach { slot ->
+                                        ChoiceChip(slot, selectedPickupSlot == slot) { selectedPickupSlot = slot }
+                                    }
+                                }
+                            }
+                        } else {
+                            Text("Retirada simples na loja (sem agendamento). Retire no balcao assim que o pedido for aprovado.", color = Color(0xFF52615A), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
             item { CheckoutSection("Quem vai receber") { AppField(name, { name = it }, "Nome completo"); Spacer(Modifier.height(9.dp)); AppField(phone, { phone = it }, "WhatsApp", KeyboardType.Phone) } }
             if (fulfillment == "DELIVERY") item { CheckoutSection("Endereco de entrega") { AppField(cep, { cep = it.filter(Char::isDigit).take(8) }, "CEP", KeyboardType.Number); Spacer(Modifier.height(9.dp)); AppField(street, { street = it }, "Rua ou avenida"); Spacer(Modifier.height(9.dp)); AppField(number, { number = it }, "Numero da casa"); Spacer(Modifier.height(9.dp)); AppField(complement, { complement = it }, "Complemento (opcional)"); Spacer(Modifier.height(9.dp)); AppField(neighborhood, { neighborhood = it }, "Bairro"); Spacer(Modifier.height(9.dp)); AppField(city, { city = it }, "Cidade"); Spacer(Modifier.height(9.dp)); AppField(state, { state = it.uppercase().take(2) }, "UF"); Spacer(Modifier.height(9.dp)); AppField(reference, { reference = it }, "Ponto de referencia (opcional)") } }
             item { CheckoutSection("Pagamento na ${if (fulfillment == "DELIVERY") "entrega" else "retirada"}") { Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { ChoiceChip("Cartao", payment == "CARD_ON_DELIVERY") { payment = "CARD_ON_DELIVERY" }; ChoiceChip("Dinheiro", payment == "CASH") { payment = "CASH" } } } }

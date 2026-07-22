@@ -42,6 +42,8 @@ function mapStore(row) {
       background: row.brand_background || '#F2F5EF'
     },
     open: Boolean(row.is_open),
+    enablePickupScheduling: row.enable_pickup_scheduling != null ? Boolean(row.enable_pickup_scheduling) : true,
+    pickupSlots: row.pickup_slots || '08:00 - 10:00, 10:00 - 12:00, 12:00 - 14:00, 14:00 - 16:00, 16:00 - 18:00, 18:00 - 20:00',
     createdAt: row.created_at
   };
 }
@@ -202,8 +204,18 @@ export async function getStoreBySlug(slug) {
 
 export async function updateStoreSettings(id, input) {
   await query(`UPDATE stores SET minimum_order=$1, delivery_fee=$2, free_delivery_above=$3,
-    support_phone=$4, cancellation_window_minutes=$5, is_open=$6 WHERE id=$7`,
-  [input.minimumOrder, input.deliveryFee, input.freeDeliveryAbove, input.supportPhone, input.cancellationWindowMinutes, input.open ? 1 : 0, id]);
+    support_phone=$4, cancellation_window_minutes=$5, is_open=$6, enable_pickup_scheduling=$7, pickup_slots=$8 WHERE id=$9`,
+  [
+    input.minimumOrder,
+    input.deliveryFee,
+    input.freeDeliveryAbove,
+    input.supportPhone,
+    input.cancellationWindowMinutes,
+    input.open ? 1 : 0,
+    input.enablePickupScheduling !== false ? 1 : 0,
+    String(input.pickupSlots || '').trim() || '08:00 - 10:00, 10:00 - 12:00, 12:00 - 14:00, 14:00 - 16:00, 16:00 - 18:00, 18:00 - 20:00',
+    id
+  ]);
   return getStore(id);
 }
 

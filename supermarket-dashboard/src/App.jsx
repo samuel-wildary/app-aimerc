@@ -519,7 +519,16 @@ function PushAutomations({ automations, onCreate, onToggle, onRun, onDelete }) {
 }
 
 function Storefront({ store, banners, campaigns, automations, onSaveSettings, onCreateBanner, onUpdateBanner, onDeleteBanner, onCreateCampaign, onSendCampaign, onDeleteCampaign, onCreateAutomation, onToggleAutomation, onRunAutomation, onDeleteAutomation }) {
-  const [settings, setSettings] = useState({ minimumOrder: store?.minimumOrder ?? 0, deliveryFee: store?.deliveryFee ?? 0, freeDeliveryAbove: store?.freeDeliveryAbove ?? 0, supportPhone: store?.supportPhone ?? '', cancellationWindowMinutes: store?.cancellationWindowMinutes ?? 5, open: store?.open ?? true });
+  const [settings, setSettings] = useState({
+    minimumOrder: store?.minimumOrder ?? 0,
+    deliveryFee: store?.deliveryFee ?? 0,
+    freeDeliveryAbove: store?.freeDeliveryAbove ?? 0,
+    supportPhone: store?.supportPhone ?? '',
+    cancellationWindowMinutes: store?.cancellationWindowMinutes ?? 5,
+    open: store?.open ?? true,
+    enablePickupScheduling: store?.enablePickupScheduling ?? true,
+    pickupSlots: store?.pickupSlots ?? '08:00 - 10:00, 10:00 - 12:00, 12:00 - 14:00, 14:00 - 16:00, 16:00 - 18:00, 18:00 - 20:00'
+  });
   const [bannerForm, setBannerForm] = useState(emptyBanner);
   const [editingId, setEditingId] = useState(null);
   const [savingSettings, setSavingSettings] = useState(false);
@@ -529,8 +538,17 @@ function Storefront({ store, banners, campaigns, automations, onSaveSettings, on
   const [bannerFileError, setBannerFileError] = useState('');
 
   useEffect(() => {
-    setSettings({ minimumOrder: store?.minimumOrder ?? 0, deliveryFee: store?.deliveryFee ?? 0, freeDeliveryAbove: store?.freeDeliveryAbove ?? 0, supportPhone: store?.supportPhone ?? '', cancellationWindowMinutes: store?.cancellationWindowMinutes ?? 5, open: store?.open ?? true });
-  }, [store?.minimumOrder, store?.deliveryFee, store?.freeDeliveryAbove, store?.supportPhone, store?.cancellationWindowMinutes, store?.open]);
+    setSettings({
+      minimumOrder: store?.minimumOrder ?? 0,
+      deliveryFee: store?.deliveryFee ?? 0,
+      freeDeliveryAbove: store?.freeDeliveryAbove ?? 0,
+      supportPhone: store?.supportPhone ?? '',
+      cancellationWindowMinutes: store?.cancellationWindowMinutes ?? 5,
+      open: store?.open ?? true,
+      enablePickupScheduling: store?.enablePickupScheduling ?? true,
+      pickupSlots: store?.pickupSlots ?? '08:00 - 10:00, 10:00 - 12:00, 12:00 - 14:00, 14:00 - 16:00, 16:00 - 18:00, 18:00 - 20:00'
+    });
+  }, [store?.minimumOrder, store?.deliveryFee, store?.freeDeliveryAbove, store?.supportPhone, store?.cancellationWindowMinutes, store?.open, store?.enablePickupScheduling, store?.pickupSlots]);
 
   function editBanner(banner) {
     setEditingId(banner.id);
@@ -596,6 +614,10 @@ function Storefront({ store, banners, campaigns, automations, onSaveSettings, on
           <label>Frete gratis acima de<span>Use R$ 0 para manter taxa fixa em todos os pedidos.</span><div className="money-input"><b>R$</b><input type="number" min="0" step="0.01" value={settings.freeDeliveryAbove} onChange={event => setSettings({ ...settings, freeDeliveryAbove: event.target.value })} /></div></label>
           <label>Central de atendimento<span>Telefone exibido quando o cancelamento precisar ser resolvido pela loja.</span><input type="tel" value={settings.supportPhone} onChange={event => setSettings({ ...settings, supportPhone: event.target.value })} placeholder="(85) 99999-0000" required /></label>
           <label>Cancelamento pelo app<span>Minutos em que o cliente pode cancelar antes da separacao.</span><input type="number" min="1" max="60" value={settings.cancellationWindowMinutes} onChange={event => setSettings({ ...settings, cancellationWindowMinutes: event.target.value })} /></label>
+          <label className="open-toggle"><span><strong>Agendamento de horário na retirada</strong><small>Permitir que o cliente escolha a faixa de horário para buscar o pedido na loja.</small></span><input type="checkbox" checked={settings.enablePickupScheduling} onChange={event => setSettings({ ...settings, enablePickupScheduling: event.target.checked })} /></label>
+          {settings.enablePickupScheduling && (
+            <label>Faixas de horário para retirada<span>Separe as opções por vírgula.</span><input value={settings.pickupSlots} onChange={event => setSettings({ ...settings, pickupSlots: event.target.value })} placeholder="08:00 - 10:00, 10:00 - 12:00, 12:00 - 14:00, 14:00 - 16:00, 16:00 - 18:00, 18:00 - 20:00" required={settings.enablePickupScheduling} /></label>
+          )}
           <label className="open-toggle"><span><strong>Receber novos pedidos</strong><small>Ao fechar, o aplicativo bloqueia novos checkouts.</small></span><input type="checkbox" checked={settings.open} onChange={event => setSettings({ ...settings, open: event.target.checked })} /></label>
           <button className="primary large" disabled={savingSettings}>{savingSettings ? 'Salvando...' : 'Salvar configuracoes'}</button>
         </form>

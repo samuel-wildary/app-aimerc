@@ -34,7 +34,9 @@ object AiMercApi {
             minimumOrder = storeJson.optDouble("minimumOrder", 0.0),
             deliveryFee = storeJson.optDouble("deliveryFee", 0.0),
             freeDeliveryAbove = storeJson.optDouble("freeDeliveryAbove", 0.0),
-            open = storeJson.optBoolean("open", false)
+            open = storeJson.optBoolean("open", false),
+            enablePickupScheduling = storeJson.optBoolean("enablePickupScheduling", true),
+            pickupSlots = storeJson.optString("pickupSlots", "08:00 - 10:00, 10:00 - 12:00, 12:00 - 14:00, 14:00 - 16:00, 16:00 - 18:00, 18:00 - 20:00")
         )
         val categories = json.getJSONArray("categories").toStringList()
         val banners = json.getJSONArray("banners").mapObjects { item ->
