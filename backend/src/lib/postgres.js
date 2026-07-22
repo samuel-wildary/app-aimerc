@@ -390,151 +390,151 @@ CREATE INDEX IF NOT EXISTS integration_runs_store_started_idx ON integration_run
 const VIRTUAL_IMAGES = {
   VIRTUAL_ALHO: {
     description: 'Alho Roxo',
-    url: 'https://produto-assets-vipcommerce-com-br.br-se1.magaluobjects.com/f80b27b7-5a02-4bb3-accb-ec6a666324da.jpg'
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect width="400" height="400" rx="40" fill="#f3e8ee"/><circle cx="200" cy="200" r="140" fill="white" opacity="0.7"/><text x="200" y="225" font-size="140" text-anchor="middle" dominant-baseline="central">🧄</text></svg>`
   },
   VIRTUAL_BATATA: {
     description: 'Batata Inglesa',
-    url: 'https://produto-assets-vipcommerce-com-br.br-se1.magaluobjects.com/a42b083c-6874-4b47-b844-30fb57a0753f.jpg'
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect width="400" height="400" rx="40" fill="#fef3c7"/><circle cx="200" cy="200" r="140" fill="white" opacity="0.7"/><text x="200" y="225" font-size="140" text-anchor="middle" dominant-baseline="central">🥔</text></svg>`
   },
   VIRTUAL_CEBOLA: {
     description: 'Cebola Branca',
-    url: 'https://produto-assets-vipcommerce-com-br.br-se1.magaluobjects.com/9788f5a6-9ab5-4b07-a35f-141de1f0a1ea.jpg'
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect width="400" height="400" rx="40" fill="#ffedd5"/><circle cx="200" cy="200" r="140" fill="white" opacity="0.7"/><text x="200" y="225" font-size="140" text-anchor="middle" dominant-baseline="central">🧅</text></svg>`
   },
   VIRTUAL_CENOURA: {
     description: 'Cenoura Especial',
-    url: 'https://produto-assets-vipcommerce-com-br.br-se1.magaluobjects.com/267cc4be-2947-4933-bfb7-3b2d1c68fca5.jpg'
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect width="400" height="400" rx="40" fill="#ffedd5"/><circle cx="200" cy="200" r="140" fill="white" opacity="0.7"/><text x="200" y="225" font-size="140" text-anchor="middle" dominant-baseline="central">🥕</text></svg>`
   },
   VIRTUAL_TOMATE: {
     description: 'Tomate Longa Vida',
-    url: 'https://produto-assets-vipcommerce-com-br.br-se1.magaluobjects.com/a0b411d7-27b9-4dc3-b783-d3b255ce7fbc.jpg'
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect width="400" height="400" rx="40" fill="#fee2e2"/><circle cx="200" cy="200" r="140" fill="white" opacity="0.7"/><text x="200" y="225" font-size="140" text-anchor="middle" dominant-baseline="central">🍅</text></svg>`
   },
   VIRTUAL_BANANA: {
     description: 'Banana Prata',
-    url: 'https://produto-assets-vipcommerce-com-br.br-se1.magaluobjects.com/d5a91f53-2d20-4e89-aebf-45b9b940ce97.jpg'
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect width="400" height="400" rx="40" fill="#fef9c3"/><circle cx="200" cy="200" r="140" fill="white" opacity="0.7"/><text x="200" y="225" font-size="140" text-anchor="middle" dominant-baseline="central">🍌</text></svg>`
   },
   VIRTUAL_MACA: {
     description: 'Maçã Nacional',
-    url: 'https://static.paodeacucar.com/img/uploads/1/261/33026261.jpg'
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect width="400" height="400" rx="40" fill="#fee2e2"/><circle cx="200" cy="200" r="140" fill="white" opacity="0.7"/><text x="200" y="225" font-size="140" text-anchor="middle" dominant-baseline="central">🍎</text></svg>`
   },
   VIRTUAL_LARANJA: {
     description: 'Laranja Pêra',
-    url: 'https://produto-assets-vipcommerce-com-br.br-se1.magaluobjects.com/a976c72d-3d44-42f2-bd55-90d0b04a7428.jpg'
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect width="400" height="400" rx="40" fill="#ffedd5"/><circle cx="200" cy="200" r="140" fill="white" opacity="0.7"/><text x="200" y="225" font-size="140" text-anchor="middle" dominant-baseline="central">🍊</text></svg>`
   },
   VIRTUAL_LIMAO: {
     description: 'Limão Taiti',
-    url: 'https://produto-assets-vipcommerce-com-br.br-se1.magaluobjects.com/832c32fa-9d18-472e-831d-b3531fb5cfd5.jpg'
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect width="400" height="400" rx="40" fill="#dcfce7"/><circle cx="200" cy="200" r="140" fill="white" opacity="0.7"/><text x="200" y="225" font-size="140" text-anchor="middle" dominant-baseline="central">🍋</text></svg>`
   },
   VIRTUAL_MAMAO: {
     description: 'Mamão Formosa',
-    url: 'https://produto-assets-vipcommerce-com-br.br-se1.magaluobjects.com/a3167707-1b00-4140-bd03-9543f628c31c.jpg'
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect width="400" height="400" rx="40" fill="#ffedd5"/><circle cx="200" cy="200" r="140" fill="white" opacity="0.7"/><text x="200" y="225" font-size="140" text-anchor="middle" dominant-baseline="central">🥭</text></svg>`
   },
   VIRTUAL_ABACAXI: {
     description: 'Abacaxi Pérola',
-    url: 'https://produto-assets-vipcommerce-com-br.br-se1.magaluobjects.com/266211e1-834f-48ba-aa16-70d659306de4.jpg'
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect width="400" height="400" rx="40" fill="#fef9c3"/><circle cx="200" cy="200" r="140" fill="white" opacity="0.7"/><text x="200" y="225" font-size="140" text-anchor="middle" dominant-baseline="central">🍍</text></svg>`
   },
   VIRTUAL_UVA: {
     description: 'Uva Roxa',
-    url: 'https://produto-assets-vipcommerce-com-br.br-se1.magaluobjects.com/5b73dcd7-cfcb-4cc9-9f79-24d1561f09bb.jpg'
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect width="400" height="400" rx="40" fill="#f3e8ff"/><circle cx="200" cy="200" r="140" fill="white" opacity="0.7"/><text x="200" y="225" font-size="140" text-anchor="middle" dominant-baseline="central">🍇</text></svg>`
   },
   VIRTUAL_ALFACE: {
     description: 'Alface Hidropônica',
-    url: 'https://produto-assets-vipcommerce-com-br.br-se1.magaluobjects.com/4e3bf60e-5327-4229-b5b3-f38533e8ae16.jpg'
-  },
-  VIRTUAL_CARNE_MOIDA: {
-    description: 'Carne Moída de Segunda',
-    url: 'https://carrefourbrfood.vtexassets.com/arquivos/ids/206516511/carne-moida-congelada-swift-1kg-1.jpg'
-  },
-  VIRTUAL_CARNE_BIFE: {
-    description: 'Bife Bovino Especial',
-    url: 'https://produto-assets-vipcommerce-com-br.br-se1.magaluobjects.com/e2f073bc-91d1-4ad9-bf98-0c6df0d57187.jpg'
-  },
-  VIRTUAL_CARNE_LOMBO: {
-    description: 'Lombo Especial (Suíno / Bovino)',
-    url: 'https://static.paodeacucar.com/img/uploads/1/697/33046697.png'
-  },
-  VIRTUAL_CARNE_MAMINHA: {
-    description: 'Maminha Bovina',
-    url: 'https://static.paodeacucar.com/img/uploads/1/343/32912343.png'
-  },
-  VIRTUAL_CARNE_PICANHA: {
-    description: 'Picanha Bovina',
-    url: 'https://produto-assets-vipcommerce-com-br.br-se1.magaluobjects.com/353cb7dc-bac1-4d9c-ad84-956e560e20af.jpg'
-  },
-  VIRTUAL_CARNE_ALCATRA: {
-    description: 'Alcatra Bovina',
-    url: 'https://static.paodeacucar.com/img/uploads/1/936/32987936.png'
-  },
-  VIRTUAL_CARNE_CONTRA_FILE: {
-    description: 'Contra Filé Bovino',
-    url: 'https://produto-assets-vipcommerce-com-br.br-se1.magaluobjects.com/54f8feda-1fe6-4b3a-8e8f-00114e8bda1b.jpg'
-  },
-  VIRTUAL_CARNE_COSTELA: {
-    description: 'Costela Bovina Especial',
-    url: 'https://produto-assets-vipcommerce-com-br.br-se1.magaluobjects.com/e9fd80bb-2066-4126-82f0-1926e632adbb.jpg'
-  },
-  VIRTUAL_CARNE_SUINA: {
-    description: 'Carne Suína',
-    url: 'https://produto-assets-vipcommerce-com-br.br-se1.magaluobjects.com/0eaa6803-37b7-4528-8ddb-cb7aee09d9a8.jpg'
-  },
-  VIRTUAL_FRANGO_PEITO: {
-    description: 'Peito de Frango Resfriado',
-    url: 'https://produto-assets-vipcommerce-com-br.br-se1.magaluobjects.com/665272ff-e608-4078-9516-15dae033fe68.jpg'
-  },
-  VIRTUAL_FRANGO_COXA: {
-    description: 'Coxa e Sobrecoxa de Frango',
-    url: 'https://produto-assets-vipcommerce-com-br.br-se1.magaluobjects.com/c8fc74b3-fcd7-4b7b-a48c-71d5be488079.jpg'
-  },
-  VIRTUAL_FRANGO_ASA: {
-    description: 'Asa de Frango',
-    url: 'https://static.paodeacucar.com/img/uploads/1/811/24021811.jpg'
-  },
-  VIRTUAL_LINGUICA: {
-    description: 'Linguiça Toscana',
-    url: 'https://static.paodeacucar.com/img/uploads/1/398/32921398.jpg'
-  },
-  VIRTUAL_OVOS: {
-    description: 'Ovos Brancos Tipo Grande',
-    url: 'https://produto-assets-vipcommerce-com-br.br-se1.magaluobjects.com/264b4c53-b930-4e31-8636-f3cc61ecb8eb.jpg'
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect width="400" height="400" rx="40" fill="#dcfce7"/><circle cx="200" cy="200" r="140" fill="white" opacity="0.7"/><text x="200" y="225" font-size="140" text-anchor="middle" dominant-baseline="central">🥬</text></svg>`
   },
   VIRTUAL_ATA: {
     description: 'Ata / Pinha',
-    url: 'https://produto-assets-vipcommerce-com-br.br-se1.magaluobjects.com/d95b2fa5-d5c2-4479-8b53-4783c596aeac.jpg'
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect width="400" height="400" rx="40" fill="#dcfce7"/><circle cx="200" cy="200" r="140" fill="white" opacity="0.7"/><text x="200" y="225" font-size="140" text-anchor="middle" dominant-baseline="central">🍈</text></svg>`
   },
   VIRTUAL_BERINJELA: {
     description: 'Berinjela',
-    url: 'https://produto-assets-vipcommerce-com-br.br-se1.magaluobjects.com/c4b8b6ec-7d0e-4f3f-9177-3e1cb59fb7a3.jpg'
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect width="400" height="400" rx="40" fill="#f3e8ff"/><circle cx="200" cy="200" r="140" fill="white" opacity="0.7"/><text x="200" y="225" font-size="140" text-anchor="middle" dominant-baseline="central">🍆</text></svg>`
   },
   VIRTUAL_MACAXEIRA: {
-    description: 'Macaxeira',
-    url: 'https://produto-assets-vipcommerce-com-br.br-se1.magaluobjects.com/235c6a1b-cd14-40a6-b4f3-fb73ea393c76.jpg'
+    description: 'Macaxeira / Mandioca',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect width="400" height="400" rx="40" fill="#ffedd5"/><circle cx="200" cy="200" r="140" fill="white" opacity="0.7"/><text x="200" y="225" font-size="140" text-anchor="middle" dominant-baseline="central">🍠</text></svg>`
+  },
+  VIRTUAL_CARNE_LOMBO: {
+    description: 'Lombo Especial',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect width="400" height="400" rx="40" fill="#fee2e2"/><circle cx="200" cy="200" r="140" fill="white" opacity="0.7"/><text x="200" y="225" font-size="140" text-anchor="middle" dominant-baseline="central">🥩</text></svg>`
+  },
+  VIRTUAL_CARNE_MAMINHA: {
+    description: 'Maminha Bovina',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect width="400" height="400" rx="40" fill="#fee2e2"/><circle cx="200" cy="200" r="140" fill="white" opacity="0.7"/><text x="200" y="225" font-size="140" text-anchor="middle" dominant-baseline="central">🥩</text></svg>`
+  },
+  VIRTUAL_CARNE_PICANHA: {
+    description: 'Picanha Bovina',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect width="400" height="400" rx="40" fill="#fee2e2"/><circle cx="200" cy="200" r="140" fill="white" opacity="0.7"/><text x="200" y="225" font-size="140" text-anchor="middle" dominant-baseline="central">🥩</text></svg>`
+  },
+  VIRTUAL_CARNE_ALCATRA: {
+    description: 'Alcatra Bovina',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect width="400" height="400" rx="40" fill="#fee2e2"/><circle cx="200" cy="200" r="140" fill="white" opacity="0.7"/><text x="200" y="225" font-size="140" text-anchor="middle" dominant-baseline="central">🥩</text></svg>`
+  },
+  VIRTUAL_CARNE_CONTRA_FILE: {
+    description: 'Contra Filé Bovino',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect width="400" height="400" rx="40" fill="#fee2e2"/><circle cx="200" cy="200" r="140" fill="white" opacity="0.7"/><text x="200" y="225" font-size="140" text-anchor="middle" dominant-baseline="central">🥩</text></svg>`
+  },
+  VIRTUAL_CARNE_COSTELA: {
+    description: 'Costela Bovina',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect width="400" height="400" rx="40" fill="#fee2e2"/><circle cx="200" cy="200" r="140" fill="white" opacity="0.7"/><text x="200" y="225" font-size="140" text-anchor="middle" dominant-baseline="central">🍖</text></svg>`
+  },
+  VIRTUAL_CARNE_SUINA: {
+    description: 'Carne Suína',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect width="400" height="400" rx="40" fill="#fce7f3"/><circle cx="200" cy="200" r="140" fill="white" opacity="0.7"/><text x="200" y="225" font-size="140" text-anchor="middle" dominant-baseline="central">🥓</text></svg>`
+  },
+  VIRTUAL_CARNE_MOIDA: {
+    description: 'Carne Moída',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect width="400" height="400" rx="40" fill="#fee2e2"/><circle cx="200" cy="200" r="140" fill="white" opacity="0.7"/><text x="200" y="225" font-size="140" text-anchor="middle" dominant-baseline="central">🥩</text></svg>`
+  },
+  VIRTUAL_CARNE_BIFE: {
+    description: 'Bife Bovino Especial',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect width="400" height="400" rx="40" fill="#fee2e2"/><circle cx="200" cy="200" r="140" fill="white" opacity="0.7"/><text x="200" y="225" font-size="140" text-anchor="middle" dominant-baseline="central">🥩</text></svg>`
   },
   VIRTUAL_CARNE_PATINHO: {
     description: 'Patinho Bovino',
-    url: 'https://static.paodeacucar.com/img/uploads/1/707/32980707.jpg'
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect width="400" height="400" rx="40" fill="#fee2e2"/><circle cx="200" cy="200" r="140" fill="white" opacity="0.7"/><text x="200" y="225" font-size="140" text-anchor="middle" dominant-baseline="central">🥩</text></svg>`
   },
   VIRTUAL_CARNE_COXAO_MOLE: {
     description: 'Coxão Mole',
-    url: 'https://carrefourbrfood.vtexassets.com/arquivos/ids/201003525/bife-coxao-mole-bovino-congelado-iqf-carrefour-selection-500g-1.jpg'
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect width="400" height="400" rx="40" fill="#fee2e2"/><circle cx="200" cy="200" r="140" fill="white" opacity="0.7"/><text x="200" y="225" font-size="140" text-anchor="middle" dominant-baseline="central">🥩</text></svg>`
   },
   VIRTUAL_CARNE_ACEM: {
-    description: 'Acém',
-    url: 'https://carrefourbrfood.vtexassets.com/arquivos/ids/206545447/5712963_1.jpg'
+    description: 'Acém Bovino',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect width="400" height="400" rx="40" fill="#fee2e2"/><circle cx="200" cy="200" r="140" fill="white" opacity="0.7"/><text x="200" y="225" font-size="140" text-anchor="middle" dominant-baseline="central">🥩</text></svg>`
   },
   VIRTUAL_CARNE_MUSCULO: {
-    description: 'Músculo',
-    url: 'https://produto-assets-vipcommerce-com-br.br-se1.magaluobjects.com/f2c4d026-3082-4cf4-8bfe-bf78ee2cce84.jpg'
+    description: 'Músculo Bovino',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect width="400" height="400" rx="40" fill="#fee2e2"/><circle cx="200" cy="200" r="140" fill="white" opacity="0.7"/><text x="200" y="225" font-size="140" text-anchor="middle" dominant-baseline="central">🥩</text></svg>`
   },
   VIRTUAL_CARNE_BISTECA: {
     description: 'Bisteca',
-    url: 'https://produto-assets-vipcommerce-com-br.br-se1.magaluobjects.com/0eaa6803-37b7-4528-8ddb-cb7aee09d9a8.jpg'
-  },
-  VIRTUAL_FRANGO_CORACAO: {
-    description: 'Coração',
-    url: 'https://produto-assets-vipcommerce-com-br.br-se1.magaluobjects.com/1a719d36-8e54-47c0-a7d9-2e0618abce02.jpg'
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect width="400" height="400" rx="40" fill="#fee2e2"/><circle cx="200" cy="200" r="140" fill="white" opacity="0.7"/><text x="200" y="225" font-size="140" text-anchor="middle" dominant-baseline="central">🥩</text></svg>`
   },
   VIRTUAL_CARNE_LAGARTO: {
     description: 'Lagarto Bovino',
-    url: 'https://produto-assets-vipcommerce-com-br.br-se1.magaluobjects.com/0e632b72-23c2-4a57-9ab9-60197b10298d.jpg'
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect width="400" height="400" rx="40" fill="#fee2e2"/><circle cx="200" cy="200" r="140" fill="white" opacity="0.7"/><text x="200" y="225" font-size="140" text-anchor="middle" dominant-baseline="central">🥩</text></svg>`
+  },
+  VIRTUAL_FRANGO_PEITO: {
+    description: 'Peito de Frango Resfriado',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect width="400" height="400" rx="40" fill="#fef3c7"/><circle cx="200" cy="200" r="140" fill="white" opacity="0.7"/><text x="200" y="225" font-size="140" text-anchor="middle" dominant-baseline="central">🍗</text></svg>`
+  },
+  VIRTUAL_FRANGO_COXA: {
+    description: 'Coxa e Sobrecoxa de Frango',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect width="400" height="400" rx="40" fill="#fef3c7"/><circle cx="200" cy="200" r="140" fill="white" opacity="0.7"/><text x="200" y="225" font-size="140" text-anchor="middle" dominant-baseline="central">🍗</text></svg>`
+  },
+  VIRTUAL_FRANGO_ASA: {
+    description: 'Asa de Frango',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect width="400" height="400" rx="40" fill="#fef3c7"/><circle cx="200" cy="200" r="140" fill="white" opacity="0.7"/><text x="200" y="225" font-size="140" text-anchor="middle" dominant-baseline="central">🍗</text></svg>`
+  },
+  VIRTUAL_FRANGO_CORACAO: {
+    description: 'Coração de Frango',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect width="400" height="400" rx="40" fill="#fee2e2"/><circle cx="200" cy="200" r="140" fill="white" opacity="0.7"/><text x="200" y="225" font-size="140" text-anchor="middle" dominant-baseline="central">🫀</text></svg>`
+  },
+  VIRTUAL_LINGUICA: {
+    description: 'Linguiça Toscana',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect width="400" height="400" rx="40" fill="#fee2e2"/><circle cx="200" cy="200" r="140" fill="white" opacity="0.7"/><text x="200" y="225" font-size="140" text-anchor="middle" dominant-baseline="central">🌭</text></svg>`
+  },
+  VIRTUAL_OVOS: {
+    description: 'Ovos Brancos Tipo Grande',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect width="400" height="400" rx="40" fill="#fef9c3"/><circle cx="200" cy="200" r="140" fill="white" opacity="0.7"/><text x="200" y="225" font-size="140" text-anchor="middle" dominant-baseline="central">🥚</text></svg>`
   }
 };
 
@@ -543,21 +543,24 @@ export async function seedVirtualAssets({ force = false } = {}) {
   for (const [ean, info] of Object.entries(VIRTUAL_IMAGES)) {
     try {
       if (!force) {
-        const existsRes = await pool.query('SELECT source_url FROM catalog_assets WHERE ean = $1 LIMIT 1', [ean]);
-        if (existsRes.rowCount > 0 && existsRes.rows[0].source_url === info.url) continue;
+        const existsRes = await pool.query('SELECT 1 FROM catalog_assets WHERE ean = $1 LIMIT 1', [ean]);
+        if (existsRes.rowCount > 0) continue;
       }
 
-      console.log(`[SEED] Baixando imagem padrao para ${info.description} (${ean})...`);
-      const response = await fetch(info.url, {
-        signal: AbortSignal.timeout(30_000)
-      });
-      if (!response.ok) {
-        console.error(`[SEED] Falha HTTP ao baixar ${info.description}: ${response.status}`);
-        continue;
+      let buffer;
+      let contentType = 'image/svg+xml';
+
+      if (info.svg) {
+        buffer = Buffer.from(info.svg);
+      } else if (info.url) {
+        const response = await fetch(info.url, { signal: AbortSignal.timeout(15_000) });
+        if (!response.ok) continue;
+        buffer = Buffer.from(await response.arrayBuffer());
+        contentType = response.headers.get('content-type') || 'image/jpeg';
       }
-      
-      const buffer = Buffer.from(await response.arrayBuffer());
-      const contentType = response.headers.get('content-type') || 'image/jpeg';
+
+      if (!buffer) continue;
+
       const checksum = crypto.createHash('sha256').update(buffer).digest('hex');
 
       await pool.query(
@@ -571,10 +574,9 @@ export async function seedVirtualAssets({ force = false } = {}) {
            byte_size = EXCLUDED.byte_size,
            source_name = EXCLUDED.source_name,
            source_url = EXCLUDED.source_url`,
-        [ean, info.description, contentType, buffer, checksum, buffer.length, 'Padrao Sistema', info.url]
+        [ean, info.description, contentType, buffer, checksum, buffer.length, 'Padrao Sistema', 'inline-svg']
       );
       seeded++;
-      console.log(`[SEED] Imagem padrao para ${info.description} cadastrada com sucesso.`);
     } catch (err) {
       console.error(`[SEED] Erro ao cadastrar ${info.description}:`, err.message);
     }
