@@ -1031,6 +1031,8 @@ export function getVirtualEan(name, category) {
   if (cleanName.includes('bife') || cleanName.includes('bovino') || cleanName.includes('bovina') || cleanName.includes('carne')) return 'VIRTUAL_CARNE_BIFE';
 
   // Hortifruti (Frutas, Legumes, Verduras)
+  if (cleanName.includes('ata') || cleanName.includes('pinha') || cleanName.includes('fruta do conde')) return 'VIRTUAL_ATA';
+  if (cleanName.includes('berinjela')) return 'VIRTUAL_BERINJELA';
   if (cleanName.includes('alho')) return 'VIRTUAL_ALHO';
   if (cleanName.includes('batata')) return 'VIRTUAL_BATATA';
   if (cleanName.includes('cebola')) return 'VIRTUAL_CEBOLA';
