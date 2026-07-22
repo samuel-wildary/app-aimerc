@@ -1000,50 +1000,66 @@ export async function writeAuditLog({ storeId = null, actorId = null, action, en
 
 export function getVirtualEan(name, category) {
   const cleanName = String(name || '').toLowerCase();
-  const cleanCategory = String(category || '').toLowerCase();
   
-  const isHortifruti = cleanCategory.includes('hort') || cleanCategory.includes('verd') || cleanCategory.includes('frut') || cleanCategory.includes('legum');
-  const isMeat = cleanCategory.includes('acougue') || cleanCategory.includes('açougue') || cleanCategory.includes('carne') || cleanCategory.includes('frigorifico') || cleanCategory.includes('frigorífico') || cleanCategory.includes('ave') || cleanCategory.includes('peixe');
+  // Carnes, Aves, Peixes, Frigorífico & Embutidos
+  if (cleanName.includes('maminha')) return 'VIRTUAL_CARNE_MAMINHA';
+  if (cleanName.includes('lombo')) return 'VIRTUAL_CARNE_LOMBO';
+  if (cleanName.includes('picanha')) return 'VIRTUAL_CARNE_PICANHA';
+  if (cleanName.includes('alcatra')) return 'VIRTUAL_CARNE_ALCATRA';
+  if (cleanName.includes('contra file') || cleanName.includes('contra-file') || cleanName.includes('contrafile') || cleanName.includes('contrafilé')) return 'VIRTUAL_CARNE_CONTRA_FILE';
+  if (cleanName.includes('costela')) return 'VIRTUAL_CARNE_COSTELA';
+  if (cleanName.includes('moida') || cleanName.includes('moída')) return 'VIRTUAL_CARNE_MOIDA';
+  if (cleanName.includes('patinho')) return 'VIRTUAL_CARNE_PATINHO';
+  if (cleanName.includes('coxao mole') || cleanName.includes('coxão mole')) return 'VIRTUAL_CARNE_COXAO_MOLE';
+  if (cleanName.includes('coxao duro') || cleanName.includes('coxão duro')) return 'VIRTUAL_CARNE_COXAO_DURO';
+  if (cleanName.includes('acem') || cleanName.includes('acém')) return 'VIRTUAL_CARNE_ACEM';
+  if (cleanName.includes('musculo') || cleanName.includes('músculo')) return 'VIRTUAL_CARNE_MUSCULO';
+  if (cleanName.includes('fraldinha')) return 'VIRTUAL_CARNE_FRALDINHA';
+  if (cleanName.includes('cupim')) return 'VIRTUAL_CARNE_CUPIM';
+  if (cleanName.includes('bisteca')) return 'VIRTUAL_CARNE_BISTECA';
+  if (cleanName.includes('pernil')) return 'VIRTUAL_CARNE_PERNIL';
+  if (cleanName.includes('peito') && (cleanName.includes('frango') || cleanName.includes('ave') || cleanName.includes('bovino'))) return 'VIRTUAL_FRANGO_PEITO';
+  if (cleanName.includes('coxa') && (cleanName.includes('frango') || cleanName.includes('ave'))) return 'VIRTUAL_FRANGO_COXA';
+  if (cleanName.includes('asa') && (cleanName.includes('frango') || cleanName.includes('ave'))) return 'VIRTUAL_FRANGO_ASA';
+  if (cleanName.includes('coracao') || cleanName.includes('coração')) return 'VIRTUAL_FRANGO_CORACAO';
+  if (cleanName.includes('linguiça') || cleanName.includes('linguica')) return 'VIRTUAL_LINGUICA';
+  if (cleanName.includes('salsicha')) return 'VIRTUAL_SALSICHA';
+  if (cleanName.includes('tilapia') || cleanName.includes('tilápia')) return 'VIRTUAL_PEIXE_TILAPIA';
+  if (cleanName.includes('salmao') || cleanName.includes('salmão')) return 'VIRTUAL_PEIXE_SALMAO';
+  if (cleanName.includes('camarao') || cleanName.includes('camarão')) return 'VIRTUAL_CAMARAO';
+  if (cleanName.includes('suina') || cleanName.includes('suína') || cleanName.includes('porco')) return 'VIRTUAL_CARNE_SUINA';
+  if (cleanName.includes('bife') || cleanName.includes('bovino') || cleanName.includes('bovina') || cleanName.includes('carne')) return 'VIRTUAL_CARNE_BIFE';
 
-  if (isHortifruti) {
-    if (cleanName.includes('alho')) return 'VIRTUAL_ALHO';
-    if (cleanName.includes('batata')) return 'VIRTUAL_BATATA';
-    if (cleanName.includes('cebola')) return 'VIRTUAL_CEBOLA';
-    if (cleanName.includes('cenoura')) return 'VIRTUAL_CENOURA';
-    if (cleanName.includes('tomate')) return 'VIRTUAL_TOMATE';
-    if (cleanName.includes('banana')) return 'VIRTUAL_BANANA';
-    if (cleanName.includes('maca') || cleanName.includes('maçã')) return 'VIRTUAL_MACA';
-    if (cleanName.includes('laranja')) return 'VIRTUAL_LARANJA';
-    if (cleanName.includes('limao') || cleanName.includes('limão')) return 'VIRTUAL_LIMAO';
-    if (cleanName.includes('mamao') || cleanName.includes('mamão')) return 'VIRTUAL_MAMAO';
-    if (cleanName.includes('abacaxi')) return 'VIRTUAL_ABACAXI';
-    if (cleanName.includes('uva')) return 'VIRTUAL_UVA';
-    if (cleanName.includes('alface')) return 'VIRTUAL_ALFACE';
-    if (cleanName.includes('pimentao') || cleanName.includes('pimentão')) return 'VIRTUAL_PIMENTAO';
-    if (cleanName.includes('cheiro verde') || cleanName.includes('coentro')) return 'VIRTUAL_CHEIRO_VERDE';
-    if (cleanName.includes('repolho')) return 'VIRTUAL_REPOLHO';
-    if (cleanName.includes('chuchu')) return 'VIRTUAL_CHUCHU';
-    if (cleanName.includes('abobora') || cleanName.includes('abóbora')) return 'VIRTUAL_ABOBORA';
-    if (cleanName.includes('melancia')) return 'VIRTUAL_MELANCIA';
-    if (cleanName.includes('melao') || cleanName.includes('melão')) return 'VIRTUAL_MELAO';
-    if (cleanName.includes('ovos') || cleanName.includes('ovo')) return 'VIRTUAL_OVOS';
-  }
-  
-  if (isMeat) {
-    if (cleanName.includes('moida') || cleanName.includes('moída')) return 'VIRTUAL_CARNE_MOIDA';
-    if (cleanName.includes('alcatra')) return 'VIRTUAL_CARNE_ALCATRA';
-    if (cleanName.includes('contra file') || cleanName.includes('contra-file') || cleanName.includes('contrafile')) return 'VIRTUAL_CARNE_CONTRA_FILE';
-    if (cleanName.includes('picanha')) return 'VIRTUAL_CARNE_PICANHA';
-    if (cleanName.includes('peito') && (cleanName.includes('frango') || cleanName.includes('ave'))) return 'VIRTUAL_FRANGO_PEITO';
-    if (cleanName.includes('coxa') && (cleanName.includes('frango') || cleanName.includes('ave'))) return 'VIRTUAL_FRANGO_COXA';
-    if (cleanName.includes('costela')) return 'VIRTUAL_CARNE_COSTELA';
-    if (cleanName.includes('bife')) return 'VIRTUAL_CARNE_BIFE';
-    if (cleanName.includes('suina') || cleanName.includes('suína') || cleanName.includes('porco')) return 'VIRTUAL_CARNE_SUINA';
-    if (cleanName.includes('asa') && (cleanName.includes('frango') || cleanName.includes('ave'))) return 'VIRTUAL_FRANGO_ASA';
-    if (cleanName.includes('coracao') || cleanName.includes('coração')) return 'VIRTUAL_FRANGO_CORACAO';
-    if (cleanName.includes('linguiça') || cleanName.includes('linguica')) return 'VIRTUAL_LINGUICA';
-    if (cleanName.includes('salsicha')) return 'VIRTUAL_SALSICHA';
-  }
+  // Hortifruti (Frutas, Legumes, Verduras)
+  if (cleanName.includes('alho')) return 'VIRTUAL_ALHO';
+  if (cleanName.includes('batata')) return 'VIRTUAL_BATATA';
+  if (cleanName.includes('cebola')) return 'VIRTUAL_CEBOLA';
+  if (cleanName.includes('cenoura')) return 'VIRTUAL_CENOURA';
+  if (cleanName.includes('tomate')) return 'VIRTUAL_TOMATE';
+  if (cleanName.includes('banana')) return 'VIRTUAL_BANANA';
+  if (cleanName.includes('maca') || cleanName.includes('maçã')) return 'VIRTUAL_MACA';
+  if (cleanName.includes('laranja')) return 'VIRTUAL_LARANJA';
+  if (cleanName.includes('limao') || cleanName.includes('limão')) return 'VIRTUAL_LIMAO';
+  if (cleanName.includes('mamao') || cleanName.includes('mamão')) return 'VIRTUAL_MAMAO';
+  if (cleanName.includes('abacaxi')) return 'VIRTUAL_ABACAXI';
+  if (cleanName.includes('uva')) return 'VIRTUAL_UVA';
+  if (cleanName.includes('alface')) return 'VIRTUAL_ALFACE';
+  if (cleanName.includes('pimentao') || cleanName.includes('pimentão')) return 'VIRTUAL_PIMENTAO';
+  if (cleanName.includes('cheiro verde') || cleanName.includes('coentro')) return 'VIRTUAL_CHEIRO_VERDE';
+  if (cleanName.includes('repolho')) return 'VIRTUAL_REPOLHO';
+  if (cleanName.includes('chuchu')) return 'VIRTUAL_CHUCHU';
+  if (cleanName.includes('abobora') || cleanName.includes('abóbora')) return 'VIRTUAL_ABOBORA';
+  if (cleanName.includes('melancia')) return 'VIRTUAL_MELANCIA';
+  if (cleanName.includes('melao') || cleanName.includes('melão')) return 'VIRTUAL_MELAO';
+  if (cleanName.includes('ovos') || cleanName.includes('ovo')) return 'VIRTUAL_OVOS';
+  if (cleanName.includes('mandioca') || cleanName.includes('macaxeira') || cleanName.includes('aipim')) return 'VIRTUAL_MACAXEIRA';
+  if (cleanName.includes('beterraba')) return 'VIRTUAL_BETERRABA';
+  if (cleanName.includes('abobrinha')) return 'VIRTUAL_ABOBRINHA';
+  if (cleanName.includes('manga')) return 'VIRTUAL_MANGA';
+  if (cleanName.includes('maracuja') || cleanName.includes('maracujá')) return 'VIRTUAL_MARACUJA';
+  if (cleanName.includes('morango')) return 'VIRTUAL_MORANGO';
+  if (cleanName.includes('pepino')) return 'VIRTUAL_PEPINO';
+  if (cleanName.includes('pera') || cleanName.includes('pêra')) return 'VIRTUAL_PERA';
 
   return null;
 }

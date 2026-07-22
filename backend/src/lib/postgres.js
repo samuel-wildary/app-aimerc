@@ -448,9 +448,45 @@ const VIRTUAL_IMAGES = {
     description: 'Bife Bovino Especial',
     url: 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=400&h=400&q=80'
   },
+  VIRTUAL_CARNE_LOMBO: {
+    description: 'Lombo Especial (Suíno / Bovino)',
+    url: 'https://images.unsplash.com/photo-1432139555190-58524dae6a55?auto=format&fit=crop&w=400&h=400&q=80'
+  },
+  VIRTUAL_CARNE_MAMINHA: {
+    description: 'Maminha Bovina',
+    url: 'https://images.unsplash.com/photo-1558030006-450675393462?auto=format&fit=crop&w=400&h=400&q=80'
+  },
+  VIRTUAL_CARNE_PICANHA: {
+    description: 'Picanha Bovina',
+    url: 'https://images.unsplash.com/photo-1594041680534-e8c8cdebd659?auto=format&fit=crop&w=400&h=400&q=80'
+  },
+  VIRTUAL_CARNE_ALCATRA: {
+    description: 'Alcatra Bovina',
+    url: 'https://images.unsplash.com/photo-1603048588665-791ca8aea617?auto=format&fit=crop&w=400&h=400&q=80'
+  },
+  VIRTUAL_CARNE_CONTRA_FILE: {
+    description: 'Contra Filé Bovino',
+    url: 'https://images.unsplash.com/photo-1600891964092-4316c288032e?auto=format&fit=crop&w=400&h=400&q=80'
+  },
+  VIRTUAL_CARNE_COSTELA: {
+    description: 'Costela Bovina Especial',
+    url: 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=400&h=400&q=80'
+  },
+  VIRTUAL_CARNE_SUINA: {
+    description: 'Carne Suína',
+    url: 'https://images.unsplash.com/photo-1432139555190-58524dae6a55?auto=format&fit=crop&w=400&h=400&q=80'
+  },
   VIRTUAL_FRANGO_PEITO: {
     description: 'Peito de Frango Resfriado',
     url: 'https://images.unsplash.com/photo-1604503468506-a8da13d82791?auto=format&fit=crop&w=400&h=400&q=80'
+  },
+  VIRTUAL_FRANGO_COXA: {
+    description: 'Coxa e Sobrecoxa de Frango',
+    url: 'https://images.unsplash.com/photo-1587593810167-a84920ea0781?auto=format&fit=crop&w=400&h=400&q=80'
+  },
+  VIRTUAL_FRANGO_ASA: {
+    description: 'Asa de Frango',
+    url: 'https://images.unsplash.com/photo-1527477396000-e27163b481c2?auto=format&fit=crop&w=400&h=400&q=80'
   },
   VIRTUAL_LINGUICA: {
     description: 'Linguiça Toscana',
