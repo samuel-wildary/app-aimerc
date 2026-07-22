@@ -1,5 +1,6 @@
 import pg from 'pg';
 import crypto from 'node:crypto';
+import { QUEIROZ_REAL_SUPERMARKET_PHOTOS } from './queiroz-images-seed.js';
 
 const { Pool } = pg;
 const databaseUrl = String(process.env.DATABASE_URL || '').trim();
@@ -579,6 +580,45 @@ export async function seedVirtualAssets({ force = false } = {}) {
       seeded++;
     } catch (err) {
       console.error(`[SEED] Erro ao cadastrar ${info.description}:`, err.message);
+    }
+  }
+
+  // Seed 301 fotos reais de supermercados (Guara, Pinheiro, Pao de Acucar, Carrefour, Sao Luiz)
+  for (const [ean, item] of Object.entries(QUEIROZ_REAL_SUPERMARKET_PHOTOS || {})) {
+    try {
+      const buffer = Buffer.from(item.base64, 'base64');
+      const checksum = crypto.createHash('sha256').update(buffer).digest('hex');
+
+      await pool.query(`
+        INSERT INTO catalog_assets (ean, description, content_type, image_data, checksum, byte_size, source_name, source_url, collected_at, updated_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
+        ON CONFLICT (ean) DO UPDATE SET
+          description = EXCLUDED.description,
+          content_type = EXCLUDED.content_type,
+          image_data = EXCLUDED.image_data,
+          checksum = EXCLUDED.checksum,
+          byte_size = EXCLUDED.byte_size,
+          source_name = EXCLUDED.source_name,
+          source_url = EXCLUDED.source_url,
+          updated_at = NOW()
+      `, [ean, item.description, item.contentType || 'image/jpeg', buffer, checksum, buffer.length, item.sourceName, item.sourceUrl]);
+
+      await pool.query(`
+        INSERT INTO product_images (store_id, product_id, content_type, image_data, checksum, byte_size, source, updated_at)
+        SELECT p.store_id, p.id, $3, $4, $5, $6, $7, NOW()
+        FROM products p
+        WHERE (p.barcode = $1 OR p.sku = $1 OR p.id = $1 OR p.barcode = REPLACE($1, 'PLU_', ''))
+        ON CONFLICT (store_id, product_id) DO UPDATE SET
+          content_type = EXCLUDED.content_type,
+          image_data = EXCLUDED.image_data,
+          checksum = EXCLUDED.checksum,
+          byte_size = EXCLUDED.byte_size,
+          source = EXCLUDED.source,
+          updated_at = NOW()
+      `, [ean, item.description, item.contentType || 'image/jpeg', buffer, checksum, buffer.length, item.sourceName]);
+      seeded++;
+    } catch (err) {
+      console.error(`[SEED REAL] Erro ao cadastrar foto real ${ean}:`, err.message);
     }
   }
 
