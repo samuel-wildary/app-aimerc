@@ -522,7 +522,7 @@ function PushAutomations({ automations, onCreate, onToggle, onRun, onDelete }) {
   </section>;
 }
 
-function Storefront({ store, banners, campaigns, automations, onSaveSettings, onCreateBanner, onUpdateBanner, onDeleteBanner, onCreateCampaign, onSendCampaign, onDeleteCampaign, onCreateAutomation, onToggleAutomation, onRunAutomation, onDeleteAutomation }) {
+function Storefront({ store, categories = [], banners, campaigns, automations, onSaveSettings, onCreateBanner, onUpdateBanner, onDeleteBanner, onCreateCampaign, onSendCampaign, onDeleteCampaign, onCreateAutomation, onToggleAutomation, onRunAutomation, onDeleteAutomation }) {
   const [settings, setSettings] = useState({
     minimumOrder: store?.minimumOrder ?? 0,
     deliveryFee: store?.deliveryFee ?? 0,
@@ -589,6 +589,27 @@ function Storefront({ store, banners, campaigns, automations, onSaveSettings, on
     }
   }
 
+  const disabledSet = new Set(
+    String(settings.disabledCategories || '')
+      .split(',')
+      .map(c => c.trim().toLowerCase())
+      .filter(Boolean)
+  );
+
+  const toggleCategory = (catName) => {
+    const list = String(settings.disabledCategories || '')
+      .split(',')
+      .map(c => c.trim())
+      .filter(Boolean);
+    const index = list.findIndex(c => c.toLowerCase() === catName.toLowerCase());
+    if (index >= 0) {
+      list.splice(index, 1);
+    } else {
+      list.push(catName);
+    }
+    setSettings({ ...settings, disabledCategories: list.join(', ') });
+  };
+
   async function submitSettings(event) {
     event.preventDefault();
     setSavingSettings(true);
@@ -627,7 +648,47 @@ function Storefront({ store, banners, campaigns, automations, onSaveSettings, on
             <label>Faixas de horário para retirada<span>Separe as opções por vírgula.</span><input value={settings.pickupSlots} onChange={event => setSettings({ ...settings, pickupSlots: event.target.value })} placeholder="08:00 - 10:00, 10:00 - 12:00, 12:00 - 14:00, 14:00 - 16:00, 16:00 - 18:00, 18:00 - 20:00" required={settings.enablePickupScheduling} /></label>
           )}
           <label className="open-toggle"><span><strong>Desativar ofertas / promoções no aplicativo</strong><small>Ao marcar, a vitrine de ofertas é ocultada no aplicativo.</small></span><input type="checkbox" checked={settings.disablePromotions} onChange={event => setSettings({ ...settings, disablePromotions: event.target.checked })} /></label>
-          <label>Categorias desativadas no aplicativo<span>Digite as categorias que deseja ocultar separadas por vírgula. Ex: Limpeza, Bebidas</span><input value={settings.disabledCategories} onChange={event => setSettings({ ...settings, disabledCategories: event.target.value })} placeholder="Ex: Higiene e Beleza, Bazar" /></label>
+          <label>Categorias ocultadas no aplicativo<span>Marque quais categorias você deseja ocultar para os clientes no aplicativo.</span>
+            <div className="categories-select-grid" style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
+              gap: '10px',
+              marginTop: '12px',
+              padding: '14px',
+              border: '1px solid #e2e8f0',
+              borderRadius: '12px',
+              backgroundColor: '#f8fafc',
+              maxHeight: '220px',
+              overflowY: 'auto'
+            }}>
+              {categories.map(cat => {
+                const isChecked = disabledSet.has(cat.name.toLowerCase());
+                return (
+                  <label key={cat.name} style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                    cursor: 'pointer',
+                    fontSize: '13.5px',
+                    fontWeight: '500',
+                    margin: 0,
+                    padding: '6px 8px',
+                    borderRadius: '6px',
+                    transition: 'background-color 0.2s',
+                    userSelect: 'none'
+                  }} className="category-checkbox-item">
+                    <input type="checkbox" checked={isChecked} onChange={() => toggleCategory(cat.name)} style={{
+                      width: '17px',
+                      height: '17px',
+                      accentColor: '#12C98A',
+                      cursor: 'pointer'
+                    }} />
+                    <span>{cat.name} <small style={{ color: '#64748b', fontSize: '11px' }}>({cat.total})</small></span>
+                  </label>
+                );
+              })}
+            </div>
+          </label>
           <label className="open-toggle"><span><strong>Receber novos pedidos</strong><small>Ao fechar, o aplicativo bloqueia novos checkouts.</small></span><input type="checkbox" checked={settings.open} onChange={event => setSettings({ ...settings, open: event.target.checked })} /></label>
           <button className="primary large" disabled={savingSettings}>{savingSettings ? 'Salvando...' : 'Salvar configuracoes'}</button>
         </form>
@@ -845,7 +906,7 @@ export default function App() {
           {active === 'delivery' && <Delivery orders={orders} selected={selected} setSelected={setSelected} />}
           {active === 'customers' && <Customers customers={customers} query={customerQuery} setQuery={setCustomerQuery} />}
           {active === 'reports' && <Reports report={report} />}
-          {active === 'storefront' && <Storefront store={summary?.store} banners={banners} campaigns={campaigns} automations={automations} onSaveSettings={saveSettings} onCreateBanner={createBanner} onUpdateBanner={updateBanner} onDeleteBanner={deleteBanner} onCreateCampaign={createCampaign} onSendCampaign={sendCampaign} onDeleteCampaign={deleteCampaign} onCreateAutomation={createAutomation} onToggleAutomation={toggleAutomation} onRunAutomation={runAutomation} onDeleteAutomation={deleteAutomation} />}
+          {active === 'storefront' && <Storefront store={summary?.store} categories={categories} banners={banners} campaigns={campaigns} automations={automations} onSaveSettings={saveSettings} onCreateBanner={createBanner} onUpdateBanner={updateBanner} onDeleteBanner={deleteBanner} onCreateCampaign={createCampaign} onSendCampaign={sendCampaign} onDeleteCampaign={deleteCampaign} onCreateAutomation={createAutomation} onToggleAutomation={toggleAutomation} onRunAutomation={runAutomation} onDeleteAutomation={deleteAutomation} />}
         </div>
       </main>
       <OrderDetail order={selected} onClose={() => setSelected(null)} onAdvance={advance} onPrint={order => printOrderSlip(order, summary?.store || session.store)} busy={busy} />
