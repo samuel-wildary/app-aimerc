@@ -1002,6 +1002,12 @@ export function getVirtualEan(name, category) {
   const cleanName = String(name || '').toLowerCase();
   
   // Carnes, Aves, Peixes, Frigorífico & Embutidos
+  if (cleanName.includes('gordura')) return 'VIRTUAL_CARNE_GORDURA';
+  if (cleanName.includes('mocoto') || cleanName.includes('mocotó')) return 'VIRTUAL_CARNE_MOCOTO';
+  if (cleanName.includes('panelada')) return 'VIRTUAL_CARNE_PANELADA';
+  if (cleanName.includes('sobrecoxa')) return 'VIRTUAL_FRANGO_COXA';
+  if (cleanName.includes('toucinho')) return 'VIRTUAL_CARNE_TOUCINHO';
+  if (cleanName.includes('tripa')) return 'VIRTUAL_CARNE_TRIPA';
   if (cleanName.includes('paleta')) return 'VIRTUAL_CARNE_PALETA';
   if (cleanName.includes('capa do file') || cleanName.includes('capa do filé')) return 'VIRTUAL_CARNE_CAPA_FILE';
   if (cleanName.includes('maminha')) return 'VIRTUAL_CARNE_MAMINHA';

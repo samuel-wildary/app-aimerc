@@ -513,6 +513,26 @@ const VIRTUAL_IMAGES = {
     description: 'Lagarto Bovino',
     svg: `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect width="400" height="400" rx="40" fill="#fee2e2"/><circle cx="200" cy="200" r="140" fill="white" opacity="0.7"/><text x="200" y="225" font-size="140" text-anchor="middle" dominant-baseline="central">🥩</text></svg>`
   },
+  VIRTUAL_CARNE_GORDURA: {
+    description: 'Gordura Salgada',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect width="400" height="400" rx="40" fill="#fce7f3"/><circle cx="200" cy="200" r="140" fill="white" opacity="0.7"/><text x="200" y="225" font-size="140" text-anchor="middle" dominant-baseline="central">🥓</text></svg>`
+  },
+  VIRTUAL_CARNE_MOCOTO: {
+    description: 'Mocotó Suíno',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect width="400" height="400" rx="40" fill="#fce7f3"/><circle cx="200" cy="200" r="140" fill="white" opacity="0.7"/><text x="200" y="225" font-size="140" text-anchor="middle" dominant-baseline="central">🍖</text></svg>`
+  },
+  VIRTUAL_CARNE_PANELADA: {
+    description: 'Panelada Temperada',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect width="400" height="400" rx="40" fill="#fee2e2"/><circle cx="200" cy="200" r="140" fill="white" opacity="0.7"/><text x="200" y="225" font-size="140" text-anchor="middle" dominant-baseline="central">🥘</text></svg>`
+  },
+  VIRTUAL_CARNE_TOUCINHO: {
+    description: 'Toucinho',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect width="400" height="400" rx="40" fill="#fce7f3"/><circle cx="200" cy="200" r="140" fill="white" opacity="0.7"/><text x="200" y="225" font-size="140" text-anchor="middle" dominant-baseline="central">🥓</text></svg>`
+  },
+  VIRTUAL_CARNE_TRIPA: {
+    description: 'Tripa Suína',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect width="400" height="400" rx="40" fill="#fce7f3"/><circle cx="200" cy="200" r="140" fill="white" opacity="0.7"/><text x="200" y="225" font-size="140" text-anchor="middle" dominant-baseline="central">🥓</text></svg>`
+  },
   VIRTUAL_FRANGO_PEITO: {
     description: 'Peito de Frango Resfriado',
     svg: `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect width="400" height="400" rx="40" fill="#fef3c7"/><circle cx="200" cy="200" r="140" fill="white" opacity="0.7"/><text x="200" y="225" font-size="140" text-anchor="middle" dominant-baseline="central">🍗</text></svg>`
