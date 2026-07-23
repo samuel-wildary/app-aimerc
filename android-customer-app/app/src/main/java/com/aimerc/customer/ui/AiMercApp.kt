@@ -256,7 +256,9 @@ private fun ProductCard(product: Product, quantity: Int, add: () -> Unit, remove
     Card(Modifier.width(164.dp), shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = Color.White), elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)) {
         Column(Modifier.padding(11.dp)) {
             Box(Modifier.fillMaxWidth().height(116.dp).clip(RoundedCornerShape(13.dp)).background(Color(0xFFF0F3EE))) {
-                AsyncImage(model = product.image, contentDescription = product.name, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                if (product.image.isNotBlank()) {
+                    AsyncImage(model = product.image, contentDescription = product.name, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                }
                 if (product.promo) Text("OFERTA", Modifier.padding(7.dp).clip(RoundedCornerShape(999.dp)).background(Orange).padding(horizontal = 8.dp, vertical = 4.dp), color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Black)
             }
             Spacer(Modifier.height(10.dp)); Text(product.name, minLines = 2, maxLines = 2, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Bold, color = Ink, fontSize = 13.sp, lineHeight = 16.sp)
