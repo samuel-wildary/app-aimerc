@@ -388,7 +388,7 @@ CREATE INDEX IF NOT EXISTS integration_agents_seen_idx ON integration_agents(las
 CREATE INDEX IF NOT EXISTS integration_runs_store_started_idx ON integration_runs(store_id, started_at DESC);
 `;
 
-const VIRTUAL_IMAGES = {
+export const VIRTUAL_IMAGES = {
   VIRTUAL_ALHO: {
     description: 'Alho Roxo',
     svg: `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect width="400" height="400" rx="40" fill="#f3e8ee"/><circle cx="200" cy="200" r="140" fill="white" opacity="0.7"/><text x="200" y="225" font-size="140" text-anchor="middle" dominant-baseline="central">🧄</text></svg>`
