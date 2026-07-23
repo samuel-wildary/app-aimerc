@@ -95,7 +95,7 @@ class AiMercViewModel(application: Application) : AndroidViewModel(application) 
         get() = catalog?.products.orEmpty().filter { product ->
             (selectedCategory == "Todos" || product.category == selectedCategory) &&
                 (query.isBlank() || product.name.contains(query, true) || product.sku.contains(query, true) || product.category.contains(query, true))
-        }
+        }.sortedWith(compareByDescending<Product> { it.image.isNotBlank() })
 
     val cartLines: List<CartLine>
         get() = catalog?.products.orEmpty().mapNotNull { product -> quantities[product.id]?.takeIf { it > 0 }?.let { CartLine(product, it) } }

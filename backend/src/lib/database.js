@@ -453,7 +453,7 @@ export async function listProducts(storeId, filters = {}) {
     ) AS has_stored_image,EXISTS(
       SELECT 1 FROM catalog_assets ca WHERE ca.ean=p.barcode
     ) AS has_catalog_image FROM products p WHERE ${clauses.join(' AND ')}
-    ORDER BY p.promo DESC,CASE WHEN p.image != '' THEN 0 ELSE 1 END,COALESCE(NULLIF(p.catalog_name,''),p.source_name,p.name)`, values);
+    ORDER BY CASE WHEN (p.image != '' OR EXISTS(SELECT 1 FROM product_images pi WHERE pi.store_id=p.store_id AND pi.product_id=p.id) OR EXISTS(SELECT 1 FROM catalog_assets ca WHERE ca.ean=p.barcode)) THEN 0 ELSE 1 END, p.promo DESC, COALESCE(NULLIF(p.catalog_name,''),p.source_name,p.name)`, values);
   const virtualEansRes = await query("SELECT ean FROM catalog_assets WHERE ean LIKE 'VIRTUAL_%'");
   const activeVirtualEans = new Set(virtualEansRes.rows.map(row => row.ean));
 
@@ -468,11 +468,25 @@ export async function listProducts(storeId, filters = {}) {
     return product;
   });
 
+  let filteredList = products;
   if (filters.category && filters.category !== 'Todos') {
     const category = normalizeCategory(filters.category);
-    return products.filter(product => product.category === category);
+    filteredList = products.filter(product => product.category === category);
   }
-  return products;
+
+  filteredList.sort((a, b) => {
+    const aHasImg = Boolean(a.hasStoredImage || a.hasCatalogImage || a.image);
+    const bHasImg = Boolean(b.hasStoredImage || b.hasCatalogImage || b.image);
+    if (aHasImg !== bHasImg) {
+      return aHasImg ? -1 : 1;
+    }
+    if (a.promo !== b.promo) {
+      return a.promo ? -1 : 1;
+    }
+    return a.name.localeCompare(b.name, 'pt-BR');
+  });
+
+  return filteredList;
 }
 
 export async function getProduct(storeId, productId) {

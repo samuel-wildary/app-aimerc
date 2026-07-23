@@ -347,7 +347,7 @@ function Catalog({ products, categories, query, setQuery, category, setCategory,
   const withoutImage = products.length - withImage;
   const outOfStock = products.filter(product => Number(product.stock) === 0).length;
   const internalEanCount = products.filter(product => !product.barcode || product.barcode.length < 8 || product.barcode === product.sku).length;
-  const filteredProducts = imageFilter === 'with'
+  const filteredProducts = (imageFilter === 'with'
     ? products.filter(product => product.hasImage)
     : imageFilter === 'without'
       ? products.filter(product => !product.hasImage)
@@ -355,7 +355,8 @@ function Catalog({ products, categories, query, setQuery, category, setCategory,
         ? products.filter(product => !product.barcode || product.barcode.length < 8 || product.barcode === product.sku)
         : imageFilter === 'out_of_stock'
           ? products.filter(product => Number(product.stock) === 0)
-          : products;
+          : products
+  ).slice().sort((a, b) => (b.hasImage ? 1 : 0) - (a.hasImage ? 1 : 0));
   const totalPages = Math.max(1, Math.ceil(filteredProducts.length / pageSize));
   const visibleProducts = filteredProducts.slice((page - 1) * pageSize, page * pageSize);
 

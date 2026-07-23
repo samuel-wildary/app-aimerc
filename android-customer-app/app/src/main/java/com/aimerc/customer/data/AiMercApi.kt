@@ -58,8 +58,8 @@ object AiMercApi {
         }
         // The public products endpoint guarantees that categories without a shelf still appear in search.
         val allProducts = requestArray("/public/stores/$STORE_SLUG/products").mapObjects { it.toProduct() }
-        allProducts.forEach { productMap[it.id] = it }
-        Catalog(store, categories, banners, productMap.values.toList())
+        val sortedProducts = productMap.values.sortedWith(compareByDescending<Product> { it.image.isNotBlank() })
+        Catalog(store, categories, banners, sortedProducts)
     }
 
     suspend fun createOrder(checkout: CheckoutData, lines: List<CartLine>): OrderReceipt = withContext(Dispatchers.IO) {
