@@ -118,12 +118,12 @@ class AiMercViewModel(application: Application) : AndroidViewModel(application) 
         get() = productSource().filter { product ->
             (selectedCategory == "Todos" || product.category == selectedCategory) &&
                 (query.isBlank() || product.name.contains(query, true) || product.sku.contains(query, true) || product.category.contains(query, true))
-        }
+        }.sortedWith(compareByDescending<Product> { it.image.isNotBlank() })
 
     fun productsForCategory(category: String, search: String): List<Product> = productSource().filter { product ->
         (category == "Ofertas" && product.promo || product.category == category) &&
             (search.isBlank() || product.name.contains(search, true) || product.sku.contains(search, true))
-    }
+    }.sortedWith(compareByDescending<Product> { it.image.isNotBlank() })
 
     val cartLines: List<CartLine>
         get() = productSource().mapNotNull { product -> quantities[product.id]?.takeIf { it > 0 }?.let { CartLine(product, it) } }

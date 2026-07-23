@@ -280,7 +280,9 @@ private fun ProductCard(product: Product, quantity: Int, add: () -> Unit, remove
     Card(Modifier.width(164.dp).clickable(onClick = open), shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = Color.White), elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)) {
         Column(Modifier.padding(11.dp)) {
             Box(Modifier.fillMaxWidth().height(116.dp).clip(RoundedCornerShape(13.dp)).background(Color.White)) {
-                AsyncImage(model = product.image, contentDescription = product.name, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize().padding(8.dp))
+                if (product.image.isNotBlank()) {
+                    AsyncImage(model = product.image, contentDescription = product.name, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize().padding(8.dp))
+                }
                 if (product.promo) Text("OFERTA", Modifier.padding(7.dp).clip(RoundedCornerShape(999.dp)).background(Orange).padding(horizontal = 8.dp, vertical = 4.dp), color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Black)
             }
             Spacer(Modifier.height(10.dp)); Text(product.name, minLines = 2, maxLines = 2, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Bold, color = Ink, fontSize = 13.sp, lineHeight = 16.sp)
@@ -357,7 +359,7 @@ private fun SearchScreen(viewModel: AiMercViewModel, modifier: Modifier, openPro
 
 @Composable
 private fun SearchProductRow(product: Product, quantity: Int, add: () -> Unit, remove: () -> Unit, open: () -> Unit) {
-    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color.White).clickable(onClick = open).padding(10.dp), verticalAlignment = Alignment.CenterVertically) { Box(Modifier.size(78.dp).clip(RoundedCornerShape(12.dp)).background(Color.White).padding(6.dp)) { AsyncImage(product.image, product.name, Modifier.fillMaxSize(), contentScale = ContentScale.Fit) }; Spacer(Modifier.width(12.dp)); Column(Modifier.weight(1f)) { Text(product.name, fontWeight = FontWeight.ExtraBold, color = Ink, maxLines = 2); Text(product.category, color = Muted, fontSize = 10.sp); Text(currency.format(product.price), fontWeight = FontWeight.Black, color = Forest, modifier = Modifier.padding(top = 8.dp)) }; QuantityControl(quantity, add, remove) }
+    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color.White).clickable(onClick = open).padding(10.dp), verticalAlignment = Alignment.CenterVertically) { Box(Modifier.size(78.dp).clip(RoundedCornerShape(12.dp)).background(Color.White).padding(6.dp)) { if (product.image.isNotBlank()) { AsyncImage(product.image, product.name, Modifier.fillMaxSize(), contentScale = ContentScale.Fit) } }; Spacer(Modifier.width(12.dp)); Column(Modifier.weight(1f)) { Text(product.name, fontWeight = FontWeight.ExtraBold, color = Ink, maxLines = 2); Text(product.category, color = Muted, fontSize = 10.sp); Text(currency.format(product.price), fontWeight = FontWeight.Black, color = Forest, modifier = Modifier.padding(top = 8.dp)) }; QuantityControl(quantity, add, remove) }
 }
 
 @Composable
