@@ -453,6 +453,78 @@ const VIRTUAL_IMAGES = {
     description: 'Macaxeira / Mandioca',
     svg: `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect width="400" height="400" rx="40" fill="#ffedd5"/><circle cx="200" cy="200" r="140" fill="white" opacity="0.7"/><text x="200" y="225" font-size="140" text-anchor="middle" dominant-baseline="central">🍠</text></svg>`
   },
+  VIRTUAL_ABACATE: {
+    description: 'Abacate',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect width="400" height="400" rx="40" fill="#dcfce7"/><circle cx="200" cy="200" r="140" fill="white" opacity="0.7"/><text x="200" y="225" font-size="140" text-anchor="middle" dominant-baseline="central">🥑</text></svg>`
+  },
+  VIRTUAL_ABOBORA: {
+    description: 'Abóbora / Jerimum',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect width="400" height="400" rx="40" fill="#ffedd5"/><circle cx="200" cy="200" r="140" fill="white" opacity="0.7"/><text x="200" y="225" font-size="140" text-anchor="middle" dominant-baseline="central">🎃</text></svg>`
+  },
+  VIRTUAL_ESPINAFRE: {
+    description: 'Espinafre Fresco',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect width="400" height="400" rx="40" fill="#dcfce7"/><circle cx="200" cy="200" r="140" fill="white" opacity="0.7"/><text x="200" y="225" font-size="140" text-anchor="middle" dominant-baseline="central">🥬</text></svg>`
+  },
+  VIRTUAL_MANJERICAO: {
+    description: 'Manjericão Fresco',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect width="400" height="400" rx="40" fill="#dcfce7"/><circle cx="200" cy="200" r="140" fill="white" opacity="0.7"/><text x="200" y="225" font-size="140" text-anchor="middle" dominant-baseline="central">🌿</text></svg>`
+  },
+  VIRTUAL_CHUCHU: {
+    description: 'Chuchu',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect width="400" height="400" rx="40" fill="#dcfce7"/><circle cx="200" cy="200" r="140" fill="white" opacity="0.7"/><text x="200" y="225" font-size="140" text-anchor="middle" dominant-baseline="central">🫑</text></svg>`
+  },
+  VIRTUAL_MELANCIA: {
+    description: 'Melancia',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect width="400" height="400" rx="40" fill="#fee2e2"/><circle cx="200" cy="200" r="140" fill="white" opacity="0.7"/><text x="200" y="225" font-size="140" text-anchor="middle" dominant-baseline="central">🍉</text></svg>`
+  },
+  VIRTUAL_MELAO: {
+    description: 'Melão Amarelo',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect width="400" height="400" rx="40" fill="#fef9c3"/><circle cx="200" cy="200" r="140" fill="white" opacity="0.7"/><text x="200" y="225" font-size="140" text-anchor="middle" dominant-baseline="central">🍈</text></svg>`
+  },
+  VIRTUAL_OVOS: {
+    description: 'Ovos da Roça',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect width="400" height="400" rx="40" fill="#fef9c3"/><circle cx="200" cy="200" r="140" fill="white" opacity="0.7"/><text x="200" y="225" font-size="140" text-anchor="middle" dominant-baseline="central">🥚</text></svg>`
+  },
+  VIRTUAL_BETERRABA: {
+    description: 'Beterraba',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect width="400" height="400" rx="40" fill="#f3e8ff"/><circle cx="200" cy="200" r="140" fill="white" opacity="0.7"/><text x="200" y="225" font-size="140" text-anchor="middle" dominant-baseline="central">🧅</text></svg>`
+  },
+  VIRTUAL_ABOBRINHA: {
+    description: 'Abobrinha Verde',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect width="400" height="400" rx="40" fill="#dcfce7"/><circle cx="200" cy="200" r="140" fill="white" opacity="0.7"/><text x="200" y="225" font-size="140" text-anchor="middle" dominant-baseline="central">🥒</text></svg>`
+  },
+  VIRTUAL_MANGA: {
+    description: 'Manga Tommy',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect width="400" height="400" rx="40" fill="#ffedd5"/><circle cx="200" cy="200" r="140" fill="white" opacity="0.7"/><text x="200" y="225" font-size="140" text-anchor="middle" dominant-baseline="central">🥭</text></svg>`
+  },
+  VIRTUAL_MARACUJA: {
+    description: 'Maracujá Azedo',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect width="400" height="400" rx="40" fill="#fef9c3"/><circle cx="200" cy="200" r="140" fill="white" opacity="0.7"/><text x="200" y="225" font-size="140" text-anchor="middle" dominant-baseline="central">🍋</text></svg>`
+  },
+  VIRTUAL_MORANGO: {
+    description: 'Morango Especial',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect width="400" height="400" rx="40" fill="#fee2e2"/><circle cx="200" cy="200" r="140" fill="white" opacity="0.7"/><text x="200" y="225" font-size="140" text-anchor="middle" dominant-baseline="central">🍓</text></svg>`
+  },
+  VIRTUAL_PEPINO: {
+    description: 'Pepino Japonês',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect width="400" height="400" rx="40" fill="#dcfce7"/><circle cx="200" cy="200" r="140" fill="white" opacity="0.7"/><text x="200" y="225" font-size="140" text-anchor="middle" dominant-baseline="central">🥒</text></svg>`
+  },
+  VIRTUAL_PERA: {
+    description: 'Pêra Portuguesa',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect width="400" height="400" rx="40" fill="#dcfce7"/><circle cx="200" cy="200" r="140" fill="white" opacity="0.7"/><text x="200" y="225" font-size="140" text-anchor="middle" dominant-baseline="central">🍐</text></svg>`
+  },
+  VIRTUAL_PIMENTAO: {
+    description: 'Pimentão Verde',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect width="400" height="400" rx="40" fill="#dcfce7"/><circle cx="200" cy="200" r="140" fill="white" opacity="0.7"/><text x="200" y="225" font-size="140" text-anchor="middle" dominant-baseline="central">🫑</text></svg>`
+  },
+  VIRTUAL_CHEIRO_VERDE: {
+    description: 'Cheiro Verde / Coentro',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect width="400" height="400" rx="40" fill="#dcfce7"/><circle cx="200" cy="200" r="140" fill="white" opacity="0.7"/><text x="200" y="225" font-size="140" text-anchor="middle" dominant-baseline="central">🌿</text></svg>`
+  },
+  VIRTUAL_REPOLHO: {
+    description: 'Repolho Verde',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect width="400" height="400" rx="40" fill="#dcfce7"/><circle cx="200" cy="200" r="140" fill="white" opacity="0.7"/><text x="200" y="225" font-size="140" text-anchor="middle" dominant-baseline="central">🥬</text></svg>`
+  },
   VIRTUAL_CARNE_LOMBO: {
     description: 'Lombo Especial',
     svg: `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect width="400" height="400" rx="40" fill="#fee2e2"/><circle cx="200" cy="200" r="140" fill="white" opacity="0.7"/><text x="200" y="225" font-size="140" text-anchor="middle" dominant-baseline="central">🥩</text></svg>`
