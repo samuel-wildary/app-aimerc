@@ -531,7 +531,9 @@ function Storefront({ store, banners, campaigns, automations, onSaveSettings, on
     cancellationWindowMinutes: store?.cancellationWindowMinutes ?? 5,
     open: store?.open ?? true,
     enablePickupScheduling: store?.enablePickupScheduling ?? true,
-    pickupSlots: store?.pickupSlots ?? '08:00 - 10:00, 10:00 - 12:00, 12:00 - 14:00, 14:00 - 16:00, 16:00 - 18:00, 18:00 - 20:00'
+    pickupSlots: store?.pickupSlots ?? '08:00 - 10:00, 10:00 - 12:00, 12:00 - 14:00, 14:00 - 16:00, 16:00 - 18:00, 18:00 - 20:00',
+    disabledCategories: store?.disabledCategories ?? '',
+    disablePromotions: store?.disablePromotions ?? false
   });
   const [bannerForm, setBannerForm] = useState(emptyBanner);
   const [editingId, setEditingId] = useState(null);
@@ -550,9 +552,11 @@ function Storefront({ store, banners, campaigns, automations, onSaveSettings, on
       cancellationWindowMinutes: store?.cancellationWindowMinutes ?? 5,
       open: store?.open ?? true,
       enablePickupScheduling: store?.enablePickupScheduling ?? true,
-      pickupSlots: store?.pickupSlots ?? '08:00 - 10:00, 10:00 - 12:00, 12:00 - 14:00, 14:00 - 16:00, 16:00 - 18:00, 18:00 - 20:00'
+      pickupSlots: store?.pickupSlots ?? '08:00 - 10:00, 10:00 - 12:00, 12:00 - 14:00, 14:00 - 16:00, 16:00 - 18:00, 18:00 - 20:00',
+      disabledCategories: store?.disabledCategories ?? '',
+      disablePromotions: store?.disablePromotions ?? false
     });
-  }, [store?.minimumOrder, store?.deliveryFee, store?.freeDeliveryAbove, store?.supportPhone, store?.cancellationWindowMinutes, store?.open, store?.enablePickupScheduling, store?.pickupSlots]);
+  }, [store?.minimumOrder, store?.deliveryFee, store?.freeDeliveryAbove, store?.supportPhone, store?.cancellationWindowMinutes, store?.open, store?.enablePickupScheduling, store?.pickupSlots, store?.disabledCategories, store?.disablePromotions]);
 
   function editBanner(banner) {
     setEditingId(banner.id);
@@ -622,6 +626,8 @@ function Storefront({ store, banners, campaigns, automations, onSaveSettings, on
           {settings.enablePickupScheduling && (
             <label>Faixas de horário para retirada<span>Separe as opções por vírgula.</span><input value={settings.pickupSlots} onChange={event => setSettings({ ...settings, pickupSlots: event.target.value })} placeholder="08:00 - 10:00, 10:00 - 12:00, 12:00 - 14:00, 14:00 - 16:00, 16:00 - 18:00, 18:00 - 20:00" required={settings.enablePickupScheduling} /></label>
           )}
+          <label className="open-toggle"><span><strong>Desativar ofertas / promoções no aplicativo</strong><small>Ao marcar, a vitrine de ofertas é ocultada no aplicativo.</small></span><input type="checkbox" checked={settings.disablePromotions} onChange={event => setSettings({ ...settings, disablePromotions: event.target.checked })} /></label>
+          <label>Categorias desativadas no aplicativo<span>Digite as categorias que deseja ocultar separadas por vírgula. Ex: Limpeza, Bebidas</span><input value={settings.disabledCategories} onChange={event => setSettings({ ...settings, disabledCategories: event.target.value })} placeholder="Ex: Higiene e Beleza, Bazar" /></label>
           <label className="open-toggle"><span><strong>Receber novos pedidos</strong><small>Ao fechar, o aplicativo bloqueia novos checkouts.</small></span><input type="checkbox" checked={settings.open} onChange={event => setSettings({ ...settings, open: event.target.checked })} /></label>
           <button className="primary large" disabled={savingSettings}>{savingSettings ? 'Salvando...' : 'Salvar configuracoes'}</button>
         </form>

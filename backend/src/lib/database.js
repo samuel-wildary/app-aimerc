@@ -44,6 +44,8 @@ function mapStore(row) {
     open: Boolean(row.is_open),
     enablePickupScheduling: row.enable_pickup_scheduling != null ? Boolean(row.enable_pickup_scheduling) : true,
     pickupSlots: row.pickup_slots || '08:00 - 10:00, 10:00 - 12:00, 12:00 - 14:00, 14:00 - 16:00, 16:00 - 18:00, 18:00 - 20:00',
+    disabledCategories: row.disabled_categories || '',
+    disablePromotions: Boolean(row.disable_promotions),
     createdAt: row.created_at
   };
 }
@@ -204,7 +206,8 @@ export async function getStoreBySlug(slug) {
 
 export async function updateStoreSettings(id, input) {
   await query(`UPDATE stores SET minimum_order=$1, delivery_fee=$2, free_delivery_above=$3,
-    support_phone=$4, cancellation_window_minutes=$5, is_open=$6, enable_pickup_scheduling=$7, pickup_slots=$8 WHERE id=$9`,
+    support_phone=$4, cancellation_window_minutes=$5, is_open=$6, enable_pickup_scheduling=$7, pickup_slots=$8,
+    disabled_categories=$9, disable_promotions=$10 WHERE id=$11`,
   [
     input.minimumOrder,
     input.deliveryFee,
@@ -214,6 +217,8 @@ export async function updateStoreSettings(id, input) {
     input.open ? 1 : 0,
     input.enablePickupScheduling !== false ? 1 : 0,
     String(input.pickupSlots || '').trim() || '08:00 - 10:00, 10:00 - 12:00, 12:00 - 14:00, 14:00 - 16:00, 16:00 - 18:00, 18:00 - 20:00',
+    String(input.disabledCategories || '').trim(),
+    input.disablePromotions ? 1 : 0,
     id
   ]);
   return getStore(id);
@@ -457,6 +462,11 @@ export async function listProducts(storeId, filters = {}) {
   const virtualEansRes = await query("SELECT ean FROM catalog_assets WHERE ean LIKE 'VIRTUAL_%'");
   const activeVirtualEans = new Set(virtualEansRes.rows.map(row => row.ean));
 
+  const store = await getStore(storeId);
+  const disabledCats = new Set(
+    String(store?.disabledCategories || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
+  );
+
   const products = result.rows.map(row => {
     const product = mapProduct(row);
     if (!product.hasCatalogImage) {
@@ -465,13 +475,20 @@ export async function listProducts(storeId, filters = {}) {
         product.hasCatalogImage = true;
       }
     }
+    if (store?.disablePromotions) {
+      product.promo = false;
+    }
     return product;
   });
 
   let filteredList = products;
+  if (disabledCats.size > 0) {
+    filteredList = filteredList.filter(p => !disabledCats.has(p.category.toLowerCase()));
+  }
+
   if (filters.category && filters.category !== 'Todos') {
     const category = normalizeCategory(filters.category);
-    filteredList = products.filter(product => product.category === category);
+    filteredList = filteredList.filter(product => product.category === category);
   }
 
   filteredList.sort((a, b) => {
@@ -551,11 +568,17 @@ export async function updateProductCatalog(storeId, productId, input) {
 }
 
 export async function listProductCategories(storeId) {
+  const store = await getStore(storeId);
+  const disabledCats = new Set(
+    String(store?.disabledCategories || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
+  );
+
   const result = await query(`SELECT COALESCE(NULLIF(catalog_category,''),source_category,category) AS name,
     COUNT(*)::int AS total FROM products WHERE store_id=$1 GROUP BY 1 ORDER BY 1`, [storeId]);
   const totals = new Map();
   for (const row of result.rows) {
     const name = normalizeCategory(row.name);
+    if (disabledCats.has(name.toLowerCase())) continue;
     totals.set(name, (totals.get(name) || 0) + Number(row.total));
   }
   return [...totals].map(([name, total]) => ({ name, total })).sort((left, right) => left.name.localeCompare(right.name, 'pt-BR'));

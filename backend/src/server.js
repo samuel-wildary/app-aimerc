@@ -497,7 +497,11 @@ app.patch('/api/store/settings', requireAuth('STORE_MANAGER'), asyncRoute(async 
     freeDeliveryAbove: positiveNumber(req.body.freeDeliveryAbove ?? 0, 'Frete gratis acima de', { min: 0 }),
     supportPhone: requiredText(req.body.supportPhone, 'Telefone da central', 30),
     cancellationWindowMinutes: positiveNumber(req.body.cancellationWindowMinutes ?? 5, 'Prazo de cancelamento', { min: 1, max: 60 }),
-    open: Boolean(req.body.open)
+    open: Boolean(req.body.open),
+    enablePickupScheduling: req.body.enablePickupScheduling !== false,
+    pickupSlots: req.body.pickupSlots,
+    disabledCategories: req.body.disabledCategories || '',
+    disablePromotions: Boolean(req.body.disablePromotions)
   });
   await writeAuditLog({ storeId: req.user.storeId, actorId: req.user.sub, action: 'STORE_SETTINGS_UPDATED', entityType: 'STORE', entityId: req.user.storeId });
   res.json(store);
