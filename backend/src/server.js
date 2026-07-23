@@ -370,16 +370,7 @@ app.get('/api/public/cep/:cep', asyncRoute(async (req, res) => {
   });
 }));
 
-app.get('/api/public/debug-db', asyncRoute(async (req, res) => {
-  try {
-    const { query } = await import('./lib/postgres.js');
-    const r1 = await query(`ALTER TABLE stores ADD COLUMN IF NOT EXISTS disabled_categories TEXT NOT NULL DEFAULT ''`);
-    const r2 = await query(`ALTER TABLE stores ADD COLUMN IF NOT EXISTS disable_promotions INTEGER NOT NULL DEFAULT 0`);
-    res.json({ success: true, message: 'Colunas criadas com sucesso', r1, r2 });
-  } catch (err) {
-    res.status(500).json({ error: err.message, stack: err.stack });
-  }
-}));
+
 
 app.post('/api/public/stores/:slug/push/devices', asyncRoute(async (req, res) => {
   const store = await publicStore(req);
