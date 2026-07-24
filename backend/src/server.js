@@ -1033,6 +1033,17 @@ app.post('/api/admin/stores/:id/assimilate-images', requireAuth('PLATFORM_ADMIN'
   assimilateJobs.set(jobId, job);
   res.status(202).json(job);
 
+  const base = publicApiBase(req);
+  const enrichSamples = samples => (samples || []).map(sample => ({
+    ...sample,
+    catalogImage: sample.catalogImagePath
+      ? `${base}${sample.catalogImagePath}`
+      : (sample.matchedEan ? `${base}/public/catalog-library/${encodeURIComponent(sample.matchedEan)}/image` : null),
+    productImage: sample.productId
+      ? `${base}/public/stores/${encodeURIComponent(store.slug)}/products/${encodeURIComponent(sample.productId)}/image?v=${Date.now()}`
+      : null
+  }));
+
   assimilateStoreCatalogImages(store.id, {
     limit,
     useAi: req.body?.useAi !== false,
@@ -1047,7 +1058,7 @@ app.post('/api/admin/stores/:id/assimilate-images', requireAuth('PLATFORM_ADMIN'
         globalMatched: progress.globalMatched || 0,
         localMatched: progress.localMatched || 0,
         total: progress.total || 0,
-        samples: progress.samples || job.samples,
+        samples: enrichSamples(progress.samples || job.samples),
         message: progress.message || job.message
       });
     }
@@ -1062,7 +1073,7 @@ app.post('/api/admin/stores/:id/assimilate-images', requireAuth('PLATFORM_ADMIN'
       globalMatched: summary.globalMatched,
       localMatched: summary.localMatched,
       total: summary.total,
-      samples: summary.samples,
+      samples: enrichSamples(summary.samples),
       message: 'Assimilacao concluida',
       finishedAt: new Date().toISOString()
     });

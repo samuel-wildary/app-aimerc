@@ -383,17 +383,19 @@ export async function assimilateStoreCatalogImages(storeId, {
       await writeImageFn(storeId, product.id, asset.image_data, asset.content_type, `ean-global:${ean}`);
       summary.matched += 1;
       summary.globalMatched += 1;
-      if (summary.samples.length < 25) {
+      if (summary.samples.length < 40) {
         summary.samples.push({
           productId: product.id,
           name: product.name,
+          category: product.category,
           barcode: product.barcode,
           matchedEan: asset.ean,
           matchedDescription: asset.description,
           sourceName: asset.source_name,
           score: 1,
           method: 'ean-global',
-          reason: 'Match automatico por EAN/GTIN global'
+          reason: 'Match automatico por EAN/GTIN global',
+          catalogImagePath: `/public/catalog-library/${encodeURIComponent(asset.ean)}/image`
         });
       }
     }
@@ -424,10 +426,11 @@ export async function assimilateStoreCatalogImages(storeId, {
         );
         summary.matched += 1;
         summary.localMatched += 1;
-        if (summary.samples.length < 40) {
+        if (summary.samples.length < 60) {
           summary.samples.push({
             productId: product.id,
             name: product.name,
+            category: product.category,
             barcode: product.barcode,
             matchedEan: match.ean,
             matchedDescription: match.description,
@@ -435,7 +438,8 @@ export async function assimilateStoreCatalogImages(storeId, {
             score: Number(match.score.toFixed(3)),
             headword: match.headword,
             method: match.method || 'openai-match',
-            reason: match.reason || 'Match semantico EAN local'
+            reason: match.reason || 'Match semantico EAN local',
+            catalogImagePath: `/public/catalog-library/${encodeURIComponent(match.ean)}/image`
           });
         }
       }

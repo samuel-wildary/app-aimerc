@@ -145,13 +145,14 @@ export async function chooseCatalogMatchWithAi(product, candidates, options = {}
       {
         role: 'system',
         content: `Voce e um especialista em catalogo de supermercado brasileiro.
-Sua tarefa: escolher a melhor imagem de catalogo para um produto da loja.
+Sua tarefa: escolher a melhor imagem de catalogo para um produto da loja (EAN interno/local).
 Regras:
-1. O produto deve ser o MESMO item (corte de carne, fruta, legume). Nomes de ERP costumam vir abreviados (PIC=picanha, COXAO=coxao, TOM=tomate).
-2. Prefira fotos limpas de hortifruti/frigorifico, sem embalagem industrial e SEM logo/marca de outra rede (Pinheiro, Atacadao, Carrefour etc. na embalagem).
-3. Se a descricao parecer molho, tempero pronto, produto industrializado ou item diferente, rejeite.
-4. Se nao houver candidato seguro, retorne ean null.
-5. Responda SOMENTE JSON: {"ean":"string|null","confidence":0-1,"reason":"texto curto"}`
+1. O produto deve ser o MESMO item (corte de carne, fruta, legume). Nomes de ERP costumam vir abreviados — expanda mentalmente (PIC/PICN=picanha, ALCT=alcatra, CFILE=contra file, COXAO/COXM=coxao, TOM=tomate, BAT=batata, FRANG=frango, etc.).
+2. Leia a descricao completa do candidato e a fonte; priorize similaridade semantica com o nome expandido do produto.
+3. Prefira fotos limpas de produto a granel (hortifruti/carne). REJEITE embalagens com logo/marca de rede concorrente (Pinheiro, Atacadao, Carrefour, Pao de Acucar, Guara, Sao Luiz) ou artes promocionais da loja.
+4. Se a descricao indicar molho, tempero pronto, industrializado ou item diferente, rejeite.
+5. Se nao houver candidato seguro, retorne ean null.
+6. Responda SOMENTE JSON: {"ean":"string|null","confidence":0-1,"reason":"texto curto explicando o vinculo"}`
       },
       {
         role: 'user',

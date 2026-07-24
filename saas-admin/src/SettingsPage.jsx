@@ -1,37 +1,43 @@
 import React, { useEffect, useState } from 'react';
-import { Bot, Check, KeyRound, Save, ServerCog } from 'lucide-react';
+import { Bot, Check, KeyRound, Save, ShieldCheck, Sparkles } from 'lucide-react';
 import { api } from './api.js';
 
 const MODELS = [
   {
     id: 'gpt-5.6-sol',
     name: 'GPT-5.6 Sol',
-    detail: 'Mais inteligente — melhor para nomes abreviados e casos dificeis'
+    badge: 'Mais inteligente',
+    detail: 'Melhor para nomes abreviados e casos dificeis de hortifruti/frigorifico.'
   },
   {
     id: 'gpt-5.6-terra',
     name: 'GPT-5.6 Terra',
-    detail: 'Equilibrio entre qualidade e custo (recomendado)'
+    badge: 'Recomendado',
+    detail: 'Equilibrio entre qualidade e custo para assimilacao em lote.'
   },
   {
     id: 'gpt-5.6-luna',
     name: 'GPT-5.6 Luna',
-    detail: 'Mais barato e rapido — bom para muitos produtos'
+    badge: 'Economico',
+    detail: 'Mais barato e rapido — bom para muitos produtos simples.'
   },
   {
     id: 'gpt-5.6',
-    name: 'GPT-5.6 (alias Sol)',
-    detail: 'Alias oficial que aponta para o Sol'
+    name: 'GPT-5.6',
+    badge: 'Alias',
+    detail: 'Alias oficial que aponta para o Sol.'
   },
   {
     id: 'gpt-4o',
     name: 'GPT-4o',
-    detail: 'Geracao anterior'
+    badge: 'Anterior',
+    detail: 'Geracao anterior da OpenAI.'
   },
   {
     id: 'gpt-4o-mini',
     name: 'GPT-4o mini',
-    detail: 'Geracao anterior, mais barata'
+    badge: 'Anterior',
+    detail: 'Geracao anterior, mais barata.'
   }
 ];
 
@@ -125,93 +131,125 @@ export default function SettingsPage() {
     return <section className="panel"><div className="empty">Carregando configuracoes...</div></section>;
   }
 
+  const connected = Boolean(agent?.hasApiKey);
+
   return (
-    <div className="store-detail">
+    <div className="settings-page">
       <section className="hero">
         <div>
           <p className="eyebrow">Plataforma</p>
           <h2>Configuracoes</h2>
-          <p>Escolha o modelo OpenAI atual (Sol, Terra ou Luna) e a chave do agente de busca de imagens.</p>
+          <p>Chave OpenAI e modelo do agente que analisa EAN local, abreviaturas do ERP e fotos limpas do banco.</p>
         </div>
         <div className="hero-badge">
           <span>Agente de imagens</span>
-          <strong>{agent?.hasApiKey ? 'Conectado' : 'Pendente'}</strong>
-          <small>{agent?.model || 'Sem modelo'} · {agent?.source === 'settings' ? 'chave no painel' : agent?.source === 'env' ? 'chave no ambiente' : 'sem chave'}</small>
+          <strong>{connected ? 'Conectado' : 'Pendente'}</strong>
+          <small>
+            {agent?.model || 'Sem modelo'} ·{' '}
+            {agent?.source === 'settings' ? 'chave no painel' : agent?.source === 'env' ? 'chave no ambiente' : 'sem chave'}
+          </small>
         </div>
       </section>
 
-      <section className="panel">
-        <div className="panel-head">
-          <div>
-            <p className="eyebrow">Integracao com API</p>
-            <h2>Agentes de busca</h2>
-            <p>Usado apenas para EAN local (hortifruti/frigorifico). EAN global continua automatico, sem IA.</p>
-          </div>
-          <Bot size={22} />
-        </div>
-        {error && <div className="error">{error}</div>}
-        {message && <div className="empty" style={{ marginBottom: 12 }}><Check size={16} /> {message}</div>}
-        <form onSubmit={save}>
-          <label style={{ display: 'block', marginBottom: 14 }}>Provedor
-            <select value={form.provider} onChange={event => setForm(current => ({ ...current, provider: event.target.value }))}>
-              <option value="openai">OpenAI</option>
-            </select>
-          </label>
-
-          <p className="eyebrow" style={{ marginBottom: 8 }}>Modelo GPT-5.6</p>
-          <div className="palette-presets" style={{ marginBottom: 14 }}>
-            {MODELS.map(item => {
-              const active = !form.customModel.trim() && form.model === item.id;
-              return (
-                <button
-                  type="button"
-                  key={item.id}
-                  className={active ? 'selected' : ''}
-                  onClick={() => setForm(current => ({ ...current, model: item.id, customModel: '' }))}
-                  style={{ textAlign: 'left', minWidth: 180 }}
-                >
-                  <span><strong>{item.name}</strong><small style={{ display: 'block', opacity: 0.8 }}>{item.detail}</small><code style={{ fontSize: 11 }}>{item.id}</code></span>
-                </button>
-              );
-            })}
+      <div className="settings-layout">
+        <section className="panel">
+          <div className="panel-head">
+            <div>
+              <p className="eyebrow">Integracao</p>
+              <h2>Agente de busca</h2>
+              <p>Usado so no EAN local. EAN global continua automatico, sem IA.</p>
+            </div>
+            <div className={`agent-pill ${connected ? 'on' : 'off'}`}>
+              <Bot size={15} />
+              {connected ? 'API pronta' : 'Sem chave'}
+            </div>
           </div>
 
-          <label style={{ display: 'block', marginBottom: 14 }}>
-            Ou cole outro model id da OpenAI
-            <input
-              value={form.customModel}
-              onChange={event => setForm(current => ({ ...current, customModel: event.target.value }))}
-              placeholder="ex.: gpt-5.6-sol"
-              autoComplete="off"
-            />
-            <small style={{ display: 'block', marginTop: 6, opacity: 0.75 }}>
-              Modelo ativo: <code>{selectedModelId()}</code>{selectedIsCustom ? ' (personalizado)' : ''}
-            </small>
-          </label>
+          {error && <div className="error">{error}</div>}
+          {message && <div className="toast-ok"><Check size={16} /> {message}</div>}
 
-          <label style={{ display: 'block', marginBottom: 14 }}>Chave API
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              <KeyRound size={16} />
+          <form className="settings-form" onSubmit={save}>
+            <label>
+              Provedor
+              <select value={form.provider} onChange={event => setForm(current => ({ ...current, provider: event.target.value }))}>
+                <option value="openai">OpenAI</option>
+              </select>
+            </label>
+
+            <div>
+              <p className="eyebrow">Modelo</p>
+              <div className="model-grid">
+                {MODELS.map(item => {
+                  const active = !form.customModel.trim() && form.model === item.id;
+                  return (
+                    <button
+                      type="button"
+                      key={item.id}
+                      className={`model-card ${active ? 'selected' : ''}`}
+                      onClick={() => setForm(current => ({ ...current, model: item.id, customModel: '' }))}
+                    >
+                      <span className="model-badge">{item.badge}</span>
+                      <strong>{item.name}</strong>
+                      <span>{item.detail}</span>
+                      <code>{item.id}</code>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <label>
+              Ou cole outro model id
               <input
-                type="password"
-                value={form.apiKey}
-                onChange={event => setForm(current => ({ ...current, apiKey: event.target.value }))}
-                placeholder={agent?.hasApiKey ? '•••••••• (deixe em branco para manter)' : 'sk-...'}
+                value={form.customModel}
+                onChange={event => setForm(current => ({ ...current, customModel: event.target.value }))}
+                placeholder="ex.: gpt-5.6-sol"
                 autoComplete="off"
               />
+              <small>
+                Modelo ativo: <code>{selectedModelId()}</code>{selectedIsCustom ? ' (personalizado)' : ''}
+              </small>
+            </label>
+
+            <label>
+              Chave API OpenAI
+              <div className="key-field">
+                <KeyRound size={16} />
+                <input
+                  type="password"
+                  value={form.apiKey}
+                  onChange={event => setForm(current => ({ ...current, apiKey: event.target.value }))}
+                  placeholder={agent?.hasApiKey ? '•••••••• (deixe em branco para manter)' : 'sk-...'}
+                  autoComplete="off"
+                />
+              </div>
+            </label>
+
+            <div className="modal-actions">
+              <button type="button" className="ghost" disabled={saving || !agent?.hasApiKey} onClick={clearKey}>Remover chave</button>
+              <button className="accent" disabled={saving}><Save size={16} /> {saving ? 'Salvando...' : 'Salvar agente'}</button>
             </div>
-          </label>
-          <div className="modal-actions">
-            <button type="button" className="ghost" disabled={saving || !agent?.hasApiKey} onClick={clearKey}>Remover chave</button>
-            <button className="accent" disabled={saving}><Save size={16} /> {saving ? 'Salvando...' : 'Salvar agente'}</button>
-          </div>
-        </form>
-        <div className="support-card" style={{ marginTop: 18 }}>
-          <ServerCog size={18} />
-          <strong>Como funciona</strong>
-          <span>1) Banco de imagens coleta tudo da fonte. 2) EAN global casa sozinho. 3) EAN local usa este modelo com barra de progresso.</span>
-        </div>
-      </section>
+          </form>
+        </section>
+
+        <aside className="settings-aside">
+          <article className="settings-tip">
+            <Sparkles size={18} />
+            <strong>Como a IA trabalha</strong>
+            <ol>
+              <li>Banco de imagens coleta fotos das fontes.</li>
+              <li>EAN global (GTIN) casa sozinho.</li>
+              <li>EAN local: o modelo le abreviaturas, compara legendas e escolhe foto limpa.</li>
+              <li>Relatorio mostra produto ↔ imagem vinculada.</li>
+            </ol>
+          </article>
+          <article className="settings-tip muted">
+            <ShieldCheck size={18} />
+            <strong>Seguranca</strong>
+            <span>A chave fica criptografada nas configuracoes da plataforma. Voce tambem pode usar AIMERC_OPENAI_API_KEY no ambiente do backend.</span>
+          </article>
+        </aside>
+      </div>
     </div>
   );
 }

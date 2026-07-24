@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ArrowLeft,
+  ArrowRightLeft,
   Cable,
   Images,
   Link2,
@@ -8,6 +9,7 @@ import {
   Percent,
   RefreshCw,
   Search,
+  Sparkles,
   Store,
   Tags
 } from 'lucide-react';
@@ -15,8 +17,82 @@ import { api } from './api.js';
 
 const money = value => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(value || 0));
 
-function Stat({ label, value }) {
-  return <article className="metric"><span>{label}</span><strong>{value}</strong></article>;
+const TABS = [
+  ['cadastro', 'Cadastro', Store],
+  ['catalogo', 'Catalogo', Package],
+  ['promocoes', 'Promocoes', Percent],
+  ['buscar', 'Buscar imagens', Search],
+  ['assimilar', 'Assimilar IA', Sparkles]
+];
+
+function Metric({ label, value, detail }) {
+  return (
+    <article className="metric">
+      <span>{label}</span>
+      <strong>{value}</strong>
+      {detail ? <small>{detail}</small> : null}
+    </article>
+  );
+}
+
+function PhaseLabel({ phase }) {
+  if (phase === 'GLOBAL') return 'EAN global (automatico)';
+  if (phase === 'LOCAL_AI') return 'EAN local (IA)';
+  if (phase === 'DONE') return 'Concluido';
+  return phase || 'Aguardando';
+}
+
+function MatchReport({ samples }) {
+  if (!samples?.length) return null;
+  return (
+    <div className="match-report">
+      <div className="panel-head">
+        <div>
+          <p className="eyebrow">Relatorio de vinculos</p>
+          <h2>O que a IA vinculou</h2>
+          <p>Produto da loja a esquerda, imagem do banco a direita.</p>
+        </div>
+        <span className="match-count">{samples.length} vinculos</span>
+      </div>
+      <div className="match-list">
+        {samples.map(sample => (
+          <article className="match-card" key={`${sample.productId}-${sample.matchedEan}`}>
+            <div className="match-side">
+              <div className="match-thumb">
+                {sample.productImage
+                  ? <img src={sample.productImage} alt={sample.name} />
+                  : <span>Sem preview</span>}
+              </div>
+              <div>
+                <small>Produto da loja</small>
+                <strong>{sample.name}</strong>
+                <code>{sample.barcode || '-'}</code>
+                {sample.category ? <em>{sample.category}</em> : null}
+              </div>
+            </div>
+            <div className="match-bridge" title="Vinculado">
+              <ArrowRightLeft size={16} />
+              <span>{Math.round(Number(sample.score || 0) * 100)}%</span>
+            </div>
+            <div className="match-side">
+              <div className="match-thumb">
+                {sample.catalogImage
+                  ? <img src={sample.catalogImage} alt={sample.matchedDescription || sample.matchedEan} />
+                  : <span>Sem preview</span>}
+              </div>
+              <div>
+                <small>Imagem do banco</small>
+                <strong>{sample.matchedDescription || 'Sem descricao'}</strong>
+                <code>{sample.matchedEan}</code>
+                <em>{sample.sourceName || sample.method || 'catalogo'}</em>
+              </div>
+            </div>
+            {sample.reason ? <p className="match-reason">{sample.reason}</p> : null}
+          </article>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 export default function StoreDetail({ storeId, onBack, onEditBrand, onDelete }) {
@@ -143,70 +219,83 @@ export default function StoreDetail({ storeId, onBack, onEditBrand, onDelete }) 
   const store = detail.store;
   const stats = detail.catalogStats || {};
   const percent = Number(job?.percent || 0);
+  const brand = store.brandColors || {};
 
   return (
     <div className="store-detail">
-      <section className="panel">
-        <div className="panel-head">
-          <div>
-            <button type="button" className="link" onClick={onBack}><ArrowLeft size={16} /> Voltar para lista</button>
-            <p className="eyebrow">Gestao completa</p>
-            <h2>{store.name}</h2>
-            <small>{store.owner} · {store.city}/{store.state} · slug {store.slug}</small>
-          </div>
-          <div className="top-actions">
-            <button className="refresh" onClick={loadDetail}><RefreshCw size={16} /> Atualizar</button>
-            <button className="brand-edit" onClick={() => onEditBrand(store)}>Editar cores</button>
-            <button className="accent small" disabled={assimilating} onClick={startAssimilate}>
-              <Images size={16} /> {assimilating ? 'Assimilando...' : 'Assimilar com IA'}
-            </button>
-          </div>
+      <section className="store-hero" style={{
+        background: `radial-gradient(circle at 82% 40%, ${brand.accent || '#c8f05b'}33, transparent 28%), linear-gradient(125deg, ${brand.primary || '#0e1c1a'}, #203c35)`
+      }}>
+        <div>
+          <button type="button" className="store-back" onClick={onBack}><ArrowLeft size={16} /> Lista de supermercados</button>
+          <p className="eyebrow">Gestao do cliente</p>
+          <h2>{store.name}</h2>
+          <p>{store.owner} · {store.city}/{store.state} · slug {store.slug}</p>
         </div>
-        {error && <div className="error">{error}</div>}
-        {message && <div className="empty" style={{ marginBottom: 8 }}>{message}</div>}
-        <div className="metrics" style={{ marginTop: 12 }}>
-          <Stat label="Produtos ativos" value={stats.activeProducts || 0} />
-          <Stat label="Com imagem" value={stats.withImage || 0} />
-          <Stat label="Sem imagem" value={stats.withoutImage || 0} />
-          <Stat label="EAN local" value={stats.localEan || 0} />
-          <Stat label="Promocoes" value={stats.promoProducts || 0} />
-          <Stat label="Pedidos hoje" value={detail.summary?.ordersToday || 0} />
-        </div>
-        <div className="category-chips" style={{ marginTop: 16 }}>
-          {[
-            ['cadastro', 'Cadastro', Store],
-            ['catalogo', 'Catalogo', Package],
-            ['promocoes', 'Promocoes', Percent],
-            ['buscar', 'Buscar imagens', Search],
-            ['assimilar', 'Assimilar IA', Images]
-          ].map(([id, label, Icon]) => (
-            <button key={id} type="button" className={tab === id ? 'active' : ''} onClick={() => setTab(id)}>
-              <Icon size={14} /> {label}
-            </button>
-          ))}
+        <div className="store-hero-actions">
+          <button className="ghost light" onClick={loadDetail}><RefreshCw size={16} /> Atualizar</button>
+          <button className="ghost light" onClick={() => onEditBrand(store)}>Cores</button>
+          <button className="accent" disabled={assimilating} onClick={startAssimilate}>
+            <Sparkles size={16} /> {assimilating ? 'Assimilando...' : 'Assimilar com IA'}
+          </button>
         </div>
       </section>
 
+      {error && <div className="error">{error}</div>}
+      {message && <div className="toast-ok">{message}</div>}
+
+      <div className="metrics store-metrics">
+        <Metric label="Produtos ativos" value={stats.activeProducts || 0} detail={`${stats.totalProducts || stats.activeProducts || 0} no total`} />
+        <Metric label="Com imagem" value={stats.withImage || 0} detail="Mesma regra do painel da loja" />
+        <Metric label="Sem imagem" value={stats.withoutImage || 0} detail="Pendentes de foto" />
+        <Metric label="EAN local" value={stats.localEan || 0} detail="Precisam de IA" />
+        <Metric label="Promocoes" value={stats.promoProducts || 0} />
+        <Metric label="Pedidos hoje" value={detail.summary?.ordersToday || 0} />
+      </div>
+
+      <nav className="store-tabs" aria-label="Secoes do supermercado">
+        {TABS.map(([id, label, Icon]) => (
+          <button key={id} type="button" className={tab === id ? 'active' : ''} onClick={() => setTab(id)}>
+            <Icon size={15} /> {label}
+          </button>
+        ))}
+      </nav>
+
       {tab === 'cadastro' && (
         <section className="panel">
-          <div className="panel-head"><div><p className="eyebrow">Dados do cliente</p><h2>Cadastro completo</h2></div></div>
+          <div className="panel-head">
+            <div>
+              <p className="eyebrow">Dados do cliente</p>
+              <h2>Cadastro completo</h2>
+            </div>
+          </div>
           <div className="overview-grid">
-            <div className="quick-list">
-              <div className="quick-row"><span>E-mail</span><strong>{store.email}</strong></div>
-              <div className="quick-row"><span>Telefone</span><strong>{store.phone}</strong></div>
-              <div className="quick-row"><span>Suporte</span><strong>{store.supportPhone}</strong></div>
-              <div className="quick-row"><span>Plano</span><strong>{store.plan}</strong></div>
-              <div className="quick-row"><span>Mensalidade</span><strong>{money(store.monthlyPrice)}</strong></div>
-              <div className="quick-row"><span>Status</span><strong>{store.status}</strong></div>
-              <div className="quick-row"><span>Pedido minimo</span><strong>{money(store.minimumOrder)}</strong></div>
-              <div className="quick-row"><span>Taxa entrega</span><strong>{money(store.deliveryFee)}</strong></div>
-              <div className="quick-row"><span>Frete gratis acima</span><strong>{money(store.freeDeliveryAbove)}</strong></div>
-              <div className="quick-row"><span>Loja aberta</span><strong>{store.open ? 'Sim' : 'Nao'}</strong></div>
-              <div className="quick-row"><span>Promocoes</span><strong>{store.disablePromotions ? 'Desativadas' : 'Ativas'}</strong></div>
-              <div className="quick-row"><span>Categorias ocultas</span><strong>{store.disabledCategories || 'Nenhuma'}</strong></div>
+            <div className="detail-grid">
+              {[
+                ['E-mail', store.email],
+                ['Telefone', store.phone],
+                ['Suporte', store.supportPhone],
+                ['Plano', store.plan],
+                ['Mensalidade', money(store.monthlyPrice)],
+                ['Status', store.status],
+                ['Pedido minimo', money(store.minimumOrder)],
+                ['Taxa entrega', money(store.deliveryFee)],
+                ['Frete gratis acima', money(store.freeDeliveryAbove)],
+                ['Loja aberta', store.open ? 'Sim' : 'Nao'],
+                ['Promocoes', store.disablePromotions ? 'Desativadas' : 'Ativas'],
+                ['Categorias ocultas', store.disabledCategories || 'Nenhuma']
+              ].map(([label, value]) => (
+                <div className="detail-cell" key={label}>
+                  <span>{label}</span>
+                  <strong>{value}</strong>
+                </div>
+              ))}
             </div>
             <div className="finance-card">
-              <div className="panel-head"><div><p className="eyebrow">Integracao</p><h2>ERP / agente</h2></div><Cable size={18} /></div>
+              <div className="panel-head">
+                <div><p className="eyebrow">Integracao</p><h2>ERP / agente</h2></div>
+                <Cable size={18} />
+              </div>
               {detail.integration ? (
                 <>
                   <div className="quick-row"><span>Provedor</span><strong>{detail.integration.providerName || detail.integration.providerCode}</strong></div>
@@ -227,10 +316,14 @@ export default function StoreDetail({ storeId, onBack, onEditBrand, onDelete }) 
       {tab === 'catalogo' && (
         <section className="panel">
           <div className="panel-head">
-            <div><p className="eyebrow">Estoque sincronizado</p><h2>Catalogo</h2></div>
+            <div>
+              <p className="eyebrow">Estoque sincronizado</p>
+              <h2>Catalogo</h2>
+              <p>Fotos, EAN e busca manual de imagem por produto.</p>
+            </div>
             <label className="search"><Tags size={16} /><input value={productQuery} onChange={event => setProductQuery(event.target.value)} placeholder="Buscar produto" /></label>
           </div>
-          <div className="category-chips">
+          <div className="filter-chips">
             {[
               ['all', 'Todos'],
               ['without_image', 'Sem imagem'],
@@ -240,37 +333,28 @@ export default function StoreDetail({ storeId, onBack, onEditBrand, onDelete }) 
               <button key={id} type="button" className={productFilter === id ? 'active' : ''} onClick={() => setProductFilter(id)}>{label}</button>
             ))}
           </div>
-          <div className="table-scroll">
-            <table>
-              <thead><tr><th>Produto</th><th>EAN/SKU</th><th>Categoria</th><th>Preco</th><th>Estoque</th><th>Foto</th><th /></tr></thead>
-              <tbody>
-                {products.items.map(item => (
-                  <tr key={item.id}>
-                    <td>
-                      <div className="store-cell">
-                        <div style={{
-                          width: 42, height: 42, borderRadius: 8, backgroundSize: 'cover', backgroundPosition: 'center',
-                          backgroundImage: item.hasImage ? `url(${item.imageUrl})` : 'none', backgroundColor: '#eef2ef'
-                        }} />
-                        <span><strong>{item.name}</strong><small>{item.promo ? 'Promocao' : 'Preco normal'}</small></span>
-                      </div>
-                    </td>
-                    <td><code>{item.barcode || item.sku}</code></td>
-                    <td>{item.category}</td>
-                    <td><strong>{money(item.price)}</strong></td>
-                    <td>{item.stock} {item.unit}</td>
-                    <td>{item.hasImage ? 'Sim' : 'Pendente'}</td>
-                    <td>
-                      <button type="button" className="brand-edit" onClick={() => {
-                        setSelectedProduct(item);
-                        setImageSearch(item.name);
-                        setTab('buscar');
-                      }}><Search size={14} /> Buscar foto</button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="product-grid">
+            {products.items.map(item => (
+              <article className="product-tile" key={item.id}>
+                <div className="product-tile-media" style={{ backgroundImage: item.hasImage ? `url(${item.imageUrl})` : undefined }}>
+                  {!item.hasImage && <span>Sem foto</span>}
+                  {item.promo ? <b className="promo-tag">Promo</b> : null}
+                </div>
+                <div className="product-tile-body">
+                  <strong>{item.name}</strong>
+                  <code>{item.barcode || item.sku}</code>
+                  <div className="product-tile-meta">
+                    <span>{item.category}</span>
+                    <span>{money(item.price)}</span>
+                  </div>
+                  <button type="button" className="brand-edit" onClick={() => {
+                    setSelectedProduct(item);
+                    setImageSearch(item.name);
+                    setTab('buscar');
+                  }}><Search size={14} /> Buscar foto</button>
+                </div>
+              </article>
+            ))}
           </div>
           {!products.items.length && <div className="empty">Nenhum produto neste filtro.</div>}
         </section>
@@ -304,49 +388,55 @@ export default function StoreDetail({ storeId, onBack, onEditBrand, onDelete }) 
           <div className="panel-head">
             <div>
               <p className="eyebrow">Biblioteca central</p>
-              <h2>Buscar imagens (todas as fontes)</h2>
-              <p>Pesquise em Pinheiro, Atacadao, Carrefour e demais. Selecione o produto da loja e vincule a foto limpa correta.</p>
+              <h2>Buscar e vincular imagens</h2>
+              <p>Escolha o produto da loja, busque no banco e vincule uma foto limpa (sem logo de concorrente).</p>
             </div>
           </div>
-          <div className="overview-grid">
-            <div className="panel" style={{ boxShadow: 'none', border: '1px solid #e5e7eb' }}>
-              <div className="panel-head"><div><p className="eyebrow">Produto da loja</p><h2>Selecione para vincular</h2></div></div>
-              <label className="search"><Tags size={16} /><input value={productQuery} onChange={event => setProductQuery(event.target.value)} placeholder="Filtrar produtos sem foto" /></label>
-              <div className="category-chips" style={{ marginTop: 8 }}>
+          <div className="link-workspace">
+            <aside className="link-products">
+              <p className="eyebrow">Produto da loja</p>
+              <label className="search"><Tags size={16} /><input value={productQuery} onChange={event => setProductQuery(event.target.value)} placeholder="Filtrar produtos" /></label>
+              <div className="filter-chips compact">
                 <button type="button" className={productFilter === 'without_image' ? 'active' : ''} onClick={() => setProductFilter('without_image')}>Sem imagem</button>
                 <button type="button" className={productFilter === 'local_ean' ? 'active' : ''} onClick={() => setProductFilter('local_ean')}>EAN local</button>
                 <button type="button" className={productFilter === 'all' ? 'active' : ''} onClick={() => setProductFilter('all')}>Todos</button>
               </div>
-              <div className="table-scroll" style={{ maxHeight: 420, overflow: 'auto' }}>
-                <table>
-                  <tbody>
-                    {products.items.map(item => (
-                      <tr key={item.id} style={{ cursor: 'pointer', background: selectedProduct?.id === item.id ? '#e8f8f0' : undefined }} onClick={() => { setSelectedProduct(item); setImageSearch(item.name); }}>
-                        <td><strong>{item.name}</strong><br /><code>{item.barcode || item.sku}</code></td>
-                        <td>{item.category}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="link-product-list">
+                {products.items.map(item => (
+                  <button
+                    type="button"
+                    key={item.id}
+                    className={`link-product ${selectedProduct?.id === item.id ? 'active' : ''}`}
+                    onClick={() => { setSelectedProduct(item); setImageSearch(item.name); }}
+                  >
+                    <div className="link-product-thumb" style={{ backgroundImage: item.hasImage ? `url(${item.imageUrl})` : undefined }} />
+                    <span>
+                      <strong>{item.name}</strong>
+                      <code>{item.barcode || item.sku}</code>
+                    </span>
+                  </button>
+                ))}
               </div>
-              {selectedProduct && <div className="empty" style={{ marginTop: 8 }}>Selecionado: <strong>{selectedProduct.name}</strong></div>}
-            </div>
+            </aside>
 
-            <div className="panel" style={{ boxShadow: 'none', border: '1px solid #e5e7eb' }}>
+            <div className="link-results">
               <div className="panel-head">
-                <div><p className="eyebrow">Resultados do banco</p><h2>Imagens encontradas</h2></div>
+                <div>
+                  <p className="eyebrow">Resultados do banco</p>
+                  <h2>{selectedProduct ? `Fotos para ${selectedProduct.name}` : 'Imagens encontradas'}</h2>
+                </div>
                 <form className="search" onSubmit={event => { event.preventDefault(); runImageSearch(imageSearch); }}>
                   <Search size={16} />
                   <input value={imageSearch} onChange={event => setImageSearch(event.target.value)} placeholder="Ex.: picanha, tomate, coxao mole" />
                 </form>
               </div>
-              <div className="top-actions" style={{ marginBottom: 10 }}>
+              <div className="top-actions" style={{ marginBottom: 12, marginLeft: 0 }}>
                 <button type="button" className="accent small" disabled={searchingImages} onClick={() => runImageSearch(imageSearch)}>
                   {searchingImages ? 'Buscando...' : 'Buscar no banco'}
                 </button>
-                <small>{imageResults.aiEnabled ? 'IA OpenAI ativa na assimilacao automatica' : 'IA nao configurada (AIMERC_OPENAI_API_KEY) — busca manual disponivel'}</small>
+                <small>{imageResults.aiEnabled ? 'IA ativa na assimilacao automatica' : 'Configure a chave em Configuracoes para IA automatica'}</small>
               </div>
-              <div className="asset-grid">
+              <div className="asset-grid link-asset-grid">
                 {imageResults.items.map(item => (
                   <article className="asset-card" key={item.ean}>
                     <div className="asset-image"><img src={item.image} alt={item.description || item.ean} /></div>
@@ -355,64 +445,76 @@ export default function StoreDetail({ storeId, onBack, onEditBrand, onDelete }) 
                       <h3>{item.description || 'Sem descricao'}</h3>
                       <span>{item.sourceName || 'Fonte'}</span>
                       <button type="button" className="brand-edit" disabled={linking || !selectedProduct} onClick={() => linkImage(item)}>
-                        <Link2 size={14} /> Vincular ao produto
+                        <Link2 size={14} /> Vincular
                       </button>
                     </div>
                   </article>
                 ))}
               </div>
-              {!imageResults.items.length && <div className="empty">Nenhuma imagem para este termo. Tente "picanha", "tomate", "banana"...</div>}
+              {!imageResults.items.length && <div className="empty">Nenhuma imagem para este termo.</div>}
             </div>
           </div>
         </section>
       )}
 
       {tab === 'assimilar' && (
-        <section className="panel">
+        <section className="panel assimilate-panel">
           <div className="panel-head">
             <div>
               <p className="eyebrow">Assimilacao inteligente</p>
-              <h2>Fotos do catalogo</h2>
+              <h2>Vincular fotos ao catalogo</h2>
               <p>
-                1) EAN global: casamento automatico sem IA. 2) EAN local: agente de busca (Configuracoes)
-                com similaridade semantica, abreviacoes e preferencia por foto limpa.
+                1) EAN global casa sozinho. 2) EAN local: a IA le abreviaturas do ERP, busca foto limpa no banco
+                e rejeita embalagens com logo de concorrente.
               </p>
             </div>
             <button className="accent" disabled={assimilating} onClick={startAssimilate}>
               <Images size={16} /> {assimilating ? 'Em andamento...' : 'Iniciar assimilacao'}
             </button>
           </div>
-          <div className="finance-card" style={{ marginTop: 8 }}>
-            <div className="quick-row"><span>Status</span><strong>{job?.status || 'Aguardando'}</strong></div>
-            <div className="quick-row"><span>Fase</span><strong>{job?.phase === 'GLOBAL' ? 'EAN global (automatico)' : job?.phase === 'LOCAL_AI' ? 'EAN local (IA)' : job?.phase || '-'}</strong></div>
-            <div className="quick-row"><span>Progresso</span><strong>{percent}%</strong></div>
-            <div className="quick-row"><span>Analisados</span><strong>{job?.examined || 0} / {job?.total || 0}</strong></div>
-            <div className="quick-row"><span>Global automatico</span><strong>{job?.globalMatched || 0}</strong></div>
-            <div className="quick-row"><span>Local com IA</span><strong>{job?.localMatched || 0}</strong></div>
-            <div className="quick-row"><span>Sem match</span><strong>{job?.skipped || 0}</strong></div>
-            <div className="finance-track" style={{ marginTop: 14 }}>
-              <i style={{ width: `${percent}%`, display: 'block', height: '100%', background: 'currentColor' }} />
+
+          <div className="assimilate-board">
+            <div className="scan-progress assimilate-progress">
+              <div className="progress-orbit" style={{ background: `conic-gradient(var(--lime) ${percent}%, #e7ece7 0)` }}>
+                <div className="progress-number">
+                  <strong>{percent}%</strong>
+                  <span>{job?.status || 'Pronto'}</span>
+                </div>
+              </div>
+              <div className="progress-track"><i style={{ width: `${percent}%` }} /></div>
+              <div className="progress-stats">
+                <span><b>{job?.examined || 0}</b>Analisados</span>
+                <span><b>{job?.globalMatched || 0}</b>Global</span>
+                <span><b>{job?.localMatched || 0}</b>IA local</span>
+                <span><b>{job?.skipped || 0}</b>Sem match</span>
+              </div>
+              <div className="assimilate-meta">
+                <div className="quick-row"><span>Fase</span><strong><PhaseLabel phase={job?.phase} /></strong></div>
+                <div className="quick-row"><span>Fila</span><strong>{job?.examined || 0} / {job?.total || 0}</strong></div>
+                {job?.message && <small>{job.message}</small>}
+                {job?.error && <div className="error" style={{ marginTop: 10 }}>{job.error}</div>}
+              </div>
             </div>
-            {job?.message && <small style={{ display: 'block', marginTop: 10 }}>{job.message}</small>}
-            {job?.error && <div className="error" style={{ marginTop: 12 }}>{job.error}</div>}
+            <div className="assimilate-steps">
+              <article>
+                <b>01</b>
+                <strong>EAN global</strong>
+                <span>GTIN valido casa direto no banco, sem gastar token de IA.</span>
+              </article>
+              <article>
+                <b>02</b>
+                <strong>EAN local + IA</strong>
+                <span>Expande abreviaturas (PIC, COXAO, TOM...), compara legendas e escolhe foto limpa.</span>
+              </article>
+              <article>
+                <b>03</b>
+                <strong>Relatorio visual</strong>
+                <span>Mostra produto ↔ imagem vinculada com score e motivo.</span>
+              </article>
+            </div>
           </div>
-          {!!job?.samples?.length && (
-            <div className="table-scroll" style={{ marginTop: 16 }}>
-              <table>
-                <thead><tr><th>Produto da loja</th><th>Casa com</th><th>Metodo</th><th>Score</th></tr></thead>
-                <tbody>
-                  {job.samples.map(sample => (
-                    <tr key={`${sample.productId}-${sample.matchedEan}`}>
-                      <td><strong>{sample.name}</strong><br /><code>{sample.barcode || '-'}</code></td>
-                      <td>{sample.matchedDescription}<br /><code>{sample.matchedEan}</code><br /><small>{sample.reason || sample.sourceName}</small></td>
-                      <td>{sample.method || '-'}</td>
-                      <td>{sample.score}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+
+          <MatchReport samples={job?.samples || []} />
         </section>
       )}
     </div>

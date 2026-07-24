@@ -973,30 +973,11 @@ export async function storeReports(storeId) {
 export async function adminStoreDetail(storeId) {
   const store = await getStore(storeId);
   if (!store) return null;
-  const [summary, categories, imageStats, promoStats, integration, subscription] = await Promise.all([
+  const [summary, categories, products, promoStats, integration, subscription] = await Promise.all([
     dashboardSummary(storeId),
     listProductCategories(storeId, true),
-    query(`
-      SELECT
-        COUNT(*) FILTER (WHERE active=1)::int AS active_products,
-        COUNT(*) FILTER (WHERE active=1 AND promo=1)::int AS promo_products,
-        COUNT(*) FILTER (
-          WHERE active=1 AND EXISTS (
-            SELECT 1 FROM product_images pi WHERE pi.store_id=p.store_id AND pi.product_id=p.id
-          )
-        )::int AS with_image,
-        COUNT(*) FILTER (
-          WHERE active=1 AND NOT EXISTS (
-            SELECT 1 FROM product_images pi WHERE pi.store_id=p.store_id AND pi.product_id=p.id
-          )
-        )::int AS without_image,
-        COUNT(*) FILTER (
-          WHERE active=1 AND (
-            barcode IS NULL OR barcode = '' OR length(regexp_replace(barcode, '\\D', '', 'g')) < 8 OR barcode = sku
-          )
-        )::int AS local_ean
-      FROM products p WHERE store_id=$1
-    `, [storeId]),
+    // Mesma base do painel da loja (/api/products): inclui ocultos, inativos e categorias desabilitadas
+    listProducts(storeId, { includeHidden: true, includeInactive: true, includeDisabled: true }),
     query(`
       SELECT id, sku, barcode, name, category, price, old_price, stock, unit, promo, catalog_visible
       FROM products
@@ -1007,7 +988,15 @@ export async function adminStoreDetail(storeId) {
     getStoreIntegration(storeId),
     query('SELECT * FROM subscriptions WHERE store_id=$1 ORDER BY created_at DESC LIMIT 1', [storeId])
   ]);
-  const stats = imageStats.rows[0] || {};
+
+  // Contagem alinhada ao supermarket-dashboard (todos os produtos listados)
+  const withImage = products.filter(item => Boolean(item.hasStoredImage || item.hasCatalogImage)).length;
+  const localEan = products.filter(item => {
+    const barcode = String(item.barcode || '');
+    return !barcode || barcode.length < 8 || barcode === String(item.sku || '');
+  }).length;
+  const activeProducts = products.filter(item => item.active !== false);
+
   return {
     store,
     summary,
@@ -1022,11 +1011,13 @@ export async function adminStoreDetail(storeId) {
       nextDueDate: subscription.rows[0].next_due_date
     } : null,
     catalogStats: {
-      activeProducts: Number(stats.active_products || 0),
-      promoProducts: Number(stats.promo_products || 0),
-      withImage: Number(stats.with_image || 0),
-      withoutImage: Number(stats.without_image || 0),
-      localEan: Number(stats.local_ean || 0)
+      activeProducts: activeProducts.length,
+      totalProducts: products.length,
+      promoProducts: activeProducts.filter(item => item.promo).length,
+      withImage,
+      withoutImage: Math.max(0, products.length - withImage),
+      localEan,
+      storedImages: products.filter(item => item.hasStoredImage).length
     },
     promotions: promoStats.rows.map(row => ({
       id: row.id,
