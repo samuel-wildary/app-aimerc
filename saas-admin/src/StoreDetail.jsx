@@ -97,7 +97,13 @@ function MatchReport({ samples }) {
                 <em>{sample.sourceName || sample.method || 'catalogo'}</em>
               </div>
             </div>
-            {sample.reason ? <p className="match-reason">{sample.reason}</p> : null}
+            {sample.reason ? (
+              <p className="match-reason">
+                <b>{sample.method === 'openai-vision' || sample.method === 'openai-match' ? 'IA (foto+texto)' : sample.method === 'ean-global' ? 'EAN global' : 'Texto'}</b>
+                {' · '}
+                {sample.reason}
+              </p>
+            ) : null}
           </article>
         ))}
       </div>

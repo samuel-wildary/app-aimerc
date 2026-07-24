@@ -1,4 +1,5 @@
 import { normalizeCategory } from './categories.js';
+import { isWrongKindCandidate } from './ai-image-match.js';
 
 const PRODUCE_CATEGORIES = new Set([
   'Hortifruti',
@@ -137,27 +138,30 @@ export function extractHeadword(name) {
   return tokens[0] || null;
 }
 
-export function scoreDescriptionMatch(productName, description, headword) {
-  const product = normalizeMatchText(productName);
+export function scoreDescriptionMatch(productName, description, headword, product = null) {
+  const productText = normalizeMatchText(productName);
   const desc = normalizeMatchText(description);
-  if (!product || !desc || !headword) return 0;
+  if (!productText || !desc || !headword) return 0;
   if (!desc.includes(normalizeMatchText(headword))) return 0;
+  if (product && isWrongKindCandidate(product, description)) return 0;
 
-  const productTokens = new Set(product.split(' ').filter(token => token.length > 2 && !STOP_WORDS.has(token)));
+  const productTokens = new Set(productText.split(' ').filter(token => token.length > 2 && !STOP_WORDS.has(token)));
   const descTokens = new Set(desc.split(' ').filter(token => token.length > 2 && !STOP_WORDS.has(token)));
-  if (!productTokens.size || !descTokens.size) return 0.35;
+  if (!productTokens.size || !descTokens.size) return 0.2;
 
   let overlap = 0;
   for (const token of productTokens) {
     if (descTokens.has(token)) overlap += 1;
   }
   const jaccard = overlap / (productTokens.size + descTokens.size - overlap);
-  let score = 0.45 + jaccard * 0.5;
+  let score = 0.35 + jaccard * 0.45;
   if (desc.startsWith(normalizeMatchText(headword)) || desc.includes(` ${normalizeMatchText(headword)} `)) score += 0.08;
-  // Penaliza embalagens industrializadas quando o produto parece hortifruti a granel
-  if (/\b(sadia|perdigao|seara|swift|friboi|nestle|bauducco|cocacola)\b/.test(desc) && productTokens.size <= 3) {
-    score -= 0.25;
+
+  if (/\b(kg|granel|madura|branca)\b/.test(productText)) {
+    if (descTokens.size > 6) score -= 0.2;
+    if (/\b(oleo|essencia|nhoque|molho|ml|shampoo|creme)\b/.test(desc)) return 0;
   }
+  if (/\b(sadia|perdigao|seara|swift|friboi|nestle|bauducco|alyne)\b/.test(desc)) score -= 0.4;
   return Math.max(0, Math.min(1, score));
 }
 
@@ -235,6 +239,13 @@ export async function findCatalogCandidates(product, options = {}) {
     )`);
   }
 
+  const produceLike = isProduceLikeCategory(product?.category);
+  const rejectIndustrial = produceLike
+    ? `AND NOT (
+         description ~* '(oleo|óleo|essencia|essência|shampoo|nhoque|molho|ketchup|maionese|detergente|shampoo|creme|perfume|\\y[0-9]+\\s*ml\\y|chips|pure|purê)'
+       )`
+    : '';
+
   const result = await dbQuery(`
     SELECT ean, description, source_name, content_type, byte_size
     FROM catalog_assets
@@ -242,43 +253,71 @@ export async function findCatalogCandidates(product, options = {}) {
       AND content_type <> 'image/svg+xml'
       AND byte_size > 5000
       AND (${likeClauses.join(' OR ')})
+      ${rejectIndustrial}
     ORDER BY byte_size DESC
     LIMIT ${options.limit || 40}
   `, values);
 
-  return result.rows.map(row => ({
-    ean: row.ean,
-    description: row.description,
-    sourceName: row.source_name,
-    contentType: row.content_type,
-    byteSize: Number(row.byte_size)
-  }));
+  return result.rows
+    .map(row => ({
+      ean: row.ean,
+      description: row.description,
+      sourceName: row.source_name,
+      contentType: row.content_type,
+      byteSize: Number(row.byte_size)
+    }))
+    .filter(item => !isWrongKindCandidate(product, item.description));
 }
 
 /**
  * Busca no catalog_assets uma imagem compatível.
- * Com AIMERC_OPENAI_API_KEY usa IA para escolher entre candidatos.
+ * Com chave OpenAI: analisa foto + descricao (visao). Sem chave: só match textual estrito.
  */
 export async function findCatalogMatchByName(product, options = {}) {
-  const minScore = options.minScore ?? 0.52;
+  const minScore = options.minScore ?? 0.72;
   const name = product?.name || product?.catalogName || product?.sourceName || '';
   const local = isLocalBarcode(product.barcode, product.sku);
   const produceLike = isProduceLikeCategory(product.category);
   if (!local && !produceLike && !options.force) return null;
 
-  const candidates = await findCatalogCandidates(product, { limit: options.candidateLimit || 40 });
+  let candidates = await findCatalogCandidates(product, { limit: options.candidateLimit || 40 });
+  candidates = candidates.filter(item => !isWrongKindCandidate(product, item.description));
   if (!candidates.length) return null;
 
   const { chooseCatalogMatchWithAi, resolveAiCredentials } = await import('./ai-image-match.js');
   const creds = await resolveAiCredentials();
   if (creds.configured && options.useAi !== false) {
     try {
-      const aiMatch = await chooseCatalogMatchWithAi(product, candidates, {
-        minConfidence: options.minConfidence ?? 0.62
+      const eans = candidates.slice(0, 8).map(item => item.ean);
+      const withImages = (await dbQuery(
+        `SELECT ean, description, source_name, content_type, image_data
+         FROM catalog_assets
+         WHERE ean = ANY($1::text[]) AND content_type <> 'image/svg+xml'`,
+        [eans]
+      )).rows;
+      const byEan = new Map(withImages.map(row => [String(row.ean), row]));
+      const visionCandidates = candidates.slice(0, 8).map(item => {
+        const row = byEan.get(String(item.ean));
+        return {
+          ...item,
+          description: row?.description || item.description,
+          sourceName: row?.source_name || item.sourceName,
+          contentType: row?.content_type || item.contentType,
+          imageData: row?.image_data || null
+        };
+      }).filter(item => !isWrongKindCandidate(product, item.description));
+
+      const aiMatch = await chooseCatalogMatchWithAi(product, visionCandidates, {
+        minConfidence: options.minConfidence ?? 0.72,
+        visionLimit: 6
       });
       if (aiMatch) return aiMatch;
+      // Com IA ativa, nao cai no fallback burro por palavra (banana → oleo de banana).
+      return null;
     } catch (error) {
       console.error('[AI-MATCH]', error.message);
+      // Falha de API: nao inventa vinculo errado
+      return null;
     }
   }
 
@@ -286,7 +325,7 @@ export async function findCatalogMatchByName(product, options = {}) {
   if (!headword) return null;
   let best = null;
   for (const row of candidates) {
-    const score = scoreDescriptionMatch(name, row.description, headword) + preferredSourceBoost(row.sourceName);
+    const score = scoreDescriptionMatch(name, row.description, headword, product) + preferredSourceBoost(row.sourceName);
     if (!best || score > best.score) {
       best = {
         ean: row.ean,
@@ -294,7 +333,8 @@ export async function findCatalogMatchByName(product, options = {}) {
         sourceName: row.sourceName,
         score,
         headword,
-        method: 'name-match'
+        method: 'name-match',
+        reason: 'Match textual estrito (IA nao configurada)'
       };
     }
   }
@@ -461,8 +501,10 @@ export async function assimilateStoreCatalogImages(storeId, {
             sourceName: match.sourceName,
             score: Number(match.score.toFixed(3)),
             headword: match.headword,
-            method: match.method || 'openai-match',
-            reason: match.reason || 'Match semantico EAN local',
+            method: match.method || 'openai-vision',
+            reason: match.reason || (match.method === 'name-match'
+              ? 'Match textual estrito (IA nao configurada)'
+              : 'IA analisou foto e descricao'),
             catalogImagePath: `/public/catalog-library/${encodeURIComponent(match.ean)}/image`
           });
         }

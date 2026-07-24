@@ -62,6 +62,11 @@ export const PRODUCT_ABBREVIATIONS = {
   pct: ''
 };
 
+/** Descrições que NÃO servem para hortifruti/frigorífico a granel. */
+const INDUSTRIAL_DESC_RE = /\b(oleo|óleo|essencia|essência|shampoo|condicionador|creme|perfume|colonia|colônia|sabonete|desodorante|nhoque|ravioli|massa|molho|ketchup|maionese|tempero pronto|caldo|sopa|instantaneo|instantâneo|conserva|enlatado|sach[eê]|capsula|cápsula|detergente|desinfetante|amaciante|ração|racao|petisco|biscoito|bolacha|chocolate|balas?|chiclete|refrigerante|suco|néctar|nectar|iogurte|sorvete|pizza|hamburguer|hambúrguer|salgadinho|snack|farinha|mistura|pronta|processad|industrial|alyne|nestle|bauducco|hellmanns|knorr|maggi)\b/i;
+const VOLUME_INDUSTRIAL_RE = /\b(\d+\s*ml|\d+\s*l\b|30ml|50ml|100ml|200ml|250ml|500ml|1l|2l)\b/i;
+const PACKAGED_FOOD_RE = /\b(pacote|embalagem|bandeja vacuum|marca |ltda|sa\b)\b/i;
+
 export function openaiConfigured() {
   return Boolean(String(process.env.AIMERC_OPENAI_API_KEY || process.env.OPENAI_API_KEY || '').trim());
 }
@@ -81,11 +86,6 @@ export async function resolveAiCredentials() {
     configured: Boolean(apiKey),
     source: apiKey ? 'env' : 'none'
   };
-}
-
-async function openaiConfiguredAsync() {
-  const creds = await resolveAiCredentials();
-  return creds.configured;
 }
 
 export function expandProductQuery(name = '', category = '') {
@@ -113,9 +113,6 @@ export function expandProductQuery(name = '', category = '') {
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase();
   if (/frigor|acoug|carne|peix|aves/.test(categoryHint)) expanded.add('carne');
-  if (/horti|fruta|legume|verdura/.test(categoryHint)) {
-    // sem forçar palavra genérica demais
-  }
   return {
     original: raw,
     terms: [...expanded].slice(0, 8)
@@ -123,49 +120,127 @@ export function expandProductQuery(name = '', category = '') {
 }
 
 /**
- * Usa o modelo para escolher o melhor EAN entre candidatos,
- * rejeitando embalagens com marca/logo de rede ou produto errado.
+ * Rejeita candidatos absurdos (óleo de banana para banana kg, nhoque para batata, etc.).
+ */
+export function isWrongKindCandidate(product, description = '') {
+  const category = String(product?.category || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+  const produceLike = /horti|fruta|legume|verdura|frigor|acoug|carne|peix|ovos|padaria/.test(category);
+  if (!produceLike) return false;
+
+  const desc = String(description || '');
+  const name = String(product?.name || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+  const bulkFresh = /\b(kg|granel|in natura|madura|verde|branca|doce)\b/.test(name) || name.split(/\s+/).length <= 4;
+
+  if (!bulkFresh) return false;
+  if (INDUSTRIAL_DESC_RE.test(desc)) return true;
+  if (VOLUME_INDUSTRIAL_RE.test(desc)) return true;
+
+  // "oleo de banana", "essencia de banana" etc. — headword aparece mas produto é outro
+  const head = expandProductQuery(product.name, product.category).terms[0] || '';
+  if (head && new RegExp(`\\b(oleo|óleo|essencia|essência|aroma|extrato|xarope)\\s+(de\\s+)?${head}\\b`, 'i').test(desc)) {
+    return true;
+  }
+  if (head === 'batata' && /\b(nhoque|chips|palha|frita|palitos|pure|purê)\b/i.test(desc)) return true;
+  if (head === 'banana' && !/\b(banana|nanica|prata|maca|maçã|terra)\b/i.test(desc)) return true;
+  if (PACKAGED_FOOD_RE.test(desc) && /\b(nhoque|massa|molho|oleo|óleo)\b/i.test(desc)) return true;
+  return false;
+}
+
+function bufferToDataUrl(buffer, contentType = 'image/jpeg') {
+  if (!buffer) return null;
+  const buf = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer);
+  if (buf.length < 800) return null;
+  // Fotos grandes demais para o request: ainda assim envia ate ~1.2MB (detail low)
+  if (buf.length > 1_200_000) return null;
+  const mime = String(contentType || 'image/jpeg').includes('png')
+    ? 'image/png'
+    : String(contentType || '').includes('webp')
+      ? 'image/webp'
+      : 'image/jpeg';
+  return `data:${mime};base64,${buf.toString('base64')}`;
+}
+
+/**
+ * Usa o modelo (com visão das fotos) para escolher o melhor EAN.
  */
 export async function chooseCatalogMatchWithAi(product, candidates, options = {}) {
   const creds = await resolveAiCredentials();
   if (!creds.configured || !candidates?.length) return null;
   const model = options.model || creds.model || 'gpt-4o-mini';
-  const list = candidates.slice(0, 12).map((item, index) => ({
+
+  const filtered = candidates.filter(item => !isWrongKindCandidate(product, item.description));
+  if (!filtered.length) return null;
+
+  const shortlist = filtered.slice(0, options.visionLimit || 6);
+  const list = shortlist.map((item, index) => ({
     index: index + 1,
     ean: item.ean,
     description: item.description,
     source: item.sourceName || item.source_name || ''
   }));
 
+  const userContent = [
+    {
+      type: 'text',
+      text: [
+        'Produto da loja (EAN local / a granel):',
+        JSON.stringify({
+          name: product.name,
+          category: product.category || '',
+          barcode: product.barcode || '',
+          sku: product.sku || '',
+          expandedTerms: expandProductQuery(product.name, product.category).terms
+        }, null, 2),
+        '',
+        'Candidatos do banco (veja as fotos anexadas na mesma ordem). Escolha SOMENTE se for o mesmo produto fresco/corte.',
+        JSON.stringify(list, null, 2),
+        '',
+        'Responda SOMENTE JSON: {"ean":"string|null","confidence":0-1,"reason":"texto curto"}'
+      ].join('\n')
+    }
+  ];
+
+  for (let i = 0; i < shortlist.length; i += 1) {
+    const item = shortlist[i];
+    const dataUrl = bufferToDataUrl(item.imageData || item.image_data, item.contentType || item.content_type);
+    userContent.push({
+      type: 'text',
+      text: `Foto do candidato ${i + 1} (EAN ${item.ean}): ${item.description || 'sem descricao'}`
+    });
+    if (dataUrl) {
+      userContent.push({
+        type: 'image_url',
+        image_url: { url: dataUrl, detail: 'low' }
+      });
+    }
+  }
+
   const payload = {
     model,
-    temperature: 0.1,
+    temperature: 0,
     response_format: { type: 'json_object' },
     messages: [
       {
         role: 'system',
-        content: `Voce e um especialista em catalogo de supermercado brasileiro.
-Sua tarefa: escolher a melhor imagem de catalogo para um produto da loja (EAN interno/local).
-Regras:
-1. O produto deve ser o MESMO item (corte de carne, fruta, legume). Nomes de ERP costumam vir abreviados — expanda mentalmente (PIC/PICN=picanha, ALCT=alcatra, CFILE=contra file, COXAO/COXM=coxao, TOM=tomate, BAT=batata, FRANG=frango, etc.).
-2. Leia a descricao completa do candidato e a fonte; priorize similaridade semantica com o nome expandido do produto.
-3. Prefira fotos limpas de produto a granel (hortifruti/carne). REJEITE embalagens com logo/marca de rede concorrente (Pinheiro, Atacadao, Carrefour, Pao de Acucar, Guara, Sao Luiz) ou artes promocionais da loja.
-4. Se a descricao indicar molho, tempero pronto, industrializado ou item diferente, rejeite.
-5. Se nao houver candidato seguro, retorne ean null.
-6. Responda SOMENTE JSON: {"ean":"string|null","confidence":0-1,"reason":"texto curto explicando o vinculo"}`
+        content: `Voce e um especialista em catalogo de supermercado brasileiro e analisa FOTO + descricao.
+Tarefa: vincular produto da loja (quase sempre a granel com EAN interno) a uma foto limpa do banco.
+
+Regras OBRIGATORIAS:
+1. O item tem que ser o MESMO produto. "BANANA kg" / "BANANA MADURA" = fruta banana fresca. NUNCA oleo, essencia, shampoo ou aroma de banana.
+2. "BATATA BRANCA kg" = batata in natura. NUNCA nhoque, chips, pure industrial, massa.
+3. Nomes de ERP vem abreviados (PIC=picanha, COXAO=coxao, TOM=tomate, BAT=batata). Expanda antes de comparar.
+4. Olhe a imagem: se for embalagem industrial, frasco, pote cosmestico, pacote de massa/molho → rejeite.
+5. Prefira fotos limpas de hortifruti/carne a granel, sem logo de rede concorrente (Pinheiro, Atacadao, Carrefour, Pao de Acucar, Guara, Sao Luiz).
+6. Se nenhum candidato for seguro, retorne ean null (nao chute).
+7. Responda SOMENTE JSON: {"ean":"string|null","confidence":0-1,"reason":"texto curto"}`
       },
-      {
-        role: 'user',
-        content: JSON.stringify({
-          product: {
-            name: product.name,
-            category: product.category || '',
-            barcode: product.barcode || '',
-            sku: product.sku || ''
-          },
-          candidates: list
-        })
-      }
+      { role: 'user', content: userContent }
     ]
   };
 
@@ -176,11 +251,11 @@ Regras:
       'Content-Type': 'application/json'
     },
     body: JSON.stringify(payload),
-    signal: AbortSignal.timeout(45_000)
+    signal: AbortSignal.timeout(90_000)
   });
   if (!response.ok) {
     const text = await response.text().catch(() => '');
-    throw new Error(`OpenAI respondeu HTTP ${response.status}: ${text.slice(0, 200)}`);
+    throw new Error(`OpenAI respondeu HTTP ${response.status}: ${text.slice(0, 240)}`);
   }
   const data = await response.json();
   const content = data.choices?.[0]?.message?.content || '{}';
@@ -192,16 +267,17 @@ Regras:
   }
   const ean = parsed?.ean ? String(parsed.ean) : null;
   const confidence = Number(parsed?.confidence || 0);
-  if (!ean || confidence < (options.minConfidence ?? 0.62)) return null;
-  const winner = candidates.find(item => String(item.ean) === ean);
+  if (!ean || confidence < (options.minConfidence ?? 0.72)) return null;
+  const winner = shortlist.find(item => String(item.ean) === ean) || filtered.find(item => String(item.ean) === ean);
   if (!winner) return null;
+  if (isWrongKindCandidate(product, winner.description)) return null;
   return {
     ean: winner.ean,
     description: winner.description,
     sourceName: winner.sourceName || winner.source_name || '',
     score: confidence,
     headword: expandProductQuery(product.name, product.category).terms[0] || 'ai',
-    method: 'openai-match',
-    reason: String(parsed.reason || '')
+    method: 'openai-vision',
+    reason: String(parsed.reason || 'IA analisou foto e descricao')
   };
 }
