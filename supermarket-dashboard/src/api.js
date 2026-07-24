@@ -48,6 +48,12 @@ export class ApiClient {
       body: JSON.stringify(product)
     });
   }
+  assimilateImages(limit = 400) {
+    return this.request('/products/assimilate-images', {
+      method: 'POST',
+      body: JSON.stringify({ limit, onlyLocalBarcode: true })
+    });
+  }
   async uploadProductImage(productId, file) {
     const response = await fetch(`${API_URL}/sync/product-images/${encodeURIComponent(productId)}`, {
       method: 'POST',

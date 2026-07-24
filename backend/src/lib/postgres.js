@@ -748,6 +748,12 @@ export function initializePostgres() {
   if (!initialization) {
     initialization = (async () => {
       await pool.query(schema);
+      try {
+        await pool.query(`ALTER TABLE stores ADD COLUMN IF NOT EXISTS disabled_categories TEXT NOT NULL DEFAULT ''`);
+        await pool.query(`ALTER TABLE stores ADD COLUMN IF NOT EXISTS disable_promotions INTEGER NOT NULL DEFAULT 0`);
+      } catch (err) {
+        console.error('[MIGRATION] Erro ao adicionar novas colunas em stores:', err.message);
+      }
       seedVirtualAssets().catch(err => console.error('[SEED] Erro em seedVirtualAssets:', err.message));
     })();
   }

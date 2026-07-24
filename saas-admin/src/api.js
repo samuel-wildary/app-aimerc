@@ -32,6 +32,12 @@ class AdminApi {
   startCatalogScan(data) { return this.request('/admin/catalog-library/scans', { method: 'POST', body: JSON.stringify(data) }); }
   cancelCatalogScan() { return this.request('/admin/catalog-library/scans/cancel', { method: 'POST' }); }
   deleteCatalogAsset(ean) { return this.request(`/admin/catalog-library/${encodeURIComponent(ean)}`, { method: 'DELETE' }); }
+  assimilateStoreImages(storeId, limit = 500) {
+    return this.request(`/admin/stores/${encodeURIComponent(storeId)}/assimilate-images`, {
+      method: 'POST',
+      body: JSON.stringify({ limit, onlyLocalBarcode: true })
+    });
+  }
   integrationProviders() { return this.request('/admin/integration-providers'); }
   integrations() { return this.request('/admin/integrations'); }
   saveIntegration(storeId, data) { return this.request(`/admin/stores/${storeId}/integration`, { method: 'PUT', body: JSON.stringify(data) }); }

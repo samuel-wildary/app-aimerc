@@ -79,6 +79,7 @@ import { integrationProvider, integrationProviders, publicIntegrationProvider } 
 import { encryptIntegrationSecret } from './lib/store-integration.js';
 import { normalizeCategory } from './lib/categories.js';
 import { ApiError, normalizeEmail, oneOf, optionalText, positiveNumber, requiredText, slugify } from './lib/validation.js';
+import { assimilateStoreCatalogImages } from './lib/catalog-image-match.js';
 
 const app = express();
 const PORT = Number(process.env.PORT || 4100);
@@ -892,6 +893,36 @@ app.post('/api/admin/catalog-library/reseed-virtual', requireAuth('PLATFORM_ADMI
   const seeded = await seedVirtualAssets({ force: true });
   await writeAuditLog({ actorId: req.user.sub, action: 'CATALOG_VIRTUAL_RESEED', entityType: 'CATALOG_ASSET', metadata: { seeded } });
   res.json({ success: true, seeded });
+}));
+
+app.post('/api/admin/stores/:id/assimilate-images', requireAuth('PLATFORM_ADMIN'), asyncRoute(async (req, res) => {
+  const store = await getStore(req.params.id);
+  if (!store) throw new ApiError(404, 'Supermercado nao encontrado');
+  const limit = Math.min(2000, Math.max(1, Number(req.body?.limit || 400)));
+  const summary = await assimilateStoreCatalogImages(store.id, { limit, onlyLocalBarcode: req.body?.onlyLocalBarcode !== false });
+  await writeAuditLog({
+    storeId: store.id,
+    actorId: req.user.sub,
+    action: 'STORE_IMAGES_ASSIMILATED',
+    entityType: 'STORE',
+    entityId: store.id,
+    metadata: { examined: summary.examined, matched: summary.matched, skipped: summary.skipped }
+  });
+  res.json({ success: true, store: { id: store.id, name: store.name }, ...summary });
+}));
+
+app.post('/api/products/assimilate-images', requireAuth('STORE_MANAGER'), asyncRoute(async (req, res) => {
+  const limit = Math.min(2000, Math.max(1, Number(req.body?.limit || 400)));
+  const summary = await assimilateStoreCatalogImages(req.user.storeId, { limit, onlyLocalBarcode: req.body?.onlyLocalBarcode !== false });
+  await writeAuditLog({
+    storeId: req.user.storeId,
+    actorId: req.user.sub,
+    action: 'STORE_IMAGES_ASSIMILATED',
+    entityType: 'STORE',
+    entityId: req.user.storeId,
+    metadata: { examined: summary.examined, matched: summary.matched, skipped: summary.skipped }
+  });
+  res.json({ success: true, ...summary });
 }));
 
 app.delete('/api/admin/catalog-library/:ean', requireAuth('PLATFORM_ADMIN'), asyncRoute(async (req, res) => {

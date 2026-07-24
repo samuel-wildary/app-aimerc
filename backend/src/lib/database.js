@@ -482,7 +482,7 @@ export async function listProducts(storeId, filters = {}) {
   });
 
   let filteredList = products;
-  if (disabledCats.size > 0) {
+  if (!filters.includeDisabled && disabledCats.size > 0) {
     filteredList = filteredList.filter(p => !disabledCats.has(p.category.toLowerCase()));
   }
 
@@ -567,7 +567,7 @@ export async function updateProductCatalog(storeId, productId, input) {
   return result.rowCount ? getProduct(storeId, productId) : null;
 }
 
-export async function listProductCategories(storeId) {
+export async function listProductCategories(storeId, includeDisabled = false) {
   const store = await getStore(storeId);
   const disabledCats = new Set(
     String(store?.disabledCategories || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
@@ -578,7 +578,7 @@ export async function listProductCategories(storeId) {
   const totals = new Map();
   for (const row of result.rows) {
     const name = normalizeCategory(row.name);
-    if (disabledCats.has(name.toLowerCase())) continue;
+    if (!includeDisabled && disabledCats.has(name.toLowerCase())) continue;
     totals.set(name, (totals.get(name) || 0) + Number(row.total));
   }
   return [...totals].map(([name, total]) => ({ name, total })).sort((left, right) => left.name.localeCompare(right.name, 'pt-BR'));

@@ -3,6 +3,7 @@ import dns from 'node:dns/promises';
 import net from 'node:net';
 import { query } from './postgres.js';
 import { getVirtualEan } from './database.js';
+import { findCatalogMatchByName, isLocalBarcode, isProduceLikeCategory } from './catalog-image-match.js';
 
 const maxImageBytes = 10 * 1024 * 1024;
 const allowedTypes = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif']);
@@ -71,6 +72,28 @@ export async function productImage(storeId, product) {
   if (databaseImage) return databaseImage;
   const catalogImage = await readCatalogImage(product.barcode);
   if (catalogImage) return catalogImage;
+
+  // EAN local / hortifruti / frigorífico: tenta foto real do catálogo (Pinheiro, Atacadão, etc.)
+  // pelo nome do produto, antes do fallback SVG.
+  const shouldNameMatch = isLocalBarcode(product.barcode, product.sku) || isProduceLikeCategory(product.category);
+  if (shouldNameMatch) {
+    try {
+      const match = await findCatalogMatchByName(product);
+      if (match?.ean) {
+        const matchedImage = await readCatalogImage(match.ean);
+        if (matchedImage && matchedImage.contentType !== 'image/svg+xml') {
+          await writeDatabaseImage(
+            storeId,
+            product.id,
+            matchedImage.data,
+            matchedImage.contentType,
+            `name-match:${match.ean}:${match.headword}`
+          );
+          return matchedImage;
+        }
+      }
+    } catch (_) {}
+  }
 
   const virtualEan = getVirtualEan(product.name, product.category);
   if (virtualEan) {
