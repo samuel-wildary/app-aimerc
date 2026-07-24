@@ -1010,6 +1010,8 @@ app.post('/api/admin/stores/:id/assimilate-images', requireAuth('PLATFORM_ADMIN'
     return;
   }
   const limit = Math.min(2000, Math.max(1, Number(req.body?.limit || 500)));
+  const category = String(req.body?.category || '').trim();
+  const onlyLocalBarcode = req.body?.onlyLocalBarcode !== false || Boolean(category);
   const jobId = `assim_${crypto.randomUUID().slice(0, 12)}`;
   const job = {
     id: jobId,
@@ -1017,7 +1019,9 @@ app.post('/api/admin/stores/:id/assimilate-images', requireAuth('PLATFORM_ADMIN'
     storeName: store.name,
     status: 'RUNNING',
     percent: 0,
-    phase: 'GLOBAL',
+    phase: onlyLocalBarcode || category ? 'LOCAL_AI' : 'GLOBAL',
+    category: category || null,
+    onlyLocalBarcode,
     examined: 0,
     matched: 0,
     skipped: 0,
@@ -1026,7 +1030,9 @@ app.post('/api/admin/stores/:id/assimilate-images', requireAuth('PLATFORM_ADMIN'
     total: 0,
     samples: [],
     error: '',
-    message: 'Iniciando assimilacao',
+    message: category
+      ? `Iniciando assimilacao EAN local · ${category}`
+      : 'Iniciando assimilacao',
     startedAt: new Date().toISOString(),
     finishedAt: null
   };
@@ -1047,11 +1053,15 @@ app.post('/api/admin/stores/:id/assimilate-images', requireAuth('PLATFORM_ADMIN'
   assimilateStoreCatalogImages(store.id, {
     limit,
     useAi: req.body?.useAi !== false,
+    category,
+    onlyLocalBarcode,
     onProgress: progress => {
       Object.assign(job, {
         status: progress.status || 'RUNNING',
         percent: progress.percent || 0,
         phase: progress.phase || job.phase,
+        category: progress.category ?? job.category,
+        onlyLocalBarcode: progress.onlyLocalBarcode ?? job.onlyLocalBarcode,
         examined: progress.examined || 0,
         matched: progress.matched || 0,
         skipped: progress.skipped || 0,
@@ -1067,6 +1077,8 @@ app.post('/api/admin/stores/:id/assimilate-images', requireAuth('PLATFORM_ADMIN'
       status: 'COMPLETED',
       percent: 100,
       phase: 'DONE',
+      category: summary.category ?? job.category,
+      onlyLocalBarcode: summary.onlyLocalBarcode ?? job.onlyLocalBarcode,
       examined: summary.examined,
       matched: summary.matched,
       skipped: summary.skipped,

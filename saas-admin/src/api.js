@@ -39,10 +39,10 @@ class AdminApi {
   startCatalogScan(data) { return this.request('/admin/catalog-library/scans', { method: 'POST', body: JSON.stringify(data) }); }
   cancelCatalogScan() { return this.request('/admin/catalog-library/scans/cancel', { method: 'POST' }); }
   deleteCatalogAsset(ean) { return this.request(`/admin/catalog-library/${encodeURIComponent(ean)}`, { method: 'DELETE' }); }
-  assimilateStoreImages(storeId, limit = 500) {
+  assimilateStoreImages(storeId, { limit = 500, category = '', onlyLocalBarcode = true } = {}) {
     return this.request(`/admin/stores/${encodeURIComponent(storeId)}/assimilate-images`, {
       method: 'POST',
-      body: JSON.stringify({ limit, onlyLocalBarcode: true })
+      body: JSON.stringify({ limit, category, onlyLocalBarcode })
     });
   }
   assimilateJob(storeId, jobId) {

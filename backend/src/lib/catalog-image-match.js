@@ -10,6 +10,9 @@ const PRODUCE_CATEGORIES = new Set([
   'Padaria industrial'
 ]);
 
+/** Categorias tipicas de EAN local para o seletor do SaaS. */
+export const LOCAL_AI_CATEGORIES = [...PRODUCE_CATEGORIES];
+
 const STOP_WORDS = new Set([
   'de', 'da', 'do', 'das', 'dos', 'com', 'sem', 'kg', 'g', 'un', 'und', 'pct', 'pc',
   'pacote', 'bandeja', 'fresco', 'fresca', 'frescos', 'frescas', 'resfriado', 'resfriada',
@@ -318,10 +321,17 @@ export async function linkCatalogImageToProduct(storeId, productId, catalogEan) 
 export async function assimilateStoreCatalogImages(storeId, {
   limit = 800,
   onProgress = null,
-  useAi = true
+  useAi = true,
+  category = '',
+  onlyLocalBarcode = false
 } = {}) {
+  const categoryFilter = category && category !== 'Todos' ? normalizeCategory(category) : '';
+  // Com categoria (hortifruti/frigorifico) o foco e EAN local + IA; sem gastar tempo em arroz/mercearia global
+  const localOnlyMode = Boolean(onlyLocalBarcode || categoryFilter);
+
   const products = (await dbQuery(`
-    SELECT p.id, p.sku, p.barcode, p.name, p.category, p.image
+    SELECT p.id, p.sku, p.barcode, p.name, p.category, p.image,
+           COALESCE(NULLIF(p.catalog_category,''), p.source_category, p.category) AS resolved_category
     FROM products p
     WHERE p.store_id = $1 AND p.active = 1
       AND (
@@ -341,12 +351,18 @@ export async function assimilateStoreCatalogImages(storeId, {
       )
     ORDER BY p.name
     LIMIT $2
-  `, [storeId, limit])).rows;
+  `, [storeId, Math.max(limit * 3, 800)])).rows
+    .map(row => ({
+      ...row,
+      category: normalizeCategory(row.resolved_category || row.category)
+    }))
+    .filter(row => !categoryFilter || row.category === categoryFilter)
+    .slice(0, limit);
 
-  const globalProducts = products.filter(p => !isLocalBarcode(p.barcode, p.sku));
-  const localProducts = products.filter(p => isLocalBarcode(p.barcode, p.sku) || isProduceLikeCategory(p.category));
-  // avoid double-processing produce with global barcode in local phase
-  const localOnly = localProducts.filter(p => isLocalBarcode(p.barcode, p.sku));
+  const globalProducts = localOnlyMode
+    ? []
+    : products.filter(p => !isLocalBarcode(p.barcode, p.sku));
+  const localOnly = products.filter(p => isLocalBarcode(p.barcode, p.sku));
 
   const summary = {
     examined: 0,
@@ -355,7 +371,9 @@ export async function assimilateStoreCatalogImages(storeId, {
     globalMatched: 0,
     localMatched: 0,
     total: globalProducts.length + localOnly.length,
-    phase: 'GLOBAL',
+    phase: localOnlyMode ? 'LOCAL_AI' : 'GLOBAL',
+    category: categoryFilter || null,
+    onlyLocalBarcode: localOnlyMode,
     samples: []
   };
 
@@ -365,44 +383,50 @@ export async function assimilateStoreCatalogImages(storeId, {
       onProgress({ ...summary, percent, status: 'RUNNING', ...extra });
     }
   };
-  report({ phase: 'GLOBAL', message: 'Casando EAN global automaticamente (sem IA)' });
 
-  for (const product of globalProducts) {
-    summary.examined += 1;
-    summary.phase = 'GLOBAL';
-    const ean = String(product.barcode || '').replace(/\D/g, '');
-    const asset = (await dbQuery(
-      `SELECT ean, description, source_name, content_type, image_data
-       FROM catalog_assets
-       WHERE ean = $1 AND content_type <> 'image/svg+xml'`,
-      [ean]
-    )).rows[0];
-    if (!asset?.image_data) {
-      summary.skipped += 1;
-    } else {
-      await writeImageFn(storeId, product.id, asset.image_data, asset.content_type, `ean-global:${ean}`);
-      summary.matched += 1;
-      summary.globalMatched += 1;
-      if (summary.samples.length < 40) {
-        summary.samples.push({
-          productId: product.id,
-          name: product.name,
-          category: product.category,
-          barcode: product.barcode,
-          matchedEan: asset.ean,
-          matchedDescription: asset.description,
-          sourceName: asset.source_name,
-          score: 1,
-          method: 'ean-global',
-          reason: 'Match automatico por EAN/GTIN global',
-          catalogImagePath: `/public/catalog-library/${encodeURIComponent(asset.ean)}/image`
-        });
+  if (!localOnlyMode) {
+    report({ phase: 'GLOBAL', message: 'Casando EAN global automaticamente (sem IA)' });
+    for (const product of globalProducts) {
+      summary.examined += 1;
+      summary.phase = 'GLOBAL';
+      const ean = String(product.barcode || '').replace(/\D/g, '');
+      const asset = (await dbQuery(
+        `SELECT ean, description, source_name, content_type, image_data
+         FROM catalog_assets
+         WHERE ean = $1 AND content_type <> 'image/svg+xml'`,
+        [ean]
+      )).rows[0];
+      if (!asset?.image_data) {
+        summary.skipped += 1;
+      } else {
+        await writeImageFn(storeId, product.id, asset.image_data, asset.content_type, `ean-global:${ean}`);
+        summary.matched += 1;
+        summary.globalMatched += 1;
+        if (summary.samples.length < 40) {
+          summary.samples.push({
+            productId: product.id,
+            name: product.name,
+            category: product.category,
+            barcode: product.barcode,
+            matchedEan: asset.ean,
+            matchedDescription: asset.description,
+            sourceName: asset.source_name,
+            score: 1,
+            method: 'ean-global',
+            reason: 'Match automatico por EAN/GTIN global',
+            catalogImagePath: `/public/catalog-library/${encodeURIComponent(asset.ean)}/image`
+          });
+        }
       }
+      report({ phase: 'GLOBAL' });
     }
-    report({ phase: 'GLOBAL' });
   }
 
-  report({ phase: 'LOCAL_AI', message: 'Assimilando EAN local com agente de IA' });
+  const categoryLabel = categoryFilter || 'todas as categorias';
+  report({
+    phase: 'LOCAL_AI',
+    message: `Assimilando EAN local com IA (${categoryLabel})`
+  });
   for (const product of localOnly) {
     summary.examined += 1;
     summary.phase = 'LOCAL_AI';

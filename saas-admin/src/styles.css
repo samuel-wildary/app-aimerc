@@ -65,6 +65,9 @@
 .link-product code{margin-top:3px;color:#7a881f;font-size:9px}
 .link-asset-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
 .assimilate-board{display:grid;grid-template-columns:minmax(280px,.85fr) minmax(0,1.15fr);gap:16px;margin-top:8px}
+.assimilate-scope{margin:4px 0 16px;padding:16px;border:1px solid #e2e7e1;border-radius:14px;background:#f8faf7}
+.assimilate-hint{display:block;margin-top:10px;color:#6d7973;font-size:11px;line-height:1.45}
+.assimilate-hint strong{color:#3f4f1a}
 .assimilate-progress{padding:18px;border:1px solid var(--line);border-radius:16px;background:linear-gradient(145deg,#fff,#f5f8f2)}
 .assimilate-meta{margin-top:12px}
 .assimilate-steps{display:grid;gap:10px}

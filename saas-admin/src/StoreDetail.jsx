@@ -25,6 +25,16 @@ const TABS = [
   ['assimilar', 'Assimilar IA', Sparkles]
 ];
 
+const LOCAL_AI_CATEGORIES = [
+  'Hortifruti',
+  'Frigorifico',
+  'Frios e Embutidos',
+  'Peixaria',
+  'Ovos',
+  'Padaria',
+  'Padaria industrial'
+];
+
 function Metric({ label, value, detail }) {
   return (
     <article className="metric">
@@ -111,6 +121,7 @@ export default function StoreDetail({ storeId, onBack, onEditBrand, onDelete }) 
   const [message, setMessage] = useState('');
   const [job, setJob] = useState(null);
   const [assimilating, setAssimilating] = useState(false);
+  const [assimilateCategory, setAssimilateCategory] = useState('Hortifruti');
 
   const loadDetail = useCallback(async () => {
     setLoading(true);
@@ -176,17 +187,30 @@ export default function StoreDetail({ storeId, onBack, onEditBrand, onDelete }) 
   }, [job, storeId, loadDetail, loadProducts, tab]);
 
   async function startAssimilate() {
+    if (!assimilateCategory) {
+      setError('Escolha a categoria que a IA deve analisar (ex.: Hortifruti ou Frigorifico).');
+      setTab('assimilar');
+      return;
+    }
     setAssimilating(true);
     setError('');
     setMessage('');
     try {
-      const started = await api.assimilateStoreImages(storeId, 400);
+      const started = await api.assimilateStoreImages(storeId, {
+        limit: 400,
+        category: assimilateCategory,
+        onlyLocalBarcode: true
+      });
       setJob(started);
       setTab('assimilar');
     } catch (err) {
       setAssimilating(false);
       setError(err.message);
     }
+  }
+
+  function openAssimilateTab() {
+    setTab('assimilar');
   }
 
   async function linkImage(asset) {
@@ -235,8 +259,8 @@ export default function StoreDetail({ storeId, onBack, onEditBrand, onDelete }) 
         <div className="store-hero-actions">
           <button className="ghost light" onClick={loadDetail}><RefreshCw size={16} /> Atualizar</button>
           <button className="ghost light" onClick={() => onEditBrand(store)}>Cores</button>
-          <button className="accent" disabled={assimilating} onClick={startAssimilate}>
-            <Sparkles size={16} /> {assimilating ? 'Assimilando...' : 'Assimilar com IA'}
+          <button className="accent" disabled={assimilating} onClick={openAssimilateTab}>
+            <Sparkles size={16} /> Assimilar com IA
           </button>
         </div>
       </section>
@@ -462,15 +486,53 @@ export default function StoreDetail({ storeId, onBack, onEditBrand, onDelete }) 
           <div className="panel-head">
             <div>
               <p className="eyebrow">Assimilacao inteligente</p>
-              <h2>Vincular fotos ao catalogo</h2>
+              <h2>EAN local por categoria</h2>
               <p>
-                1) EAN global casa sozinho. 2) EAN local: a IA le abreviaturas do ERP, busca foto limpa no banco
-                e rejeita embalagens com logo de concorrente.
+                Escolha a categoria (Hortifruti, Frigorifico...). A IA analisa so produtos com EAN interno
+                dessa categoria: le abreviaturas, busca foto limpa no banco e mostra o vinculo.
               </p>
             </div>
-            <button className="accent" disabled={assimilating} onClick={startAssimilate}>
-              <Images size={16} /> {assimilating ? 'Em andamento...' : 'Iniciar assimilacao'}
+            <button className="accent" disabled={assimilating || !assimilateCategory} onClick={startAssimilate}>
+              <Images size={16} /> {assimilating ? 'Analisando...' : `Analisar ${assimilateCategory}`}
             </button>
+          </div>
+
+          <div className="assimilate-scope">
+            <div>
+              <p className="eyebrow">Categoria para analisar</p>
+              <div className="filter-chips">
+                {LOCAL_AI_CATEGORIES.map(name => (
+                  <button
+                    key={name}
+                    type="button"
+                    className={assimilateCategory === name ? 'active' : ''}
+                    disabled={assimilating}
+                    onClick={() => setAssimilateCategory(name)}
+                  >
+                    {name}
+                  </button>
+                ))}
+                {(detail.categories || [])
+                  .map(item => item?.name)
+                  .filter(Boolean)
+                  .filter(name => !LOCAL_AI_CATEGORIES.includes(name))
+                  .slice(0, 12)
+                  .map(name => (
+                    <button
+                      key={name}
+                      type="button"
+                      className={assimilateCategory === name ? 'active' : ''}
+                      disabled={assimilating}
+                      onClick={() => setAssimilateCategory(name)}
+                    >
+                      {name}
+                    </button>
+                  ))}
+              </div>
+              <small className="assimilate-hint">
+                Foco: produtos com EAN local/interno em <strong>{assimilateCategory}</strong>. EAN global (arroz, biscoito etc.) nao entra nesta rodada.
+              </small>
+            </div>
           </div>
 
           <div className="assimilate-board">
@@ -484,11 +546,12 @@ export default function StoreDetail({ storeId, onBack, onEditBrand, onDelete }) 
               <div className="progress-track"><i style={{ width: `${percent}%` }} /></div>
               <div className="progress-stats">
                 <span><b>{job?.examined || 0}</b>Analisados</span>
-                <span><b>{job?.globalMatched || 0}</b>Global</span>
-                <span><b>{job?.localMatched || 0}</b>IA local</span>
+                <span><b>{job?.localMatched || 0}</b>Vinculados</span>
                 <span><b>{job?.skipped || 0}</b>Sem match</span>
+                <span><b>{job?.total || 0}</b>Na fila</span>
               </div>
               <div className="assimilate-meta">
+                <div className="quick-row"><span>Categoria</span><strong>{job?.category || assimilateCategory}</strong></div>
                 <div className="quick-row"><span>Fase</span><strong><PhaseLabel phase={job?.phase} /></strong></div>
                 <div className="quick-row"><span>Fila</span><strong>{job?.examined || 0} / {job?.total || 0}</strong></div>
                 {job?.message && <small>{job.message}</small>}
@@ -498,8 +561,8 @@ export default function StoreDetail({ storeId, onBack, onEditBrand, onDelete }) 
             <div className="assimilate-steps">
               <article>
                 <b>01</b>
-                <strong>EAN global</strong>
-                <span>GTIN valido casa direto no banco, sem gastar token de IA.</span>
+                <strong>Escolha a categoria</strong>
+                <span>Hortifruti, Frigorifico, Peixaria... so essa fila entra na IA.</span>
               </article>
               <article>
                 <b>02</b>
