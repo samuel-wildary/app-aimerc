@@ -221,7 +221,8 @@ export async function findCatalogMatchByName(product, options = {}) {
 
 export async function assimilateStoreCatalogImages(storeId, {
   limit = 400,
-  onlyLocalBarcode = true
+  onlyLocalBarcode = true,
+  onProgress = null
 } = {}) {
   const clauses = ['p.store_id = $1', 'p.active = 1'];
   const values = [storeId];
@@ -249,43 +250,54 @@ export async function assimilateStoreCatalogImages(storeId, {
     LIMIT $${values.length + 1}
   `, [...values, limit])).rows;
 
-  const summary = { examined: 0, matched: 0, skipped: 0, samples: [] };
+  const summary = { examined: 0, matched: 0, skipped: 0, total: products.length, samples: [] };
+  if (typeof onProgress === 'function') {
+    onProgress({ ...summary, status: 'RUNNING', percent: 0 });
+  }
 
   for (const product of products) {
     summary.examined += 1;
     if (onlyLocalBarcode && !isLocalBarcode(product.barcode, product.sku) && !isProduceLikeCategory(product.category)) {
       summary.skipped += 1;
-      continue;
+    } else {
+      const match = await findCatalogMatchByName(product);
+      if (!match) {
+        summary.skipped += 1;
+      } else {
+        const asset = (await dbQuery(
+          'SELECT content_type, image_data FROM catalog_assets WHERE ean = $1',
+          [match.ean]
+        )).rows[0];
+        if (!asset?.image_data) {
+          summary.skipped += 1;
+        } else {
+          await writeImageFn(storeId, product.id, asset.image_data, asset.content_type, `name-match:${match.ean}:${match.headword}`);
+          summary.matched += 1;
+          if (summary.samples.length < 20) {
+            summary.samples.push({
+              productId: product.id,
+              name: product.name,
+              barcode: product.barcode,
+              matchedEan: match.ean,
+              matchedDescription: match.description,
+              sourceName: match.sourceName,
+              score: Number(match.score.toFixed(3)),
+              headword: match.headword
+            });
+          }
+        }
+      }
     }
-    const match = await findCatalogMatchByName(product);
-    if (!match) {
-      summary.skipped += 1;
-      continue;
-    }
-    const asset = (await dbQuery(
-      'SELECT content_type, image_data FROM catalog_assets WHERE ean = $1',
-      [match.ean]
-    )).rows[0];
-    if (!asset?.image_data) {
-      summary.skipped += 1;
-      continue;
-    }
-    await writeImageFn(storeId, product.id, asset.image_data, asset.content_type, `name-match:${match.ean}:${match.headword}`);
-    summary.matched += 1;
-    if (summary.samples.length < 20) {
-      summary.samples.push({
-        productId: product.id,
-        name: product.name,
-        barcode: product.barcode,
-        matchedEan: match.ean,
-        matchedDescription: match.description,
-        sourceName: match.sourceName,
-        score: Number(match.score.toFixed(3)),
-        headword: match.headword
-      });
+
+    if (typeof onProgress === 'function') {
+      const percent = summary.total ? Math.round((summary.examined / summary.total) * 100) : 100;
+      onProgress({ ...summary, status: 'RUNNING', percent });
     }
   }
 
+  if (typeof onProgress === 'function') {
+    onProgress({ ...summary, status: 'COMPLETED', percent: 100 });
+  }
   return summary;
 }
 

@@ -23,6 +23,13 @@ class AdminApi {
   login(email, password) { return this.request('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }); }
   overview() { return this.request('/admin/overview'); }
   stores() { return this.request('/admin/stores'); }
+  storeDetail(id) { return this.request(`/admin/stores/${encodeURIComponent(id)}`); }
+  storeProducts(id, { q = '', filter = 'all', limit = 60, offset = 0, category = 'Todos' } = {}) {
+    const params = new URLSearchParams({
+      q, filter, category, limit: String(limit), offset: String(offset)
+    });
+    return this.request(`/admin/stores/${encodeURIComponent(id)}/products?${params}`);
+  }
   subscriptions() { return this.request('/admin/subscriptions'); }
   createStore(data) { return this.request('/admin/stores', { method: 'POST', body: JSON.stringify(data) }); }
   updateStatus(id, status) { return this.request(`/admin/stores/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }); }
@@ -37,6 +44,9 @@ class AdminApi {
       method: 'POST',
       body: JSON.stringify({ limit, onlyLocalBarcode: true })
     });
+  }
+  assimilateJob(storeId, jobId) {
+    return this.request(`/admin/stores/${encodeURIComponent(storeId)}/assimilate-images/${encodeURIComponent(jobId)}`);
   }
   integrationProviders() { return this.request('/admin/integration-providers'); }
   integrations() { return this.request('/admin/integrations'); }

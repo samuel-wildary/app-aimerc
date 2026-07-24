@@ -970,6 +970,79 @@ export async function storeReports(storeId) {
   };
 }
 
+export async function adminStoreDetail(storeId) {
+  const store = await getStore(storeId);
+  if (!store) return null;
+  const [summary, categories, imageStats, promoStats, integration, subscription] = await Promise.all([
+    dashboardSummary(storeId),
+    listProductCategories(storeId, true),
+    query(`
+      SELECT
+        COUNT(*) FILTER (WHERE active=1)::int AS active_products,
+        COUNT(*) FILTER (WHERE active=1 AND promo=1)::int AS promo_products,
+        COUNT(*) FILTER (
+          WHERE active=1 AND EXISTS (
+            SELECT 1 FROM product_images pi WHERE pi.store_id=p.store_id AND pi.product_id=p.id
+          )
+        )::int AS with_image,
+        COUNT(*) FILTER (
+          WHERE active=1 AND NOT EXISTS (
+            SELECT 1 FROM product_images pi WHERE pi.store_id=p.store_id AND pi.product_id=p.id
+          )
+        )::int AS without_image,
+        COUNT(*) FILTER (
+          WHERE active=1 AND (
+            barcode IS NULL OR barcode = '' OR length(regexp_replace(barcode, '\\D', '', 'g')) < 8 OR barcode = sku
+          )
+        )::int AS local_ean
+      FROM products p WHERE store_id=$1
+    `, [storeId]),
+    query(`
+      SELECT id, sku, barcode, name, category, price, old_price, stock, unit, promo, catalog_visible
+      FROM products
+      WHERE store_id=$1 AND active=1 AND promo=1
+      ORDER BY name
+      LIMIT 100
+    `, [storeId]),
+    getStoreIntegration(storeId),
+    query('SELECT * FROM subscriptions WHERE store_id=$1 ORDER BY created_at DESC LIMIT 1', [storeId])
+  ]);
+  const stats = imageStats.rows[0] || {};
+  return {
+    store,
+    summary,
+    categories,
+    integration,
+    subscription: subscription.rows[0] ? {
+      id: subscription.rows[0].id,
+      plan: subscription.rows[0].plan,
+      status: subscription.rows[0].status,
+      amount: Number(subscription.rows[0].amount),
+      billingMethod: subscription.rows[0].billing_method,
+      nextDueDate: subscription.rows[0].next_due_date
+    } : null,
+    catalogStats: {
+      activeProducts: Number(stats.active_products || 0),
+      promoProducts: Number(stats.promo_products || 0),
+      withImage: Number(stats.with_image || 0),
+      withoutImage: Number(stats.without_image || 0),
+      localEan: Number(stats.local_ean || 0)
+    },
+    promotions: promoStats.rows.map(row => ({
+      id: row.id,
+      sku: row.sku,
+      barcode: row.barcode,
+      name: row.name,
+      category: normalizeCategory(row.category),
+      price: Number(row.price),
+      oldPrice: row.old_price == null ? null : Number(row.old_price),
+      stock: Number(row.stock),
+      unit: row.unit,
+      catalogVisible: Boolean(row.catalog_visible)
+    }))
+  };
+}
+
 export async function adminOverview() {
   const [stores, subscriptions] = await Promise.all([listStores(), listSubscriptions()]);
   const activeStatuses = new Set(['ACTIVE', 'TRIAL']);

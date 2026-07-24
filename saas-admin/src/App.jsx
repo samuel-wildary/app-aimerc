@@ -30,6 +30,7 @@ import {
   X
 } from 'lucide-react';
 import { api } from './api.js';
+import StoreDetail from './StoreDetail.jsx';
 
 const money = value => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(value || 0));
 const STATUS = {
@@ -92,24 +93,9 @@ function Metric({ label, value, detail, icon: Icon, tone }) {
   return <article className="metric"><div className={`metric-icon ${tone}`}><Icon size={20} /></div><span>{label}</span><strong>{value}</strong><small>{detail}</small></article>;
 }
 
-function StoresTable({ stores, query, setQuery, onStatus, onEditBrand, onDelete, onAssimilateImages }) {
-  const [busyId, setBusyId] = useState('');
-  const [message, setMessage] = useState('');
+function StoresTable({ stores, query, setQuery, onStatus, onEditBrand, onDelete, onOpen }) {
   const visible = stores.filter(store => `${store.name} ${store.owner} ${store.city} ${store.plan}`.toLowerCase().includes(query.toLowerCase()));
-  async function assimilate(store) {
-    if (busyId) return;
-    setBusyId(store.id);
-    setMessage('');
-    try {
-      const result = await onAssimilateImages(store.id);
-      setMessage(`${store.name}: ${result.matched} fotos aplicadas (${result.examined} analisados).`);
-    } catch (error) {
-      setMessage(error.message || 'Falha ao assimilar imagens');
-    } finally {
-      setBusyId('');
-    }
-  }
-  return <section className="panel"><div className="panel-head"><div><p className="eyebrow">Base de clientes</p><h2>Supermercados</h2></div><label className="search"><Search size={17} /><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Buscar cliente" /></label></div>{message && <div className="empty" style={{marginBottom:12}}>{message}</div>}<div className="table-scroll"><table><thead><tr><th>Supermercado</th><th>Plano</th><th>Mensalidade</th><th>Status</th><th>Cidade</th><th>Gerenciar</th></tr></thead><tbody>{visible.map(store => <tr key={store.id}><td><div className="store-cell"><div style={{background:store.brandColors?.primary,color:store.brandColors?.accent}}>{store.name.slice(0,2).toUpperCase()}</div><span><strong>{store.name}</strong><small>{store.owner}</small><span className="store-colors"><i style={{background:store.brandColors?.primary}}/><i style={{background:store.brandColors?.accent}}/><i style={{background:store.brandColors?.background}}/></span></span></div></td><td><b className="plan">{store.plan}</b></td><td><strong>{money(store.monthlyPrice)}</strong></td><td><Status value={store.status} /></td><td>{store.city} / {store.state}</td><td><div className="manage-actions"><label className="select-wrap"><select value={store.status} onChange={event => onStatus(store.id, event.target.value)}>{Object.keys(STATUS).map(value => <option key={value} value={value}>{STATUS[value][0]}</option>)}</select><ChevronDown size={14} /></label><button className="brand-edit" onClick={() => assimilate(store)} disabled={busyId === store.id}><Images size={14}/>{busyId === store.id ? ' Assimilando...' : ' Assimilar fotos'}</button><button className="brand-edit" onClick={() => onEditBrand(store)}><Palette size={14}/> Editar cores</button><button className="store-delete" title={`Excluir ${store.name}`} onClick={() => onDelete(store)}><Trash2 size={14}/><span>Excluir</span></button></div></td></tr>)}</tbody></table></div>{!visible.length && <div className="empty">Nenhum supermercado encontrado.</div>}</section>;
+  return <section className="panel"><div className="panel-head"><div><p className="eyebrow">Base de clientes</p><h2>Supermercados</h2><small>Clique no supermercado para abrir cadastro, catalogo, promocoes e assimilacao de fotos.</small></div><label className="search"><Search size={17} /><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Buscar cliente" /></label></div><div className="table-scroll"><table><thead><tr><th>Supermercado</th><th>Plano</th><th>Mensalidade</th><th>Status</th><th>Cidade</th><th>Gerenciar</th></tr></thead><tbody>{visible.map(store => <tr key={store.id} style={{ cursor: 'pointer' }} onClick={() => onOpen(store)}><td><div className="store-cell"><div style={{background:store.brandColors?.primary,color:store.brandColors?.accent}}>{store.name.slice(0,2).toUpperCase()}</div><span><strong>{store.name}</strong><small>{store.owner}</small><span className="store-colors"><i style={{background:store.brandColors?.primary}}/><i style={{background:store.brandColors?.accent}}/><i style={{background:store.brandColors?.background}}/></span></span></div></td><td><b className="plan">{store.plan}</b></td><td><strong>{money(store.monthlyPrice)}</strong></td><td><Status value={store.status} /></td><td>{store.city} / {store.state}</td><td onClick={event => event.stopPropagation()}><div className="manage-actions"><label className="select-wrap"><select value={store.status} onChange={event => onStatus(store.id, event.target.value)}>{Object.keys(STATUS).map(value => <option key={value} value={value}>{STATUS[value][0]}</option>)}</select><ChevronDown size={14} /></label><button className="brand-edit" onClick={() => onOpen(store)}><Store size={14}/> Abrir</button><button className="brand-edit" onClick={() => onEditBrand(store)}><Palette size={14}/> Editar cores</button><button className="store-delete" title={`Excluir ${store.name}`} onClick={() => onDelete(store)}><Trash2 size={14}/><span>Excluir</span></button></div></td></tr>)}</tbody></table></div>{!visible.length && <div className="empty">Nenhum supermercado encontrado.</div>}</section>;
 }
 
 function DeleteStoreModal({ store, close, onDelete }) {
@@ -425,16 +411,16 @@ export default function App() {
   const [creating, setCreating] = useState(false);
   const [editingBrand, setEditingBrand] = useState(null);
   const [deletingStore, setDeletingStore] = useState(null);
+  const [selectedStoreId, setSelectedStoreId] = useState(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const load = useCallback(async () => { if (!api.token) return; setRefreshing(true); try { const [a,b,c] = await Promise.all([api.overview(), api.stores(), api.subscriptions()]); setOverview(a); setStores(b); setSubscriptions(c); setSession(current => current || { user: { name: 'Administrador' } }); setError(''); } catch (requestError) { if (requestError.status === 401) logout(); else setError(requestError.message); } finally { setRefreshing(false); } }, []);
   useEffect(() => { if (api.token) load(); }, [load]);
-  function logout() { api.setToken(''); setSession(null); }
+  function logout() { api.setToken(''); setSession(null); setSelectedStoreId(null); }
   async function create(data) { await api.createStore(data); await load(); }
   async function saveBranding(id, colors) { await api.updateBranding(id, colors); await load(); }
-  async function removeStore(id, password) { await api.deleteStore(id, password); await load(); }
+  async function removeStore(id, password) { await api.deleteStore(id, password); setSelectedStoreId(null); await load(); }
   async function changeStatus(id,status) { try { await api.updateStatus(id,status); await load(); } catch (requestError) { setError(requestError.message); } }
-  async function assimilateStoreImages(id) { return api.assimilateStoreImages(id, 500); }
   if (!session) return <Login onSuccess={value => { setSession(value); load(); }} />;
-  const titles = { overview: 'Visao geral', stores: 'Supermercados', integrations: 'Integracoes ERP', catalog: 'Banco de imagens', billing: 'Assinaturas' };
-  return <div className="shell"><Sidebar active={active} setActive={setActive} user={session.user} logout={logout} open={menuOpen} close={() => setMenuOpen(false)} />{menuOpen && <button className="overlay" onClick={() => setMenuOpen(false)} />}<main className="workspace"><Topbar title={titles[active]} openMenu={() => setMenuOpen(true)} refresh={active === 'catalog' || active === 'integrations' ? () => {} : load} refreshing={refreshing} onNew={active === 'stores' || active === 'overview' ? () => setCreating(true) : null} />{error && <div className="global-error">{error}<button onClick={() => setError('')}><X size={17} /></button></div>}<div className="content">{active === 'overview' && <Overview overview={overview} stores={stores} subscriptions={subscriptions} goStores={() => setActive('stores')} goBilling={() => setActive('billing')} />}{active === 'stores' && <StoresTable stores={stores} query={query} setQuery={setQuery} onStatus={changeStatus} onEditBrand={setEditingBrand} onDelete={setDeletingStore} onAssimilateImages={assimilateStoreImages} />}{active === 'integrations' && <IntegrationsPage />}{active === 'catalog' && <CatalogLibrary />}{active === 'billing' && <Billing subscriptions={subscriptions} />}</div></main>{creating && <CreateStore close={() => setCreating(false)} onCreate={create} />}{editingBrand && <BrandingModal store={editingBrand} close={() => setEditingBrand(null)} onSave={saveBranding} />}{deletingStore && <DeleteStoreModal store={deletingStore} close={() => setDeletingStore(null)} onDelete={removeStore} />}</div>;
+  const titles = { overview: 'Visao geral', stores: selectedStoreId ? 'Gestao do supermercado' : 'Supermercados', integrations: 'Integracoes ERP', catalog: 'Banco de imagens', billing: 'Assinaturas' };
+  return <div className="shell"><Sidebar active={active} setActive={id => { setActive(id); setSelectedStoreId(null); }} user={session.user} logout={logout} open={menuOpen} close={() => setMenuOpen(false)} />{menuOpen && <button className="overlay" onClick={() => setMenuOpen(false)} />}<main className="workspace"><Topbar title={titles[active]} openMenu={() => setMenuOpen(true)} refresh={active === 'catalog' || active === 'integrations' || selectedStoreId ? () => {} : load} refreshing={refreshing} onNew={active === 'stores' || active === 'overview' ? () => setCreating(true) : null} />{error && <div className="global-error">{error}<button onClick={() => setError('')}><X size={17} /></button></div>}<div className="content">{active === 'overview' && <Overview overview={overview} stores={stores} subscriptions={subscriptions} goStores={() => setActive('stores')} goBilling={() => setActive('billing')} />}{active === 'stores' && !selectedStoreId && <StoresTable stores={stores} query={query} setQuery={setQuery} onStatus={changeStatus} onEditBrand={setEditingBrand} onDelete={setDeletingStore} onOpen={store => setSelectedStoreId(store.id)} />}{active === 'stores' && selectedStoreId && <StoreDetail storeId={selectedStoreId} onBack={() => setSelectedStoreId(null)} onEditBrand={setEditingBrand} onDelete={setDeletingStore} />}{active === 'integrations' && <IntegrationsPage />}{active === 'catalog' && <CatalogLibrary />}{active === 'billing' && <Billing subscriptions={subscriptions} />}</div></main>{creating && <CreateStore close={() => setCreating(false)} onCreate={create} />}{editingBrand && <BrandingModal store={editingBrand} close={() => setEditingBrand(null)} onSave={saveBranding} />}{deletingStore && <DeleteStoreModal store={deletingStore} close={() => setDeletingStore(null)} onDelete={removeStore} />}</div>;
 }

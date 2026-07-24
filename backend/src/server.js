@@ -4,6 +4,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import {
   adminOverview,
+  adminStoreDetail,
   assertLoginAllowed,
   createBanner,
   createOrder,
@@ -80,6 +81,9 @@ import { encryptIntegrationSecret } from './lib/store-integration.js';
 import { normalizeCategory } from './lib/categories.js';
 import { ApiError, normalizeEmail, oneOf, optionalText, positiveNumber, requiredText, slugify } from './lib/validation.js';
 import { assimilateStoreCatalogImages } from './lib/catalog-image-match.js';
+import crypto from 'node:crypto';
+
+const assimilateJobs = new Map();
 
 const app = express();
 const PORT = Number(process.env.PORT || 4100);
@@ -792,6 +796,45 @@ app.get('/api/admin/stores', requireAuth('PLATFORM_ADMIN'), asyncRoute(async (re
   res.json(await listStores());
 }));
 
+app.get('/api/admin/stores/:id', requireAuth('PLATFORM_ADMIN'), asyncRoute(async (req, res) => {
+  const detail = await adminStoreDetail(req.params.id);
+  if (!detail) throw new ApiError(404, 'Supermercado nao encontrado');
+  res.json(detail);
+}));
+
+app.get('/api/admin/stores/:id/products', requireAuth('PLATFORM_ADMIN'), asyncRoute(async (req, res) => {
+  const store = await getStore(req.params.id);
+  if (!store) throw new ApiError(404, 'Supermercado nao encontrado');
+  const products = await listProducts(store.id, {
+    q: req.query.q || '',
+    category: req.query.category || 'Todos',
+    includeDisabled: true,
+    includeHidden: true
+  });
+  const limit = Math.min(200, Math.max(1, Number(req.query.limit || 60)));
+  const offset = Math.max(0, Number(req.query.offset || 0));
+  const filter = String(req.query.filter || 'all');
+  let filtered = products;
+  if (filter === 'promo') filtered = products.filter(item => item.promo);
+  if (filter === 'without_image') filtered = products.filter(item => !(item.hasStoredImage || item.hasCatalogImage || item.image));
+  if (filter === 'local_ean') {
+    filtered = products.filter(item => !item.barcode || item.barcode.length < 8 || item.barcode === item.sku);
+  }
+  const base = publicApiBase(req);
+  const page = filtered.slice(offset, offset + limit).map(item => ({
+    ...item,
+    hasImage: Boolean(item.hasStoredImage || item.hasCatalogImage || item.image),
+    imageUrl: `${base}/public/stores/${encodeURIComponent(store.slug)}/products/${encodeURIComponent(item.id)}/image`
+  }));
+  res.json({
+    store: { id: store.id, name: store.name, slug: store.slug },
+    total: filtered.length,
+    limit,
+    offset,
+    items: page
+  });
+}));
+
 app.post('/api/admin/stores', requireAuth('PLATFORM_ADMIN'), asyncRoute(async (req, res) => {
   const name = requiredText(req.body.name, 'Nome do supermercado');
   const store = await createStore({
@@ -898,17 +941,77 @@ app.post('/api/admin/catalog-library/reseed-virtual', requireAuth('PLATFORM_ADMI
 app.post('/api/admin/stores/:id/assimilate-images', requireAuth('PLATFORM_ADMIN'), asyncRoute(async (req, res) => {
   const store = await getStore(req.params.id);
   if (!store) throw new ApiError(404, 'Supermercado nao encontrado');
-  const limit = Math.min(2000, Math.max(1, Number(req.body?.limit || 400)));
-  const summary = await assimilateStoreCatalogImages(store.id, { limit, onlyLocalBarcode: req.body?.onlyLocalBarcode !== false });
-  await writeAuditLog({
+  const existing = [...assimilateJobs.values()].find(job => job.storeId === store.id && job.status === 'RUNNING');
+  if (existing) {
+    res.status(202).json(existing);
+    return;
+  }
+  const limit = Math.min(2000, Math.max(1, Number(req.body?.limit || 500)));
+  const jobId = `assim_${crypto.randomUUID().slice(0, 12)}`;
+  const job = {
+    id: jobId,
     storeId: store.id,
-    actorId: req.user.sub,
-    action: 'STORE_IMAGES_ASSIMILATED',
-    entityType: 'STORE',
-    entityId: store.id,
-    metadata: { examined: summary.examined, matched: summary.matched, skipped: summary.skipped }
+    storeName: store.name,
+    status: 'RUNNING',
+    percent: 0,
+    examined: 0,
+    matched: 0,
+    skipped: 0,
+    total: 0,
+    samples: [],
+    error: '',
+    startedAt: new Date().toISOString(),
+    finishedAt: null
+  };
+  assimilateJobs.set(jobId, job);
+  res.status(202).json(job);
+
+  assimilateStoreCatalogImages(store.id, {
+    limit,
+    onlyLocalBarcode: req.body?.onlyLocalBarcode !== false,
+    onProgress: progress => {
+      Object.assign(job, {
+        status: progress.status || 'RUNNING',
+        percent: progress.percent || 0,
+        examined: progress.examined || 0,
+        matched: progress.matched || 0,
+        skipped: progress.skipped || 0,
+        total: progress.total || 0,
+        samples: progress.samples || job.samples
+      });
+    }
+  }).then(async summary => {
+    Object.assign(job, {
+      status: 'COMPLETED',
+      percent: 100,
+      examined: summary.examined,
+      matched: summary.matched,
+      skipped: summary.skipped,
+      total: summary.total,
+      samples: summary.samples,
+      finishedAt: new Date().toISOString()
+    });
+    await writeAuditLog({
+      storeId: store.id,
+      actorId: req.user.sub,
+      action: 'STORE_IMAGES_ASSIMILATED',
+      entityType: 'STORE',
+      entityId: store.id,
+      metadata: { jobId, examined: summary.examined, matched: summary.matched, skipped: summary.skipped }
+    });
+  }).catch(error => {
+    Object.assign(job, {
+      status: 'FAILED',
+      error: error.message || 'Falha na assimilacao',
+      finishedAt: new Date().toISOString()
+    });
   });
-  res.json({ success: true, store: { id: store.id, name: store.name }, ...summary });
+}));
+
+app.get('/api/admin/stores/:id/assimilate-images/:jobId', requireAuth('PLATFORM_ADMIN'), asyncRoute(async (req, res) => {
+  const job = assimilateJobs.get(req.params.jobId);
+  if (!job || job.storeId !== req.params.id) throw new ApiError(404, 'Job de assimilacao nao encontrado');
+  res.json(job);
 }));
 
 app.post('/api/products/assimilate-images', requireAuth('STORE_MANAGER'), asyncRoute(async (req, res) => {
