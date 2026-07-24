@@ -80,7 +80,8 @@ import { integrationProvider, integrationProviders, publicIntegrationProvider } 
 import { encryptIntegrationSecret } from './lib/store-integration.js';
 import { normalizeCategory } from './lib/categories.js';
 import { ApiError, normalizeEmail, oneOf, optionalText, positiveNumber, requiredText, slugify } from './lib/validation.js';
-import { assimilateStoreCatalogImages } from './lib/catalog-image-match.js';
+import { assimilateStoreCatalogImages, linkCatalogImageToProduct, searchCatalogImages } from './lib/catalog-image-match.js';
+import { openaiConfigured } from './lib/ai-image-match.js';
 import crypto from 'node:crypto';
 
 const assimilateJobs = new Map();
@@ -833,6 +834,43 @@ app.get('/api/admin/stores/:id/products', requireAuth('PLATFORM_ADMIN'), asyncRo
     offset,
     items: page
   });
+}));
+
+app.get('/api/admin/image-search', requireAuth('PLATFORM_ADMIN'), asyncRoute(async (req, res) => {
+  const result = await searchCatalogImages({
+    search: req.query.q || req.query.search || '',
+    limit: req.query.limit,
+    offset: req.query.offset,
+    realOnly: req.query.realOnly !== '0'
+  });
+  const base = publicApiBase(req);
+  res.json({
+    ...result,
+    aiEnabled: openaiConfigured(),
+    items: result.items.map(item => ({
+      ...item,
+      image: `${base}/public/catalog-library/${encodeURIComponent(item.ean)}/image?v=${encodeURIComponent(item.updatedAt)}`
+    }))
+  });
+}));
+
+app.post('/api/admin/stores/:id/products/:productId/link-image', requireAuth('PLATFORM_ADMIN'), asyncRoute(async (req, res) => {
+  const store = await getStore(req.params.id);
+  if (!store) throw new ApiError(404, 'Supermercado nao encontrado');
+  const product = await getProduct(store.id, req.params.productId);
+  if (!product) throw new ApiError(404, 'Produto nao encontrado');
+  const catalogEan = requiredText(req.body?.catalogEan || req.body?.ean, 'EAN do catalogo');
+  const linked = await linkCatalogImageToProduct(store.id, product.id, catalogEan);
+  if (!linked) throw new ApiError(404, 'Imagem do catalogo nao encontrada');
+  await writeAuditLog({
+    storeId: store.id,
+    actorId: req.user.sub,
+    action: 'PRODUCT_IMAGE_LINKED',
+    entityType: 'PRODUCT',
+    entityId: product.id,
+    metadata: { catalogEan }
+  });
+  res.json({ success: true, ...linked, product: { id: product.id, name: product.name } });
 }));
 
 app.post('/api/admin/stores', requireAuth('PLATFORM_ADMIN'), asyncRoute(async (req, res) => {

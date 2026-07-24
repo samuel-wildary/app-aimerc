@@ -48,6 +48,16 @@ class AdminApi {
   assimilateJob(storeId, jobId) {
     return this.request(`/admin/stores/${encodeURIComponent(storeId)}/assimilate-images/${encodeURIComponent(jobId)}`);
   }
+  searchImages(q = '', limit = 48, offset = 0) {
+    const params = new URLSearchParams({ q, limit: String(limit), offset: String(offset), realOnly: '1' });
+    return this.request(`/admin/image-search?${params}`);
+  }
+  linkProductImage(storeId, productId, catalogEan) {
+    return this.request(`/admin/stores/${encodeURIComponent(storeId)}/products/${encodeURIComponent(productId)}/link-image`, {
+      method: 'POST',
+      body: JSON.stringify({ catalogEan })
+    });
+  }
   integrationProviders() { return this.request('/admin/integration-providers'); }
   integrations() { return this.request('/admin/integrations'); }
   saveIntegration(storeId, data) { return this.request(`/admin/stores/${storeId}/integration`, { method: 'PUT', body: JSON.stringify(data) }); }

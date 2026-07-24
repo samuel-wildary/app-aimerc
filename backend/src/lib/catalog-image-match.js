@@ -169,60 +169,156 @@ async function dbQuery(sql, params) {
   return query(sql, params);
 }
 
-/**
- * Busca no catalog_assets (fotos reais de outras redes) uma imagem
- * compatível com o nome do produto de EAN local.
- */
-export async function findCatalogMatchByName(product, options = {}) {
-  const minScore = options.minScore ?? 0.52;
+export async function searchCatalogImages({ search = '', limit = 48, offset = 0, realOnly = true } = {}) {
+  const safeLimit = Math.min(100, Math.max(1, Number(limit) || 48));
+  const safeOffset = Math.max(0, Number(offset) || 0);
+  const term = String(search || '').trim();
+  const clauses = [];
+  const values = [];
+  if (realOnly) {
+    clauses.push(`ean ~ '^[0-9]{8,14}$'`);
+    clauses.push(`content_type <> 'image/svg+xml'`);
+    clauses.push(`byte_size > 3000`);
+  }
+  if (term) {
+    values.push(`%${term}%`);
+    clauses.push(`(ean ILIKE $${values.length} OR description ILIKE $${values.length} OR source_name ILIKE $${values.length})`);
+  }
+  const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
+  const [items, count] = await Promise.all([
+    dbQuery(
+      `SELECT ean, description, content_type, byte_size, source_name, source_url, updated_at
+       FROM catalog_assets ${where}
+       ORDER BY byte_size DESC, updated_at DESC
+       LIMIT $${values.length + 1} OFFSET $${values.length + 2}`,
+      [...values, safeLimit, safeOffset]
+    ),
+    dbQuery(`SELECT COUNT(*)::int AS total FROM catalog_assets ${where}`, values)
+  ]);
+  return {
+    items: items.rows.map(row => ({
+      ean: row.ean,
+      description: row.description,
+      contentType: row.content_type,
+      byteSize: Number(row.byte_size),
+      sourceName: row.source_name,
+      sourceUrl: row.source_url,
+      updatedAt: row.updated_at
+    })),
+    total: Number(count.rows[0].total),
+    limit: safeLimit,
+    offset: safeOffset
+  };
+}
+
+export async function findCatalogCandidates(product, options = {}) {
+  const { expandProductQuery } = await import('./ai-image-match.js');
   const name = product?.name || product?.catalogName || product?.sourceName || '';
   const headword = extractHeadword(name);
-  if (!headword) return null;
+  const expanded = expandProductQuery(name, product?.category || '');
+  const terms = [...new Set([headword, ...expanded.terms].filter(Boolean).map(normalizeMatchText))];
+  if (!terms.length) return [];
 
-  const local = isLocalBarcode(product.barcode, product.sku);
-  const produceLike = isProduceLikeCategory(product.category);
-  if (!local && !produceLike && !options.force) return null;
+  const likeClauses = [];
+  const values = [];
+  for (const term of terms.slice(0, 5)) {
+    values.push(term);
+    const i = values.length;
+    likeClauses.push(`(
+      lower(description) LIKE '%' || $${i} || '%'
+      OR translate(lower(description),
+           'áàâãäéèêëíìîïóòôõöúùûüç',
+           'aaaaaeeeeiiiiooooouuuuc') LIKE '%' || $${i} || '%'
+    )`);
+  }
 
-  const needle = normalizeMatchText(headword);
   const result = await dbQuery(`
     SELECT ean, description, source_name, content_type, byte_size
     FROM catalog_assets
     WHERE ean ~ '^[0-9]{8,14}$'
       AND content_type <> 'image/svg+xml'
       AND byte_size > 5000
-      AND (
-        lower(description) LIKE '%' || $1 || '%'
-        OR translate(lower(description),
-             'áàâãäéèêëíìîïóòôõöúùûüç',
-             'aaaaaeeeeiiiiooooouuuuc') LIKE '%' || $1 || '%'
-      )
+      AND (${likeClauses.join(' OR ')})
     ORDER BY byte_size DESC
-    LIMIT 60
-  `, [needle]);
+    LIMIT ${options.limit || 40}
+  `, values);
 
+  return result.rows.map(row => ({
+    ean: row.ean,
+    description: row.description,
+    sourceName: row.source_name,
+    contentType: row.content_type,
+    byteSize: Number(row.byte_size)
+  }));
+}
+
+/**
+ * Busca no catalog_assets uma imagem compatível.
+ * Com AIMERC_OPENAI_API_KEY usa IA para escolher entre candidatos.
+ */
+export async function findCatalogMatchByName(product, options = {}) {
+  const minScore = options.minScore ?? 0.52;
+  const name = product?.name || product?.catalogName || product?.sourceName || '';
+  const local = isLocalBarcode(product.barcode, product.sku);
+  const produceLike = isProduceLikeCategory(product.category);
+  if (!local && !produceLike && !options.force) return null;
+
+  const candidates = await findCatalogCandidates(product, { limit: options.candidateLimit || 40 });
+  if (!candidates.length) return null;
+
+  const { chooseCatalogMatchWithAi, openaiConfigured } = await import('./ai-image-match.js');
+  if (openaiConfigured() && options.useAi !== false) {
+    try {
+      const aiMatch = await chooseCatalogMatchWithAi(product, candidates, {
+        minConfidence: options.minConfidence ?? 0.62
+      });
+      if (aiMatch) return aiMatch;
+    } catch (error) {
+      console.error('[AI-MATCH]', error.message);
+    }
+  }
+
+  const headword = extractHeadword(name) || (await import('./ai-image-match.js')).expandProductQuery(name, product.category).terms[0];
+  if (!headword) return null;
   let best = null;
-  for (const row of result.rows) {
-    const score = scoreDescriptionMatch(name, row.description, headword) + preferredSourceBoost(row.source_name);
+  for (const row of candidates) {
+    const score = scoreDescriptionMatch(name, row.description, headword) + preferredSourceBoost(row.sourceName);
     if (!best || score > best.score) {
       best = {
         ean: row.ean,
         description: row.description,
-        sourceName: row.source_name,
+        sourceName: row.sourceName,
         score,
         headword,
         method: 'name-match'
       };
     }
   }
-
   if (!best || best.score < minScore) return null;
   return best;
+}
+
+export async function linkCatalogImageToProduct(storeId, productId, catalogEan) {
+  const asset = (await dbQuery(
+    `SELECT content_type, image_data FROM catalog_assets
+     WHERE ean = $1 AND content_type <> 'image/svg+xml'`,
+    [String(catalogEan)]
+  )).rows[0];
+  if (!asset?.image_data) return null;
+  await writeImageFn(storeId, productId, asset.image_data, asset.content_type, `manual-catalog:${catalogEan}`);
+  return {
+    productId,
+    catalogEan: String(catalogEan),
+    contentType: asset.content_type,
+    bytes: asset.image_data.length
+  };
 }
 
 export async function assimilateStoreCatalogImages(storeId, {
   limit = 400,
   onlyLocalBarcode = true,
-  onProgress = null
+  onProgress = null,
+  useAi = true
 } = {}) {
   const clauses = ['p.store_id = $1', 'p.active = 1'];
   const values = [storeId];
@@ -260,7 +356,7 @@ export async function assimilateStoreCatalogImages(storeId, {
     if (onlyLocalBarcode && !isLocalBarcode(product.barcode, product.sku) && !isProduceLikeCategory(product.category)) {
       summary.skipped += 1;
     } else {
-      const match = await findCatalogMatchByName(product);
+      const match = await findCatalogMatchByName(product, { useAi });
       if (!match) {
         summary.skipped += 1;
       } else {
@@ -271,7 +367,13 @@ export async function assimilateStoreCatalogImages(storeId, {
         if (!asset?.image_data) {
           summary.skipped += 1;
         } else {
-          await writeImageFn(storeId, product.id, asset.image_data, asset.content_type, `name-match:${match.ean}:${match.headword}`);
+          await writeImageFn(
+            storeId,
+            product.id,
+            asset.image_data,
+            asset.content_type,
+            `${match.method || 'name-match'}:${match.ean}:${match.headword || 'item'}`
+          );
           summary.matched += 1;
           if (summary.samples.length < 20) {
             summary.samples.push({
@@ -282,7 +384,9 @@ export async function assimilateStoreCatalogImages(storeId, {
               matchedDescription: match.description,
               sourceName: match.sourceName,
               score: Number(match.score.toFixed(3)),
-              headword: match.headword
+              headword: match.headword,
+              method: match.method || 'name-match',
+              reason: match.reason || ''
             });
           }
         }
