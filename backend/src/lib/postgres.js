@@ -290,7 +290,7 @@ CREATE TABLE IF NOT EXISTS banner_images (
 );
 
 CREATE TABLE IF NOT EXISTS catalog_assets (
-  ean VARCHAR(14) PRIMARY KEY,
+  ean VARCHAR(64) PRIMARY KEY,
   description TEXT NOT NULL DEFAULT '',
   content_type VARCHAR(80) NOT NULL,
   image_data BYTEA NOT NULL,
@@ -299,6 +299,12 @@ CREATE TABLE IF NOT EXISTS catalog_assets (
   source_name TEXT NOT NULL DEFAULT '',
   source_url TEXT NOT NULL DEFAULT '',
   collected_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS platform_settings (
+  key TEXT PRIMARY KEY,
+  value JSONB NOT NULL DEFAULT '{}'::jsonb,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -751,8 +757,14 @@ export function initializePostgres() {
       try {
         await pool.query(`ALTER TABLE stores ADD COLUMN IF NOT EXISTS disabled_categories TEXT NOT NULL DEFAULT ''`);
         await pool.query(`ALTER TABLE stores ADD COLUMN IF NOT EXISTS disable_promotions INTEGER NOT NULL DEFAULT 0`);
+        await pool.query(`ALTER TABLE catalog_assets ALTER COLUMN ean TYPE VARCHAR(64)`);
+        await pool.query(`CREATE TABLE IF NOT EXISTS platform_settings (
+          key TEXT PRIMARY KEY,
+          value JSONB NOT NULL DEFAULT '{}'::jsonb,
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )`);
       } catch (err) {
-        console.error('[MIGRATION] Erro ao adicionar novas colunas em stores:', err.message);
+        console.error('[MIGRATION] Erro ao adicionar novas colunas/tabelas:', err.message);
       }
       seedVirtualAssets().catch(err => console.error('[SEED] Erro em seedVirtualAssets:', err.message));
     })();

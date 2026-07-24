@@ -106,7 +106,8 @@ async function importLatestAssets(job) {
   let offset = 0;
   let imported = 0;
   let examined = 0;
-  await appendEvent(job.id, 'Importando imagens e descricoes para o PostgreSQL do AiMerc.');
+  let skippedEmpty = 0;
+  await appendEvent(job.id, 'Importando TODAS as imagens da fonte para o PostgreSQL (sem filtrar EAN).');
 
   while (examined < limit) {
     const pageSize = Math.min(200, limit - examined);
@@ -115,16 +116,37 @@ async function importLatestAssets(job) {
     if (!items.length) break;
     for (const item of items) {
       examined += 1;
-      if (!/^\d{8,14}$/.test(String(item.ean || ''))) continue;
       try {
-        const imageResponse = await fetch(`${scraperBaseUrl}/api/images/${encodeURIComponent(item.ean)}`, {
-          signal: AbortSignal.timeout(20_000)
+        const rawEan = String(item.ean || '').replace(/\D/g, '');
+        let assetKey = rawEan;
+        if (!/^\d{8,14}$/.test(rawEan)) {
+          const seed = String(item.product_url || item.image_url || item.product_name || item.id || examined);
+          assetKey = `ext_${crypto.createHash('sha1').update(seed).digest('hex').slice(0, 28)}`;
+        }
+        const imageResponse = await fetch(`${scraperBaseUrl}/api/images/${encodeURIComponent(item.ean || item.id || assetKey)}`, {
+          signal: AbortSignal.timeout(30_000)
         });
-        if (!imageResponse.ok) continue;
-        const data = Buffer.from(await imageResponse.arrayBuffer());
-        if (!data.length || data.length > 5 * 1024 * 1024) continue;
-        const contentType = String(imageResponse.headers.get('content-type') || 'image/jpeg').split(';')[0];
-        if (!contentType.startsWith('image/')) continue;
+        // fallback: try by ean field as returned by list
+        let response = imageResponse;
+        if (!response.ok && item.ean) {
+          response = await fetch(`${scraperBaseUrl}/api/images/${encodeURIComponent(item.ean)}`, {
+            signal: AbortSignal.timeout(30_000)
+          });
+        }
+        if (!response.ok) {
+          skippedEmpty += 1;
+          continue;
+        }
+        const data = Buffer.from(await response.arrayBuffer());
+        if (!data.length || data.length > 12 * 1024 * 1024) {
+          skippedEmpty += 1;
+          continue;
+        }
+        const contentType = String(response.headers.get('content-type') || 'image/jpeg').split(';')[0];
+        if (!contentType.startsWith('image/')) {
+          skippedEmpty += 1;
+          continue;
+        }
         const checksum = crypto.createHash('sha256').update(data).digest('hex');
         await query(`INSERT INTO catalog_assets
           (ean,description,content_type,image_data,checksum,byte_size,source_name,source_url,collected_at,updated_at)
@@ -134,7 +156,7 @@ async function importLatestAssets(job) {
             content_type=EXCLUDED.content_type,image_data=EXCLUDED.image_data,checksum=EXCLUDED.checksum,
             byte_size=EXCLUDED.byte_size,source_name=EXCLUDED.source_name,source_url=EXCLUDED.source_url,
             collected_at=EXCLUDED.collected_at,updated_at=NOW()`, [
-          String(item.ean), String(item.product_name || ''), contentType, data, checksum, data.length,
+          assetKey, String(item.product_name || ''), contentType, data, checksum, data.length,
           String(item.source_site || ''), String(item.product_url || item.image_url || ''), item.scraped_at || null
         ]);
         imported += 1;
@@ -142,12 +164,13 @@ async function importLatestAssets(job) {
           await query('UPDATE catalog_scan_jobs SET imported_count=$2,updated_at=NOW() WHERE id=$1', [job.id, imported]);
         }
       } catch {
-        // A falha de um produto nao interrompe a importacao completa.
+        skippedEmpty += 1;
       }
     }
     offset += items.length;
     if (items.length < pageSize) break;
   }
+  await appendEvent(job.id, `Importacao concluida: ${imported} salvas, ${skippedEmpty} sem arquivo de imagem utilizavel.`);
   return imported;
 }
 

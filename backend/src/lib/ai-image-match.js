@@ -66,8 +66,26 @@ export function openaiConfigured() {
   return Boolean(String(process.env.AIMERC_OPENAI_API_KEY || process.env.OPENAI_API_KEY || '').trim());
 }
 
-function openaiKey() {
-  return String(process.env.AIMERC_OPENAI_API_KEY || process.env.OPENAI_API_KEY || '').trim();
+export async function resolveAiCredentials() {
+  try {
+    const { getAiSearchAgentSecrets } = await import('./platform-settings.js');
+    const secrets = await getAiSearchAgentSecrets();
+    if (secrets.apiKey) {
+      return { apiKey: secrets.apiKey, model: secrets.model || 'gpt-4o-mini', configured: true, source: secrets.source };
+    }
+  } catch (_) {}
+  const apiKey = String(process.env.AIMERC_OPENAI_API_KEY || process.env.OPENAI_API_KEY || '').trim();
+  return {
+    apiKey,
+    model: String(process.env.AIMERC_OPENAI_MODEL || 'gpt-4o-mini').trim() || 'gpt-4o-mini',
+    configured: Boolean(apiKey),
+    source: apiKey ? 'env' : 'none'
+  };
+}
+
+async function openaiConfiguredAsync() {
+  const creds = await resolveAiCredentials();
+  return creds.configured;
 }
 
 export function expandProductQuery(name = '', category = '') {
@@ -109,8 +127,9 @@ export function expandProductQuery(name = '', category = '') {
  * rejeitando embalagens com marca/logo de rede ou produto errado.
  */
 export async function chooseCatalogMatchWithAi(product, candidates, options = {}) {
-  if (!openaiConfigured() || !candidates?.length) return null;
-  const model = options.model || process.env.AIMERC_OPENAI_MODEL || 'gpt-4o-mini';
+  const creds = await resolveAiCredentials();
+  if (!creds.configured || !candidates?.length) return null;
+  const model = options.model || creds.model || 'gpt-4o-mini';
   const list = candidates.slice(0, 12).map((item, index) => ({
     index: index + 1,
     ean: item.ean,
@@ -152,7 +171,7 @@ Regras:
   const response = await fetch(OPENAI_URL, {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${openaiKey()}`,
+      Authorization: `Bearer ${creds.apiKey}`,
       'Content-Type': 'application/json'
     },
     body: JSON.stringify(payload),

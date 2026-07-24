@@ -371,26 +371,29 @@ export default function StoreDetail({ storeId, onBack, onEditBrand, onDelete }) 
         <section className="panel">
           <div className="panel-head">
             <div>
-              <p className="eyebrow">Matching inteligente</p>
-              <h2>Assimilar com IA</h2>
+              <p className="eyebrow">Assimilacao inteligente</p>
+              <h2>Fotos do catalogo</h2>
               <p>
-                Expande abreviacoes do ERP (PIC→picanha) e usa OpenAI para escolher a foto correta entre candidatos do banco,
-                rejeitando embalagens com logo de outras redes quando a confianca for baixa.
+                1) EAN global: casamento automatico sem IA. 2) EAN local: agente de busca (Configuracoes)
+                com similaridade semantica, abreviacoes e preferencia por foto limpa.
               </p>
             </div>
             <button className="accent" disabled={assimilating} onClick={startAssimilate}>
-              <Images size={16} /> {assimilating ? 'Em andamento...' : 'Iniciar assimilacao IA'}
+              <Images size={16} /> {assimilating ? 'Em andamento...' : 'Iniciar assimilacao'}
             </button>
           </div>
           <div className="finance-card" style={{ marginTop: 8 }}>
             <div className="quick-row"><span>Status</span><strong>{job?.status || 'Aguardando'}</strong></div>
+            <div className="quick-row"><span>Fase</span><strong>{job?.phase === 'GLOBAL' ? 'EAN global (automatico)' : job?.phase === 'LOCAL_AI' ? 'EAN local (IA)' : job?.phase || '-'}</strong></div>
             <div className="quick-row"><span>Progresso</span><strong>{percent}%</strong></div>
             <div className="quick-row"><span>Analisados</span><strong>{job?.examined || 0} / {job?.total || 0}</strong></div>
-            <div className="quick-row"><span>Fotos aplicadas</span><strong>{job?.matched || 0}</strong></div>
-            <div className="quick-row"><span>Sem match seguro</span><strong>{job?.skipped || 0}</strong></div>
+            <div className="quick-row"><span>Global automatico</span><strong>{job?.globalMatched || 0}</strong></div>
+            <div className="quick-row"><span>Local com IA</span><strong>{job?.localMatched || 0}</strong></div>
+            <div className="quick-row"><span>Sem match</span><strong>{job?.skipped || 0}</strong></div>
             <div className="finance-track" style={{ marginTop: 14 }}>
               <i style={{ width: `${percent}%`, display: 'block', height: '100%', background: 'currentColor' }} />
             </div>
+            {job?.message && <small style={{ display: 'block', marginTop: 10 }}>{job.message}</small>}
             {job?.error && <div className="error" style={{ marginTop: 12 }}>{job.error}</div>}
           </div>
           {!!job?.samples?.length && (
@@ -402,7 +405,7 @@ export default function StoreDetail({ storeId, onBack, onEditBrand, onDelete }) 
                     <tr key={`${sample.productId}-${sample.matchedEan}`}>
                       <td><strong>{sample.name}</strong><br /><code>{sample.barcode || '-'}</code></td>
                       <td>{sample.matchedDescription}<br /><code>{sample.matchedEan}</code><br /><small>{sample.reason || sample.sourceName}</small></td>
-                      <td>{sample.method || 'name-match'}</td>
+                      <td>{sample.method || '-'}</td>
                       <td>{sample.score}</td>
                     </tr>
                   ))}

@@ -31,6 +31,7 @@ import {
 } from 'lucide-react';
 import { api } from './api.js';
 import StoreDetail from './StoreDetail.jsx';
+import SettingsPage from './SettingsPage.jsx';
 
 const money = value => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(value || 0));
 const STATUS = {
@@ -78,7 +79,8 @@ const nav = [
   ['stores', 'Supermercados', Building2],
   ['integrations', 'Integracoes ERP', Cable],
   ['catalog', 'Banco de imagens', Images],
-  ['billing', 'Assinaturas', WalletCards]
+  ['billing', 'Assinaturas', WalletCards],
+  ['settings', 'Configuracoes', ServerCog]
 ];
 
 function Sidebar({ active, setActive, user, logout, open, close }) {
@@ -243,7 +245,7 @@ function CatalogLibrary() {
   }
   return <div className="catalog-page">
     <section className="catalog-hero">
-      <div><p className="eyebrow">Patrimonio de catalogo</p><h2>Imagens certas, produtos reconhecidos.</h2><p>Varra fontes homologadas e construa uma biblioteca central por EAN para enriquecer todos os supermercados.</p></div>
+      <div><p className="eyebrow">Patrimonio de catalogo</p><h2>Imagens certas, produtos reconhecidos.</h2><p>Escolha o supermercado fonte e importe todas as imagens disponiveis para o banco central. Nada e descartado por EAN — tudo entra na biblioteca.</p></div>
       <div className={`collector-pill ${library?.collector?.online ? 'online' : 'offline'}`}><i />{library?.collector?.online ? 'Coletor conectado' : 'Coletor desligado'}</div>
     </section>
     <section className="catalog-metrics">
@@ -259,7 +261,7 @@ function CatalogLibrary() {
         <label>Fonte de produtos<select value={form.sourceType} onChange={event => chooseSource(event.target.value)}>{SCAN_SOURCES.map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select></label>
         {needsValue && <label>{form.sourceType === 'CUSTOM_URL' ? 'URL HTTPS do supermercado' : 'Termo para pesquisar'}<input value={form.value} onChange={event => setForm(current => ({ ...current, value: event.target.value }))} placeholder={form.sourceType === 'CUSTOM_URL' ? 'https://loja.exemplo.com/produtos' : 'Ex.: cafe, arroz, limpeza'} required /></label>}
         <div className="scan-fields"><label>Quantidade maxima<input type="number" min="1" max={maxLimit} value={form.limit} onChange={event => setForm(current => ({ ...current, limit: event.target.value }))}/></label><label>Processos simultaneos<input type="number" min="1" max="12" value={form.concurrency} onChange={event => setForm(current => ({ ...current, concurrency: event.target.value }))}/></label></div>
-        <div className="scan-note"><CircleAlert size={17}/><span>A coleta usa o servico especializado na porta 4300. O resultado final e copiado para o banco central do AiMerc.</span></div>
+        <div className="scan-note"><CircleAlert size={17}/><span>A varredura busca todas as imagens da fonte escolhida e grava no banco central. Depois, no supermercado cliente, EAN global casa automatico e EAN local usa o agente de IA.</span></div>
         {running ? (
           <button type="button" className="danger-button scan-start" onClick={cancel} disabled={cancelling}>
             <X size={18}/> {cancelling ? 'Cancelando...' : 'Cancelar varredura'}
@@ -421,6 +423,6 @@ export default function App() {
   async function removeStore(id, password) { await api.deleteStore(id, password); setSelectedStoreId(null); await load(); }
   async function changeStatus(id,status) { try { await api.updateStatus(id,status); await load(); } catch (requestError) { setError(requestError.message); } }
   if (!session) return <Login onSuccess={value => { setSession(value); load(); }} />;
-  const titles = { overview: 'Visao geral', stores: selectedStoreId ? 'Gestao do supermercado' : 'Supermercados', integrations: 'Integracoes ERP', catalog: 'Banco de imagens', billing: 'Assinaturas' };
-  return <div className="shell"><Sidebar active={active} setActive={id => { setActive(id); setSelectedStoreId(null); }} user={session.user} logout={logout} open={menuOpen} close={() => setMenuOpen(false)} />{menuOpen && <button className="overlay" onClick={() => setMenuOpen(false)} />}<main className="workspace"><Topbar title={titles[active]} openMenu={() => setMenuOpen(true)} refresh={active === 'catalog' || active === 'integrations' || selectedStoreId ? () => {} : load} refreshing={refreshing} onNew={active === 'stores' || active === 'overview' ? () => setCreating(true) : null} />{error && <div className="global-error">{error}<button onClick={() => setError('')}><X size={17} /></button></div>}<div className="content">{active === 'overview' && <Overview overview={overview} stores={stores} subscriptions={subscriptions} goStores={() => setActive('stores')} goBilling={() => setActive('billing')} />}{active === 'stores' && !selectedStoreId && <StoresTable stores={stores} query={query} setQuery={setQuery} onStatus={changeStatus} onEditBrand={setEditingBrand} onDelete={setDeletingStore} onOpen={store => setSelectedStoreId(store.id)} />}{active === 'stores' && selectedStoreId && <StoreDetail storeId={selectedStoreId} onBack={() => setSelectedStoreId(null)} onEditBrand={setEditingBrand} onDelete={setDeletingStore} />}{active === 'integrations' && <IntegrationsPage />}{active === 'catalog' && <CatalogLibrary />}{active === 'billing' && <Billing subscriptions={subscriptions} />}</div></main>{creating && <CreateStore close={() => setCreating(false)} onCreate={create} />}{editingBrand && <BrandingModal store={editingBrand} close={() => setEditingBrand(null)} onSave={saveBranding} />}{deletingStore && <DeleteStoreModal store={deletingStore} close={() => setDeletingStore(null)} onDelete={removeStore} />}</div>;
+  const titles = { overview: 'Visao geral', stores: selectedStoreId ? 'Gestao do supermercado' : 'Supermercados', integrations: 'Integracoes ERP', catalog: 'Banco de imagens', billing: 'Assinaturas', settings: 'Configuracoes' };
+  return <div className="shell"><Sidebar active={active} setActive={id => { setActive(id); setSelectedStoreId(null); }} user={session.user} logout={logout} open={menuOpen} close={() => setMenuOpen(false)} />{menuOpen && <button className="overlay" onClick={() => setMenuOpen(false)} />}<main className="workspace"><Topbar title={titles[active]} openMenu={() => setMenuOpen(true)} refresh={active === 'catalog' || active === 'integrations' || active === 'settings' || selectedStoreId ? () => {} : load} refreshing={refreshing} onNew={active === 'stores' || active === 'overview' ? () => setCreating(true) : null} />{error && <div className="global-error">{error}<button onClick={() => setError('')}><X size={17} /></button></div>}<div className="content">{active === 'overview' && <Overview overview={overview} stores={stores} subscriptions={subscriptions} goStores={() => setActive('stores')} goBilling={() => setActive('billing')} />}{active === 'stores' && !selectedStoreId && <StoresTable stores={stores} query={query} setQuery={setQuery} onStatus={changeStatus} onEditBrand={setEditingBrand} onDelete={setDeletingStore} onOpen={store => setSelectedStoreId(store.id)} />}{active === 'stores' && selectedStoreId && <StoreDetail storeId={selectedStoreId} onBack={() => setSelectedStoreId(null)} onEditBrand={setEditingBrand} onDelete={setDeletingStore} />}{active === 'integrations' && <IntegrationsPage />}{active === 'catalog' && <CatalogLibrary />}{active === 'billing' && <Billing subscriptions={subscriptions} />}{active === 'settings' && <SettingsPage />}</div></main>{creating && <CreateStore close={() => setCreating(false)} onCreate={create} />}{editingBrand && <BrandingModal store={editingBrand} close={() => setEditingBrand(null)} onSave={saveBranding} />}{deletingStore && <DeleteStoreModal store={deletingStore} close={() => setDeletingStore(null)} onDelete={removeStore} />}</div>;
 }

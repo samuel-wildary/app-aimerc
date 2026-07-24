@@ -81,7 +81,8 @@ import { encryptIntegrationSecret } from './lib/store-integration.js';
 import { normalizeCategory } from './lib/categories.js';
 import { ApiError, normalizeEmail, oneOf, optionalText, positiveNumber, requiredText, slugify } from './lib/validation.js';
 import { assimilateStoreCatalogImages, linkCatalogImageToProduct, searchCatalogImages } from './lib/catalog-image-match.js';
-import { openaiConfigured } from './lib/ai-image-match.js';
+import { resolveAiCredentials } from './lib/ai-image-match.js';
+import { getAiSearchAgent, saveAiSearchAgent } from './lib/platform-settings.js';
 import crypto from 'node:crypto';
 
 const assimilateJobs = new Map();
@@ -319,8 +320,11 @@ app.get('/api/public/stores/:slug/catalog', asyncRoute(async (req, res) => {
 }));
 
 app.get('/api/public/catalog-library/:ean/image', asyncRoute(async (req, res) => {
-  if (!/^\d{8,14}$/.test(String(req.params.ean || ''))) throw new ApiError(400, 'EAN invalido');
-  const image = await getCatalogAssetImage(req.params.ean);
+  const ean = String(req.params.ean || '');
+  if (!/^(\d{8,14}|ext_[a-f0-9]{8,40}|VIRTUAL_[A-Z0-9_]{2,48}|PLU_[A-Z0-9_]{1,40})$/i.test(ean)) {
+    throw new ApiError(400, 'Identificador de imagem invalido');
+  }
+  const image = await getCatalogAssetImage(ean);
   if (!image) throw new ApiError(404, 'Imagem nao encontrada');
   res.setHeader('Content-Type', image.content_type);
   res.setHeader('Cache-Control', 'public, max-age=86400, stale-while-revalidate=604800');
@@ -846,7 +850,7 @@ app.get('/api/admin/image-search', requireAuth('PLATFORM_ADMIN'), asyncRoute(asy
   const base = publicApiBase(req);
   res.json({
     ...result,
-    aiEnabled: openaiConfigured(),
+    aiEnabled: (await resolveAiCredentials()).configured,
     items: result.items.map(item => ({
       ...item,
       image: `${base}/public/catalog-library/${encodeURIComponent(item.ean)}/image?v=${encodeURIComponent(item.updatedAt)}`
@@ -934,6 +938,27 @@ app.delete('/api/admin/stores/:id', requireAuth('PLATFORM_ADMIN'), asyncRoute(as
   res.json({ success: true, deletedStore: { id: store.id, name: store.name } });
 }));
 
+app.get('/api/admin/settings/ai-agent', requireAuth('PLATFORM_ADMIN'), asyncRoute(async (req, res) => {
+  res.json(await getAiSearchAgent());
+}));
+
+app.put('/api/admin/settings/ai-agent', requireAuth('PLATFORM_ADMIN'), asyncRoute(async (req, res) => {
+  const saved = await saveAiSearchAgent({
+    provider: req.body?.provider || 'openai',
+    model: req.body?.model,
+    apiKey: req.body?.apiKey,
+    clearApiKey: Boolean(req.body?.clearApiKey)
+  });
+  await writeAuditLog({
+    actorId: req.user.sub,
+    action: 'AI_AGENT_SETTINGS_UPDATED',
+    entityType: 'PLATFORM_SETTING',
+    entityId: 'ai_search_agent',
+    metadata: { provider: saved.provider, model: saved.model, hasApiKey: saved.hasApiKey }
+  });
+  res.json(saved);
+}));
+
 app.get('/api/admin/subscriptions', requireAuth('PLATFORM_ADMIN'), asyncRoute(async (req, res) => {
   res.json(await listSubscriptions());
 }));
@@ -992,12 +1017,16 @@ app.post('/api/admin/stores/:id/assimilate-images', requireAuth('PLATFORM_ADMIN'
     storeName: store.name,
     status: 'RUNNING',
     percent: 0,
+    phase: 'GLOBAL',
     examined: 0,
     matched: 0,
     skipped: 0,
+    globalMatched: 0,
+    localMatched: 0,
     total: 0,
     samples: [],
     error: '',
+    message: 'Iniciando assimilacao',
     startedAt: new Date().toISOString(),
     finishedAt: null
   };
@@ -1006,27 +1035,35 @@ app.post('/api/admin/stores/:id/assimilate-images', requireAuth('PLATFORM_ADMIN'
 
   assimilateStoreCatalogImages(store.id, {
     limit,
-    onlyLocalBarcode: req.body?.onlyLocalBarcode !== false,
+    useAi: req.body?.useAi !== false,
     onProgress: progress => {
       Object.assign(job, {
         status: progress.status || 'RUNNING',
         percent: progress.percent || 0,
+        phase: progress.phase || job.phase,
         examined: progress.examined || 0,
         matched: progress.matched || 0,
         skipped: progress.skipped || 0,
+        globalMatched: progress.globalMatched || 0,
+        localMatched: progress.localMatched || 0,
         total: progress.total || 0,
-        samples: progress.samples || job.samples
+        samples: progress.samples || job.samples,
+        message: progress.message || job.message
       });
     }
   }).then(async summary => {
     Object.assign(job, {
       status: 'COMPLETED',
       percent: 100,
+      phase: 'DONE',
       examined: summary.examined,
       matched: summary.matched,
       skipped: summary.skipped,
+      globalMatched: summary.globalMatched,
+      localMatched: summary.localMatched,
       total: summary.total,
       samples: summary.samples,
+      message: 'Assimilacao concluida',
       finishedAt: new Date().toISOString()
     });
     await writeAuditLog({
@@ -1035,7 +1072,14 @@ app.post('/api/admin/stores/:id/assimilate-images', requireAuth('PLATFORM_ADMIN'
       action: 'STORE_IMAGES_ASSIMILATED',
       entityType: 'STORE',
       entityId: store.id,
-      metadata: { jobId, examined: summary.examined, matched: summary.matched, skipped: summary.skipped }
+      metadata: {
+        jobId,
+        examined: summary.examined,
+        matched: summary.matched,
+        globalMatched: summary.globalMatched,
+        localMatched: summary.localMatched,
+        skipped: summary.skipped
+      }
     });
   }).catch(error => {
     Object.assign(job, {

@@ -266,8 +266,9 @@ export async function findCatalogMatchByName(product, options = {}) {
   const candidates = await findCatalogCandidates(product, { limit: options.candidateLimit || 40 });
   if (!candidates.length) return null;
 
-  const { chooseCatalogMatchWithAi, openaiConfigured } = await import('./ai-image-match.js');
-  if (openaiConfigured() && options.useAi !== false) {
+  const { chooseCatalogMatchWithAi, resolveAiCredentials } = await import('./ai-image-match.js');
+  const creds = await resolveAiCredentials();
+  if (creds.configured && options.useAi !== false) {
     try {
       const aiMatch = await chooseCatalogMatchWithAi(product, candidates, {
         minConfidence: options.minConfidence ?? 0.62
@@ -315,18 +316,14 @@ export async function linkCatalogImageToProduct(storeId, productId, catalogEan) 
 }
 
 export async function assimilateStoreCatalogImages(storeId, {
-  limit = 400,
-  onlyLocalBarcode = true,
+  limit = 800,
   onProgress = null,
   useAi = true
 } = {}) {
-  const clauses = ['p.store_id = $1', 'p.active = 1'];
-  const values = [storeId];
-
   const products = (await dbQuery(`
     SELECT p.id, p.sku, p.barcode, p.name, p.category, p.image
     FROM products p
-    WHERE ${clauses.join(' AND ')}
+    WHERE p.store_id = $1 AND p.active = 1
       AND (
         NOT EXISTS (
           SELECT 1 FROM product_images pi
@@ -343,64 +340,111 @@ export async function assimilateStoreCatalogImages(storeId, {
         )
       )
     ORDER BY p.name
-    LIMIT $${values.length + 1}
-  `, [...values, limit])).rows;
+    LIMIT $2
+  `, [storeId, limit])).rows;
 
-  const summary = { examined: 0, matched: 0, skipped: 0, total: products.length, samples: [] };
-  if (typeof onProgress === 'function') {
-    onProgress({ ...summary, status: 'RUNNING', percent: 0 });
-  }
+  const globalProducts = products.filter(p => !isLocalBarcode(p.barcode, p.sku));
+  const localProducts = products.filter(p => isLocalBarcode(p.barcode, p.sku) || isProduceLikeCategory(p.category));
+  // avoid double-processing produce with global barcode in local phase
+  const localOnly = localProducts.filter(p => isLocalBarcode(p.barcode, p.sku));
 
-  for (const product of products) {
+  const summary = {
+    examined: 0,
+    matched: 0,
+    skipped: 0,
+    globalMatched: 0,
+    localMatched: 0,
+    total: globalProducts.length + localOnly.length,
+    phase: 'GLOBAL',
+    samples: []
+  };
+
+  const report = (extra = {}) => {
+    if (typeof onProgress === 'function') {
+      const percent = summary.total ? Math.round((summary.examined / summary.total) * 100) : 100;
+      onProgress({ ...summary, percent, status: 'RUNNING', ...extra });
+    }
+  };
+  report({ phase: 'GLOBAL', message: 'Casando EAN global automaticamente (sem IA)' });
+
+  for (const product of globalProducts) {
     summary.examined += 1;
-    if (onlyLocalBarcode && !isLocalBarcode(product.barcode, product.sku) && !isProduceLikeCategory(product.category)) {
+    summary.phase = 'GLOBAL';
+    const ean = String(product.barcode || '').replace(/\D/g, '');
+    const asset = (await dbQuery(
+      `SELECT ean, description, source_name, content_type, image_data
+       FROM catalog_assets
+       WHERE ean = $1 AND content_type <> 'image/svg+xml'`,
+      [ean]
+    )).rows[0];
+    if (!asset?.image_data) {
       summary.skipped += 1;
     } else {
-      const match = await findCatalogMatchByName(product, { useAi });
-      if (!match) {
+      await writeImageFn(storeId, product.id, asset.image_data, asset.content_type, `ean-global:${ean}`);
+      summary.matched += 1;
+      summary.globalMatched += 1;
+      if (summary.samples.length < 25) {
+        summary.samples.push({
+          productId: product.id,
+          name: product.name,
+          barcode: product.barcode,
+          matchedEan: asset.ean,
+          matchedDescription: asset.description,
+          sourceName: asset.source_name,
+          score: 1,
+          method: 'ean-global',
+          reason: 'Match automatico por EAN/GTIN global'
+        });
+      }
+    }
+    report({ phase: 'GLOBAL' });
+  }
+
+  report({ phase: 'LOCAL_AI', message: 'Assimilando EAN local com agente de IA' });
+  for (const product of localOnly) {
+    summary.examined += 1;
+    summary.phase = 'LOCAL_AI';
+    const match = await findCatalogMatchByName(product, { useAi, force: true });
+    if (!match) {
+      summary.skipped += 1;
+    } else {
+      const asset = (await dbQuery(
+        'SELECT content_type, image_data FROM catalog_assets WHERE ean = $1',
+        [match.ean]
+      )).rows[0];
+      if (!asset?.image_data) {
         summary.skipped += 1;
       } else {
-        const asset = (await dbQuery(
-          'SELECT content_type, image_data FROM catalog_assets WHERE ean = $1',
-          [match.ean]
-        )).rows[0];
-        if (!asset?.image_data) {
-          summary.skipped += 1;
-        } else {
-          await writeImageFn(
-            storeId,
-            product.id,
-            asset.image_data,
-            asset.content_type,
-            `${match.method || 'name-match'}:${match.ean}:${match.headword || 'item'}`
-          );
-          summary.matched += 1;
-          if (summary.samples.length < 20) {
-            summary.samples.push({
-              productId: product.id,
-              name: product.name,
-              barcode: product.barcode,
-              matchedEan: match.ean,
-              matchedDescription: match.description,
-              sourceName: match.sourceName,
-              score: Number(match.score.toFixed(3)),
-              headword: match.headword,
-              method: match.method || 'name-match',
-              reason: match.reason || ''
-            });
-          }
+        await writeImageFn(
+          storeId,
+          product.id,
+          asset.image_data,
+          asset.content_type,
+          `${match.method || 'openai-match'}:${match.ean}:${match.headword || 'item'}`
+        );
+        summary.matched += 1;
+        summary.localMatched += 1;
+        if (summary.samples.length < 40) {
+          summary.samples.push({
+            productId: product.id,
+            name: product.name,
+            barcode: product.barcode,
+            matchedEan: match.ean,
+            matchedDescription: match.description,
+            sourceName: match.sourceName,
+            score: Number(match.score.toFixed(3)),
+            headword: match.headword,
+            method: match.method || 'openai-match',
+            reason: match.reason || 'Match semantico EAN local'
+          });
         }
       }
     }
-
-    if (typeof onProgress === 'function') {
-      const percent = summary.total ? Math.round((summary.examined / summary.total) * 100) : 100;
-      onProgress({ ...summary, status: 'RUNNING', percent });
-    }
+    report({ phase: 'LOCAL_AI' });
   }
 
   if (typeof onProgress === 'function') {
-    onProgress({ ...summary, status: 'COMPLETED', percent: 100 });
+    onProgress({ ...summary, status: 'COMPLETED', percent: 100, phase: 'DONE' });
   }
   return summary;
 }

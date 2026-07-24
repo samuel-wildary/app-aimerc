@@ -58,6 +58,10 @@ class AdminApi {
       body: JSON.stringify({ catalogEan })
     });
   }
+  getAiAgentSettings() { return this.request('/admin/settings/ai-agent'); }
+  saveAiAgentSettings(data) {
+    return this.request('/admin/settings/ai-agent', { method: 'PUT', body: JSON.stringify(data) });
+  }
   integrationProviders() { return this.request('/admin/integration-providers'); }
   integrations() { return this.request('/admin/integrations'); }
   saveIntegration(storeId, data) { return this.request(`/admin/stores/${storeId}/integration`, { method: 'PUT', body: JSON.stringify(data) }); }
