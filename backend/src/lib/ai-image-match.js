@@ -77,7 +77,7 @@ export async function resolveAiCredentials() {
   const apiKey = String(process.env.AIMERC_OPENAI_API_KEY || process.env.OPENAI_API_KEY || '').trim();
   return {
     apiKey,
-    model: String(process.env.AIMERC_OPENAI_MODEL || 'gpt-4o-mini').trim() || 'gpt-4o-mini',
+    model: String(process.env.AIMERC_OPENAI_MODEL || 'gpt-5.6-terra').trim() || 'gpt-5.6-terra',
     configured: Boolean(apiKey),
     source: apiKey ? 'env' : 'none'
   };

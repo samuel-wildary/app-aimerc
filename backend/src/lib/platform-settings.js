@@ -31,7 +31,7 @@ export async function getAiSearchAgent() {
   if (!apiKey) apiKey = envKey;
   return {
     provider: value.provider || 'openai',
-    model: value.model || envModel || 'gpt-4o-mini',
+    model: value.model || envModel || 'gpt-5.6-terra',
     hasApiKey: Boolean(apiKey),
     apiKeyConfigured: Boolean(apiKey),
     source: value.encryptedApiKey ? 'settings' : (envKey ? 'env' : 'none'),
@@ -61,7 +61,7 @@ export async function saveAiSearchAgent(input = {}) {
   const currentValue = current?.value || {};
   const next = {
     provider: String(input.provider || currentValue.provider || 'openai').toLowerCase(),
-    model: String(input.model || currentValue.model || 'gpt-4o-mini').trim() || 'gpt-4o-mini',
+    model: String(input.model || currentValue.model || 'gpt-5.6-terra').trim() || 'gpt-5.6-terra',
     encryptedApiKey: currentValue.encryptedApiKey || ''
   };
   const incomingKey = String(input.apiKey || '').trim();
