@@ -48,6 +48,12 @@ class AdminApi {
   assimilateJob(storeId, jobId) {
     return this.request(`/admin/stores/${encodeURIComponent(storeId)}/assimilate-images/${encodeURIComponent(jobId)}`);
   }
+  clearShortEanImages(storeId, maxDigits = 5) {
+    return this.request(`/admin/stores/${encodeURIComponent(storeId)}/clear-short-ean-images`, {
+      method: 'POST',
+      body: JSON.stringify({ maxDigits })
+    });
+  }
   searchImages(q = '', limit = 48, offset = 0) {
     const params = new URLSearchParams({ q, limit: String(limit), offset: String(offset), realOnly: '1' });
     return this.request(`/admin/image-search?${params}`);
@@ -56,6 +62,37 @@ class AdminApi {
     return this.request(`/admin/stores/${encodeURIComponent(storeId)}/products/${encodeURIComponent(productId)}/link-image`, {
       method: 'POST',
       body: JSON.stringify({ catalogEan })
+    });
+  }
+  async uploadProductImage(storeId, productId, file) {
+    const response = await fetch(
+      `${API_URL}/admin/stores/${encodeURIComponent(storeId)}/products/${encodeURIComponent(productId)}/image`,
+      {
+        method: 'POST',
+        headers: {
+          ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}),
+          'Content-Type': file.type || 'image/jpeg'
+        },
+        body: file
+      }
+    );
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const error = new Error(data.error || 'Falha ao enviar a foto');
+      error.status = response.status;
+      throw error;
+    }
+    return data;
+  }
+  clearProductImage(storeId, productId) {
+    return this.request(`/admin/stores/${encodeURIComponent(storeId)}/products/${encodeURIComponent(productId)}/image`, {
+      method: 'DELETE'
+    });
+  }
+  clearProductImages(storeId, productIds) {
+    return this.request(`/admin/stores/${encodeURIComponent(storeId)}/products/clear-images`, {
+      method: 'POST',
+      body: JSON.stringify({ productIds })
     });
   }
   getAiAgentSettings() { return this.request('/admin/settings/ai-agent'); }

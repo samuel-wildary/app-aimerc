@@ -64,7 +64,7 @@ import {
   upsertProducts
 } from './lib/database.js';
 import { firebaseStatus, sendFirebaseNotification } from './lib/firebase.js';
-import { productImage, storeProductImage } from './lib/product-images.js';
+import { productImage, storeProductImage, clearShortEanProductImages, clearProductImages } from './lib/product-images.js';
 import { getBannerImage, storeBannerImage } from './lib/banner-images.js';
 import {
   catalogLibraryOverview,
@@ -124,7 +124,8 @@ app.use((req, res, next) => {
   // public, read-only assets must not consume the administrative API quota.
   if (isPublicImageRead) return next();
 
-  const isImageUpload = req.path.startsWith('/api/sync/product-images/');
+  const isImageUpload = req.path.startsWith('/api/sync/product-images/')
+    || /^\/api\/admin\/stores\/[^/]+\/products\/[^/]+\/image$/.test(req.path);
   const bucket = isImageUpload ? 'image-upload' : 'api';
   const key = `${bucket}:${req.ip}:${Math.floor(Date.now() / 60_000)}`;
   const count = (requestBuckets.get(key) || 0) + 1;
@@ -875,6 +876,92 @@ app.post('/api/admin/stores/:id/products/:productId/link-image', requireAuth('PL
     metadata: { catalogEan }
   });
   res.json({ success: true, ...linked, product: { id: product.id, name: product.name } });
+}));
+
+app.post(
+  '/api/admin/stores/:id/products/:productId/image',
+  requireAuth('PLATFORM_ADMIN'),
+  express.raw({ type: ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif'], limit: '10mb' }),
+  asyncRoute(async (req, res) => {
+    const store = await getStore(req.params.id);
+    if (!store) throw new ApiError(404, 'Supermercado nao encontrado');
+    const product = await getProduct(store.id, req.params.productId);
+    if (!product) throw new ApiError(404, 'Produto nao encontrado');
+    if (!Buffer.isBuffer(req.body) || !req.body.length) throw new ApiError(400, 'Arquivo de imagem invalido');
+    const stored = await storeProductImage(store.id, product, req.body, req.headers['content-type'], 'admin-upload');
+    await writeAuditLog({
+      storeId: store.id,
+      actorId: req.user.sub,
+      action: 'PRODUCT_IMAGE_UPLOADED',
+      entityType: 'PRODUCT',
+      entityId: product.id,
+      metadata: { bytes: stored.bytes, contentType: stored.contentType }
+    });
+    res.json({ success: true, productId: product.id, product: { id: product.id, name: product.name }, ...stored });
+  })
+);
+
+app.delete('/api/admin/stores/:id/products/:productId/image', requireAuth('PLATFORM_ADMIN'), asyncRoute(async (req, res) => {
+  const store = await getStore(req.params.id);
+  if (!store) throw new ApiError(404, 'Supermercado nao encontrado');
+  const product = await getProduct(store.id, req.params.productId);
+  if (!product) throw new ApiError(404, 'Produto nao encontrado');
+  const result = await clearProductImages(store.id, [product.id]);
+  await writeAuditLog({
+    storeId: store.id,
+    actorId: req.user.sub,
+    action: 'PRODUCT_IMAGE_CLEARED',
+    entityType: 'PRODUCT',
+    entityId: product.id,
+    metadata: result
+  });
+  res.json({ success: true, product: { id: product.id, name: product.name }, ...result });
+}));
+
+app.post('/api/admin/stores/:id/products/clear-images', requireAuth('PLATFORM_ADMIN'), asyncRoute(async (req, res) => {
+  const store = await getStore(req.params.id);
+  if (!store) throw new ApiError(404, 'Supermercado nao encontrado');
+  const productIds = Array.isArray(req.body?.productIds) ? req.body.productIds : [];
+  if (!productIds.length) throw new ApiError(400, 'Informe productIds');
+  if (productIds.length > 200) throw new ApiError(400, 'Limite de 200 produtos por vez');
+  const result = await clearProductImages(store.id, productIds);
+  await writeAuditLog({
+    storeId: store.id,
+    actorId: req.user.sub,
+    action: 'PRODUCT_IMAGES_CLEARED_BULK',
+    entityType: 'STORE',
+    entityId: store.id,
+    metadata: { count: productIds.length, ...result }
+  });
+  res.json({ success: true, store: { id: store.id, name: store.name }, ...result });
+}));
+
+app.post('/api/admin/stores/:id/clear-short-ean-images', requireAuth('PLATFORM_ADMIN'), asyncRoute(async (req, res) => {
+  const store = await getStore(req.params.id);
+  if (!store) throw new ApiError(404, 'Supermercado nao encontrado');
+  const maxDigits = Math.min(20, Math.max(0, Number(req.body?.maxDigits ?? 5)));
+  const result = await clearShortEanProductImages({ storeId: store.id, maxDigits });
+  await writeAuditLog({
+    storeId: store.id,
+    actorId: req.user.sub,
+    action: 'STORE_SHORT_EAN_IMAGES_CLEARED',
+    entityType: 'STORE',
+    entityId: store.id,
+    metadata: { removedImages: result.removedImages, clearedUrlFields: result.clearedUrlFields, maxDigits }
+  });
+  res.json({ success: true, store: { id: store.id, name: store.name }, ...result });
+}));
+
+app.post('/api/admin/clear-short-ean-images', requireAuth('PLATFORM_ADMIN'), asyncRoute(async (req, res) => {
+  const maxDigits = Math.min(20, Math.max(0, Number(req.body?.maxDigits ?? 5)));
+  const result = await clearShortEanProductImages({ maxDigits });
+  await writeAuditLog({
+    actorId: req.user.sub,
+    action: 'PLATFORM_SHORT_EAN_IMAGES_CLEARED',
+    entityType: 'PLATFORM',
+    metadata: { removedImages: result.removedImages, clearedUrlFields: result.clearedUrlFields, maxDigits }
+  });
+  res.json({ success: true, ...result });
 }));
 
 app.post('/api/admin/stores', requireAuth('PLATFORM_ADMIN'), asyncRoute(async (req, res) => {
