@@ -359,14 +359,28 @@ export async function linkCatalogImageToProduct(storeId, productId, catalogEan) 
 }
 
 /**
- * Ao abrir um supermercado: copia do banco de imagens (catalog_assets)
- * para product_images todo produto com EAN real (8–14 digitos) que bate no banco.
- * Nao usa IA. Preserva upload manual (admin-upload / catalog-import).
+ * Copia do banco de imagens (catalog_assets) para product_images
+ * todo produto com EAN real (8–14 digitos) que bate no banco.
+ * Nao usa IA.
+ * force=true: substitui qualquer foto existente (incluindo upload manual).
+ * force=false: preserva admin-upload / catalog-import.
  */
-export async function syncStoreEanImages(storeId) {
+export async function syncStoreEanImages(storeId, { force = false } = {}) {
   const eligible = (await dbQuery(`
     SELECT COUNT(*)::int AS total
     FROM products p
+    WHERE p.store_id = $1
+      AND p.active = 1
+      AND length(regexp_replace(COALESCE(p.barcode, ''), '[^0-9]', '', 'g')) BETWEEN 8 AND 14
+  `, [storeId])).rows[0]?.total || 0;
+
+  const withCatalog = (await dbQuery(`
+    SELECT COUNT(*)::int AS total
+    FROM products p
+    INNER JOIN catalog_assets ca
+      ON ca.ean = regexp_replace(COALESCE(p.barcode, ''), '[^0-9]', '', 'g')
+     AND ca.content_type <> 'image/svg+xml'
+     AND COALESCE(ca.byte_size, 0) > 3000
     WHERE p.store_id = $1
       AND p.active = 1
       AND length(regexp_replace(COALESCE(p.barcode, ''), '[^0-9]', '', 'g')) BETWEEN 8 AND 14
@@ -394,7 +408,8 @@ export async function syncStoreEanImages(storeId) {
       AND p.active = 1
       AND length(regexp_replace(COALESCE(p.barcode, ''), '[^0-9]', '', 'g')) BETWEEN 8 AND 14
       AND (
-        pi.product_id IS NULL
+        $2::boolean = true
+        OR pi.product_id IS NULL
         OR COALESCE(pi.source, '') NOT IN ('admin-upload', 'catalog-import')
       )
     ON CONFLICT (store_id, product_id) DO UPDATE SET
@@ -404,10 +419,11 @@ export async function syncStoreEanImages(storeId) {
       byte_size = EXCLUDED.byte_size,
       source = EXCLUDED.source,
       updated_at = NOW()
-    WHERE product_images.checksum IS DISTINCT FROM EXCLUDED.checksum
+    WHERE $2::boolean = true
+       OR product_images.checksum IS DISTINCT FROM EXCLUDED.checksum
        OR product_images.source IS DISTINCT FROM EXCLUDED.source
     RETURNING product_id
-  `, [storeId]);
+  `, [storeId, Boolean(force)]);
 
   const productIds = synced.rows.map(row => row.product_id);
   if (productIds.length) {
@@ -420,8 +436,10 @@ export async function syncStoreEanImages(storeId) {
 
   return {
     eligible,
+    withCatalog,
     updated: productIds.length,
-    skippedManual: Math.max(0, eligible - productIds.length)
+    force: Boolean(force),
+    skippedManual: force ? 0 : Math.max(0, withCatalog - productIds.length)
   };
 }
 

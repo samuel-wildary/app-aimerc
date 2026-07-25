@@ -281,12 +281,12 @@ export default function StoreDetail({ storeId, onBack, onEditBrand, onDelete }) 
     (async () => {
       setSyncingEan(true);
       try {
-        const result = await api.syncStoreEanImages(storeId);
+        const result = await api.syncStoreEanImages(storeId, { force: true });
         if (cancelled) return;
         const updated = Number(result.updated || 0);
         setMessage(
           updated > 0
-            ? `Fotos por EAN atualizadas: ${updated} produto(s) do banco de imagens.`
+            ? `Fotos por EAN substituidas: ${updated} produto(s) do banco de imagens.`
             : 'Fotos por EAN conferidas — nada novo para sincronizar.'
         );
         await loadDetail({ quiet: true });
@@ -573,12 +573,12 @@ export default function StoreDetail({ storeId, onBack, onEditBrand, onDelete }) 
             onClick={() => {
               loadDetail({ quiet: true });
               setSyncingEan(true);
-              api.syncStoreEanImages(storeId)
+              api.syncStoreEanImages(storeId, { force: true })
                 .then(async result => {
                   const updated = Number(result.updated || 0);
                   setMessage(
                     updated > 0
-                      ? `Fotos por EAN atualizadas: ${updated} produto(s) do banco de imagens.`
+                      ? `Fotos por EAN substituidas: ${updated} produto(s) do banco de imagens.`
                       : 'Fotos por EAN conferidas — nada novo para sincronizar.'
                   );
                   await loadDetail({ quiet: true });

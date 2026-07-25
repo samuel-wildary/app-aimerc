@@ -41,10 +41,10 @@ class AdminApi {
   startCatalogScan(data) { return this.request('/admin/catalog-library/scans', { method: 'POST', body: JSON.stringify(data) }); }
   cancelCatalogScan() { return this.request('/admin/catalog-library/scans/cancel', { method: 'POST' }); }
   deleteCatalogAsset(ean) { return this.request(`/admin/catalog-library/${encodeURIComponent(ean)}`, { method: 'DELETE' }); }
-  syncStoreEanImages(storeId) {
+  syncStoreEanImages(storeId, { force = false } = {}) {
     return this.request(`/admin/stores/${encodeURIComponent(storeId)}/sync-ean-images`, {
       method: 'POST',
-      body: JSON.stringify({})
+      body: JSON.stringify({ force })
     });
   }
   assimilateStoreImages(storeId, { limit = 500, category = '', onlyLocalBarcode = true } = {}) {

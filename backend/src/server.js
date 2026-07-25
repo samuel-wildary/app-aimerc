@@ -881,7 +881,8 @@ app.post('/api/admin/stores/:id/products/:productId/link-image', requireAuth('PL
 app.post('/api/admin/stores/:id/sync-ean-images', requireAuth('PLATFORM_ADMIN'), asyncRoute(async (req, res) => {
   const store = await getStore(req.params.id);
   if (!store) throw new ApiError(404, 'Supermercado nao encontrado');
-  const summary = await syncStoreEanImages(store.id);
+  const force = req.body?.force === true || req.body?.force === '1' || req.body?.force === 1;
+  const summary = await syncStoreEanImages(store.id, { force });
   await writeAuditLog({
     storeId: store.id,
     actorId: req.user.sub,
