@@ -469,9 +469,10 @@ export async function listProducts(storeId, filters = {}) {
 
   const products = result.rows.map(row => {
     const product = mapProduct(row);
+    // So conta VIRTUAL se existir de verdade no banco — nao inventar "com imagem" so pelo nome.
     if (!product.hasCatalogImage) {
       const virtualEan = getVirtualEan(product.name, product.category);
-      if (virtualEan) {
+      if (virtualEan && activeVirtualEans.has(virtualEan)) {
         product.hasCatalogImage = true;
       }
     }
