@@ -1051,9 +1051,15 @@ app.get('/api/admin/subscriptions', requireAuth('PLATFORM_ADMIN'), asyncRoute(as
 }));
 
 app.get('/api/admin/catalog-library', requireAuth('PLATFORM_ADMIN'), asyncRoute(async (req, res) => {
+  const realOnly = req.query.realOnly !== '0';
   const [overview, assets] = await Promise.all([
     catalogLibraryOverview(),
-    listCatalogAssets({ search: req.query.search, limit: req.query.limit, offset: req.query.offset })
+    listCatalogAssets({
+      search: req.query.search,
+      limit: req.query.limit,
+      offset: req.query.offset,
+      realOnly
+    })
   ]);
   const base = publicApiBase(req);
   res.json({

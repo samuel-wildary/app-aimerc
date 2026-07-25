@@ -35,7 +35,9 @@ class AdminApi {
   updateStatus(id, status) { return this.request(`/admin/stores/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }); }
   updateBranding(id, colors) { return this.request(`/admin/stores/${id}/branding`, { method: 'PATCH', body: JSON.stringify(colors) }); }
   deleteStore(id, password) { return this.request(`/admin/stores/${id}`, { method: 'DELETE', body: JSON.stringify({ password }) }); }
-  catalogLibrary(search = '') { return this.request(`/admin/catalog-library?limit=48&search=${encodeURIComponent(search)}`); }
+  catalogLibrary(search = '') {
+    return this.request(`/admin/catalog-library?limit=48&realOnly=1&search=${encodeURIComponent(search)}`);
+  }
   startCatalogScan(data) { return this.request('/admin/catalog-library/scans', { method: 'POST', body: JSON.stringify(data) }); }
   cancelCatalogScan() { return this.request('/admin/catalog-library/scans/cancel', { method: 'POST' }); }
   deleteCatalogAsset(ean) { return this.request(`/admin/catalog-library/${encodeURIComponent(ean)}`, { method: 'DELETE' }); }

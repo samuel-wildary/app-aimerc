@@ -118,11 +118,11 @@ async function importLatestAssets(job) {
       examined += 1;
       try {
         const rawEan = String(item.ean || '').replace(/\D/g, '');
-        let assetKey = rawEan;
         if (!/^\d{8,14}$/.test(rawEan)) {
-          const seed = String(item.product_url || item.image_url || item.product_name || item.id || examined);
-          assetKey = `ext_${crypto.createHash('sha1').update(seed).digest('hex').slice(0, 28)}`;
+          skippedEmpty += 1;
+          continue;
         }
+        const assetKey = rawEan;
         const imageResponse = await fetch(`${scraperBaseUrl}/api/images/${encodeURIComponent(item.ean || item.id || assetKey)}`, {
           signal: AbortSignal.timeout(30_000)
         });
@@ -143,7 +143,12 @@ async function importLatestAssets(job) {
           continue;
         }
         const contentType = String(response.headers.get('content-type') || 'image/jpeg').split(';')[0];
-        if (!contentType.startsWith('image/')) {
+        if (!contentType.startsWith('image/') || contentType === 'image/svg+xml') {
+          skippedEmpty += 1;
+          continue;
+        }
+        const description = String(item.product_name || item.description || '').trim();
+        if (!description) {
           skippedEmpty += 1;
           continue;
         }
@@ -156,7 +161,7 @@ async function importLatestAssets(job) {
             content_type=EXCLUDED.content_type,image_data=EXCLUDED.image_data,checksum=EXCLUDED.checksum,
             byte_size=EXCLUDED.byte_size,source_name=EXCLUDED.source_name,source_url=EXCLUDED.source_url,
             collected_at=EXCLUDED.collected_at,updated_at=NOW()`, [
-          assetKey, String(item.product_name || ''), contentType, data, checksum, data.length,
+          assetKey, description, contentType, data, checksum, data.length,
           String(item.source_site || ''), String(item.product_url || item.image_url || ''), item.scraped_at || null
         ]);
         imported += 1;
@@ -263,33 +268,52 @@ export async function cancelCatalogScan(actorId) {
 }
 
 export async function catalogLibraryOverview() {
-  const [assets, bytes, lastJob, service] = await Promise.all([
+  const [assets, realAssets, bytes, lastJob, service] = await Promise.all([
     query('SELECT COUNT(*)::int AS total FROM catalog_assets'),
-    query('SELECT COALESCE(SUM(byte_size),0)::bigint AS total FROM catalog_assets'),
+    query(`SELECT COUNT(*)::int AS total FROM catalog_assets
+      WHERE ean ~ '^[0-9]{8,14}$' AND content_type <> 'image/svg+xml' AND byte_size > 3000`),
+    query(`SELECT COALESCE(SUM(byte_size),0)::bigint AS total FROM catalog_assets
+      WHERE ean ~ '^[0-9]{8,14}$' AND content_type <> 'image/svg+xml' AND byte_size > 3000`),
     query('SELECT * FROM catalog_scan_jobs ORDER BY started_at DESC LIMIT 1'),
     scraperStatus()
   ]);
   return {
-    totalAssets: Number(assets.rows[0].total),
+    totalAssets: Number(realAssets.rows[0].total),
+    totalAllAssets: Number(assets.rows[0].total),
     totalBytes: Number(bytes.rows[0].total),
     collector: { online: service.online, active: Boolean(service.scraper?.active), url: scraperBaseUrl },
     job: mapJob(lastJob.rows[0])
   };
 }
 
-export async function listCatalogAssets({ search = '', limit = 48, offset = 0 } = {}) {
+export async function listCatalogAssets({ search = '', limit = 48, offset = 0, realOnly = true } = {}) {
   const safeLimit = clamp(limit, 48, 1, 200);
   const safeOffset = clamp(offset, 0, 0, 100_000);
   const term = String(search || '').trim();
-  const where = term ? 'WHERE ean ILIKE $1 OR description ILIKE $1 OR source_name ILIKE $1' : '';
-  const values = term ? [`%${term}%`] : [];
+  const clauses = [];
+  const values = [];
+
+  if (realOnly !== false && realOnly !== '0') {
+    clauses.push(`ean ~ '^[0-9]{8,14}$'`);
+    clauses.push(`content_type <> 'image/svg+xml'`);
+    clauses.push(`byte_size > 3000`);
+  }
+
+  if (term) {
+    values.push(`%${term}%`);
+    clauses.push(`(ean ILIKE $${values.length} OR description ILIKE $${values.length} OR source_name ILIKE $${values.length})`);
+  }
+
+  const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
   const index = values.length;
   const [items, count] = await Promise.all([
     query(`SELECT ean,description,content_type,byte_size,source_name,source_url,collected_at,updated_at
-      FROM catalog_assets ${where} ORDER BY updated_at DESC LIMIT $${index + 1} OFFSET $${index + 2}`, [...values, safeLimit, safeOffset]),
+      FROM catalog_assets ${where}
+      ORDER BY updated_at DESC
+      LIMIT $${index + 1} OFFSET $${index + 2}`, [...values, safeLimit, safeOffset]),
     query(`SELECT COUNT(*)::int AS total FROM catalog_assets ${where}`, values)
   ]);
-  return { items: items.rows.map(mapAsset), total: Number(count.rows[0].total), limit: safeLimit, offset: safeOffset };
+  return { items: items.rows.map(mapAsset), total: Number(count.rows[0].total), limit: safeLimit, offset: safeOffset, realOnly: realOnly !== false && realOnly !== '0' };
 }
 
 export async function getCatalogAssetImage(ean) {

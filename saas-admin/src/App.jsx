@@ -245,11 +245,11 @@ function CatalogLibrary() {
   }
   return <div className="catalog-page">
     <section className="catalog-hero">
-      <div><p className="eyebrow">Patrimonio de catalogo</p><h2>Imagens certas, produtos reconhecidos.</h2><p>Escolha o supermercado fonte e importe todas as imagens disponiveis para o banco central. Nada e descartado por EAN — tudo entra na biblioteca.</p></div>
+      <div><p className="eyebrow">Patrimonio de catalogo</p><h2>Imagens certas, produtos reconhecidos.</h2><p>A biblioteca central guarda somente produtos com EAN valido (8 a 14 digitos), descricao e foto real coletadas das fontes. Codigos VIRTUAL e PLU nao entram nesta vitrine.</p></div>
       <div className={`collector-pill ${library?.collector?.online ? 'online' : 'offline'}`}><i />{library?.collector?.online ? 'Coletor conectado' : 'Coletor desligado'}</div>
     </section>
     <section className="catalog-metrics">
-      <Metric label="EANs catalogados" value={library?.totalAssets || 0} detail="produtos unicos" icon={Database} tone="lime" />
+      <Metric label="EANs catalogados" value={library?.totalAssets || 0} detail="somente EAN 8-14 digitos" icon={Database} tone="lime" />
       <Metric label="Armazenamento" value={bytes(library?.totalBytes)} detail="imagens no PostgreSQL" icon={HardDrive} tone="cyan" />
       <Metric label="Importados no ciclo" value={job?.imported || 0} detail={job ? `ultima execucao: ${job.status}` : 'nenhuma execucao'} icon={Images} tone="blue" />
       <Metric label="Tempo da varredura" value={elapsed(job?.startedAt, job?.finishedAt)} detail={running ? 'em andamento agora' : 'duracao do ultimo ciclo'} icon={RefreshCw} tone="orange" />
@@ -261,7 +261,7 @@ function CatalogLibrary() {
         <label>Fonte de produtos<select value={form.sourceType} onChange={event => chooseSource(event.target.value)}>{SCAN_SOURCES.map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select></label>
         {needsValue && <label>{form.sourceType === 'CUSTOM_URL' ? 'URL HTTPS do supermercado' : 'Termo para pesquisar'}<input value={form.value} onChange={event => setForm(current => ({ ...current, value: event.target.value }))} placeholder={form.sourceType === 'CUSTOM_URL' ? 'https://loja.exemplo.com/produtos' : 'Ex.: cafe, arroz, limpeza'} required /></label>}
         <div className="scan-fields"><label>Quantidade maxima<input type="number" min="1" max={maxLimit} value={form.limit} onChange={event => setForm(current => ({ ...current, limit: event.target.value }))}/></label><label>Processos simultaneos<input type="number" min="1" max="12" value={form.concurrency} onChange={event => setForm(current => ({ ...current, concurrency: event.target.value }))}/></label></div>
-        <div className="scan-note"><CircleAlert size={17}/><span>A varredura busca todas as imagens da fonte escolhida e grava no banco central. Depois, no supermercado cliente, EAN global casa automatico e EAN local usa o agente de IA.</span></div>
+        <div className="scan-note"><CircleAlert size={17}/><span>A varredura grava no banco central apenas itens com EAN numerico, descricao e foto real. Depois, no supermercado cliente, EAN global casa automatico e EAN local usa o agente de IA.</span></div>
         {running ? (
           <button type="button" className="danger-button scan-start" onClick={cancel} disabled={cancelling}>
             <X size={18}/> {cancelling ? 'Cancelando...' : 'Cancelar varredura'}
@@ -278,8 +278,8 @@ function CatalogLibrary() {
       </section>
     </section>
     <section className="panel asset-library">
-      <div className="panel-head"><div><p className="eyebrow">Biblioteca central</p><h2>Imagens e descricoes</h2></div><form className="search" onSubmit={event => { event.preventDefault(); load(search); }}><Search size={17}/><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Buscar EAN, descricao ou origem"/></form></div>
-      {loading ? <div className="asset-loading"><RefreshCw className="spin"/> Carregando biblioteca...</div> : library?.assets?.items?.length ? <div className="asset-grid">{library.assets.items.map(item => <article className="asset-card" key={item.ean}><div className="asset-image"><img src={item.image} alt={item.description || `Produto ${item.ean}`}/><button onClick={() => remove(item.ean)} title="Excluir"><Trash2 size={15}/></button></div><div className="asset-body"><code>{item.ean}</code><h3>{item.description || 'Descricao ainda nao identificada'}</h3><span>{item.sourceName || 'Fonte nao informada'}</span><small>{bytes(item.byteSize)} · {new Date(item.updatedAt).toLocaleDateString('pt-BR')}</small></div></article>)}</div> : <div className="scan-empty"><Database size={34}/><strong>Biblioteca vazia</strong><span>Os produtos coletados aparecerao aqui com EAN, descricao e imagem.</span></div>}
+      <div className="panel-head"><div><p className="eyebrow">Biblioteca central</p><h2>Imagens por EAN</h2><p className="catalog-library-hint">{library?.assets?.total || 0} produtos com codigo EAN, descricao e foto</p></div><form className="search" onSubmit={event => { event.preventDefault(); load(search); }}><Search size={17}/><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Buscar EAN, descricao ou origem"/></form></div>
+      {loading ? <div className="asset-loading"><RefreshCw className="spin"/> Carregando biblioteca...</div> : library?.assets?.items?.length ? <div className="asset-grid">{library.assets.items.map(item => <article className="asset-card" key={item.ean}><div className="asset-image"><img src={item.image} alt={item.description || `Produto ${item.ean}`}/><button onClick={() => remove(item.ean)} title="Excluir"><Trash2 size={15}/></button></div><div className="asset-body"><code>{item.ean}</code><h3>{item.description || 'Descricao ainda nao identificada'}</h3><span>{item.sourceName || 'Fonte nao informada'}</span><small>{bytes(item.byteSize)} · {new Date(item.updatedAt).toLocaleDateString('pt-BR')}</small></div></article>)}</div> : <div className="scan-empty"><Database size={34}/><strong>Nenhum EAN encontrado</strong><span>So aparecem produtos com EAN numerico (8 a 14 digitos), descricao e foto real. VIRTUAL_ e PLU_ ficam fora desta lista.</span></div>}
     </section>
   </div>;
 }
