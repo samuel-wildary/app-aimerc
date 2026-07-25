@@ -1220,6 +1220,23 @@ app.post('/api/products/assimilate-images', requireAuth('STORE_MANAGER'), asyncR
   res.json({ success: true, ...summary });
 }));
 
+app.post('/api/products/clear-images', requireAuth('STORE_MANAGER'), asyncRoute(async (req, res) => {
+  await managerStore(req);
+  const productIds = Array.isArray(req.body?.productIds) ? req.body.productIds : [];
+  if (!productIds.length) throw new ApiError(400, 'Informe productIds');
+  if (productIds.length > 200) throw new ApiError(400, 'Limite de 200 produtos por vez');
+  const result = await clearProductImages(req.user.storeId, productIds);
+  await writeAuditLog({
+    storeId: req.user.storeId,
+    actorId: req.user.sub,
+    action: 'STORE_PRODUCT_IMAGES_CLEARED',
+    entityType: 'STORE',
+    entityId: req.user.storeId,
+    metadata: { count: productIds.length, ...result }
+  });
+  res.json({ success: true, ...result });
+}));
+
 app.delete('/api/admin/catalog-library/:ean', requireAuth('PLATFORM_ADMIN'), asyncRoute(async (req, res) => {
   if (!await deleteCatalogAsset(req.params.ean)) throw new ApiError(404, 'Produto nao encontrado na biblioteca');
   await writeAuditLog({ actorId: req.user.sub, action: 'CATALOG_ASSET_DELETED', entityType: 'CATALOG_ASSET', entityId: req.params.ean });

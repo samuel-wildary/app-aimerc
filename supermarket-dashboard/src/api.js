@@ -54,6 +54,12 @@ export class ApiClient {
       body: JSON.stringify({ limit, onlyLocalBarcode: true })
     });
   }
+  clearProductImages(productIds = []) {
+    return this.request('/products/clear-images', {
+      method: 'POST',
+      body: JSON.stringify({ productIds })
+    });
+  }
   async uploadProductImage(productId, file) {
     const response = await fetch(`${API_URL}/sync/product-images/${encodeURIComponent(productId)}`, {
       method: 'POST',

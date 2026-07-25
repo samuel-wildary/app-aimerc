@@ -1,11 +1,13 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowRight,
   BarChart3,
   Bell,
   CalendarClock,
   Boxes,
+  Camera,
   Check,
+  CheckSquare,
   ChevronRight,
   CircleDollarSign,
   Clock3,
@@ -29,10 +31,12 @@ import {
   Search,
   ShoppingBasket,
   Sparkles,
+  Square,
   Store,
   Tags,
   Trash2,
   Truck,
+  Upload,
   UserRound,
   UsersRound,
   Zap,
@@ -338,13 +342,82 @@ function ProductEditor({ product, categories, onClose, onSaved }) {
   </div>;
 }
 
+function CatalogPhotoQueue({
+  products,
+  index,
+  busy,
+  previewUrl,
+  onClose,
+  onSkip,
+  onPickFile,
+  onCapture,
+  onConfirm
+}) {
+  const current = products[index];
+  if (!current) return null;
+  return (
+    <div className="catalog-editor-backdrop catalog-photo-queue" onMouseDown={event => event.target === event.currentTarget && !busy && onClose()}>
+      <div className="catalog-editor catalog-photo-queue-dialog">
+        <header>
+          <div>
+            <p className="overline">Fila de fotos</p>
+            <h2>{current.name}</h2>
+            <span>Produto {index + 1} de {products.length} · {current.barcode || current.sku || 'sem codigo'}</span>
+          </div>
+          <button type="button" className="icon-button" onClick={onClose} disabled={busy} aria-label="Fechar"><X size={18} /></button>
+        </header>
+        <div className="catalog-photo-queue-progress"><i style={{ width: `${(index / Math.max(products.length, 1)) * 100}%` }} /></div>
+        <div className="catalog-photo-queue-body">
+          <div className="catalog-photo-queue-current">
+            <div className={`product-thumb ${current.hasImage ? '' : 'missing'}`} style={{ backgroundImage: current.hasImage && current.image ? `url(${current.image})` : 'none' }}>
+              {!current.hasImage && <ImageOff size={18} />}
+            </div>
+            <div>
+              <strong>{current.name}</strong>
+              <code>{current.barcode || current.sku || '-'}</code>
+              <small>{current.category || 'Sem categoria'}</small>
+            </div>
+          </div>
+          <div className="catalog-photo-queue-preview">
+            {previewUrl
+              ? <img src={previewUrl} alt="Nova foto" />
+              : (
+                <div className="catalog-photo-queue-empty">
+                  <Camera size={28} />
+                  <p>Tire a foto ou envie um arquivo deste produto</p>
+                </div>
+              )}
+          </div>
+        </div>
+        <footer>
+          <button type="button" className="catalog-cancel" disabled={busy} onClick={onSkip}>Pular</button>
+          <button type="button" className="secondary" disabled={busy} onClick={onCapture}><Camera size={16} /> Tirar foto</button>
+          <button type="button" className="secondary" disabled={busy} onClick={onPickFile}><Upload size={16} /> Arquivo</button>
+          <button type="button" className="primary" disabled={busy || !previewUrl} onClick={onConfirm}>
+            {busy ? 'Salvando...' : index === products.length - 1 ? 'Salvar e concluir' : 'Salvar e proximo'}
+          </button>
+        </footer>
+      </div>
+    </div>
+  );
+}
+
 function Catalog({ products, categories, query, setQuery, category, setCategory, onChanged }) {
   const [editing, setEditing] = useState(null);
   const [page, setPage] = useState(1);
   const [imageFilter, setImageFilter] = useState('all');
   const [assimilating, setAssimilating] = useState(false);
   const [assimilateMsg, setAssimilateMsg] = useState('');
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+  const [photoQueue, setPhotoQueue] = useState([]);
+  const [photoIndex, setPhotoIndex] = useState(0);
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const [photoPreview, setPhotoPreview] = useState(null);
+  const [photoFile, setPhotoFile] = useState(null);
+  const fileInputRef = useRef(null);
+  const cameraInputRef = useRef(null);
   const pageSize = 60;
+
   const withImage = products.filter(product => product.hasImage).length;
   const withoutImage = products.length - withImage;
   const outOfStock = products.filter(product => Number(product.stock) === 0).length;
@@ -361,8 +434,133 @@ function Catalog({ products, categories, query, setQuery, category, setCategory,
   ).slice().sort((a, b) => (b.hasImage ? 1 : 0) - (a.hasImage ? 1 : 0));
   const totalPages = Math.max(1, Math.ceil(filteredProducts.length / pageSize));
   const visibleProducts = filteredProducts.slice((page - 1) * pageSize, page * pageSize);
+  const visibleIds = visibleProducts.map(product => product.id);
+  const allVisibleSelected = visibleIds.length > 0 && visibleIds.every(id => selectedIds.has(id));
+  const selectedProducts = useMemo(
+    () => products.filter(product => selectedIds.has(product.id)),
+    [products, selectedIds]
+  );
 
-  useEffect(() => setPage(1), [query, category, imageFilter]);
+  useEffect(() => {
+    setPage(1);
+    setSelectedIds(new Set());
+  }, [query, category, imageFilter]);
+
+  useEffect(() => () => {
+    if (photoPreview) URL.revokeObjectURL(photoPreview);
+  }, [photoPreview]);
+
+  function toggleSelect(id) {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAllVisible() {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (allVisibleSelected) visibleIds.forEach(id => next.delete(id));
+      else visibleIds.forEach(id => next.add(id));
+      return next;
+    });
+  }
+
+  function selectFilteredCategory() {
+    setSelectedIds(new Set(filteredProducts.map(product => product.id)));
+  }
+
+  function resetPhotoDraft() {
+    setPhotoFile(null);
+    setPhotoPreview(prev => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
+  }
+
+  function openPhotoQueue(items) {
+    const queue = items?.length ? items : selectedProducts;
+    if (!queue.length) {
+      setAssimilateMsg('Selecione ao menos um produto para tirar ou enviar foto.');
+      return;
+    }
+    resetPhotoDraft();
+    setPhotoQueue(queue);
+    setPhotoIndex(0);
+  }
+
+  function closePhotoQueue() {
+    resetPhotoDraft();
+    setPhotoQueue([]);
+    setPhotoIndex(0);
+    setPhotoBusy(false);
+  }
+
+  function handlePhotoFile(event) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    if (!String(file.type || '').startsWith('image/')) {
+      setAssimilateMsg('Selecione um arquivo de imagem valido.');
+      return;
+    }
+    setPhotoFile(file);
+    setPhotoPreview(prev => {
+      if (prev) URL.revokeObjectURL(prev);
+      return URL.createObjectURL(file);
+    });
+  }
+
+  async function confirmPhotoForCurrent() {
+    const current = photoQueue[photoIndex];
+    if (!current || !photoFile) return;
+    setPhotoBusy(true);
+    try {
+      await api.uploadProductImage(current.id, await prepareCatalogImage(photoFile));
+      const isLast = photoIndex >= photoQueue.length - 1;
+      if (isLast) {
+        setAssimilateMsg(`Fotos salvas para ${photoQueue.length} produto(s).`);
+        closePhotoQueue();
+        setSelectedIds(new Set());
+        if (onChanged) await onChanged();
+      } else {
+        resetPhotoDraft();
+        setPhotoIndex(photoIndex + 1);
+      }
+    } catch (error) {
+      setAssimilateMsg(error.message || 'Falha ao salvar a foto');
+    } finally {
+      setPhotoBusy(false);
+    }
+  }
+
+  function skipPhotoCurrent() {
+    if (photoIndex >= photoQueue.length - 1) {
+      closePhotoQueue();
+      if (onChanged) onChanged();
+      return;
+    }
+    resetPhotoDraft();
+    setPhotoIndex(photoIndex + 1);
+  }
+
+  async function clearSelectedImages() {
+    if (!selectedProducts.length) {
+      setAssimilateMsg('Selecione produtos para remover a foto.');
+      return;
+    }
+    if (!window.confirm(`Remover a foto de ${selectedProducts.length} produto(s) selecionado(s)?`)) return;
+    try {
+      const result = await api.clearProductImages(selectedProducts.map(product => product.id));
+      setAssimilateMsg(`Removidas ${result.removedImages || 0} foto(s) dos selecionados.`);
+      setSelectedIds(new Set());
+      if (onChanged) await onChanged();
+    } catch (error) {
+      setAssimilateMsg(error.message || 'Falha ao remover fotos');
+    }
+  }
 
   async function assimilateLocalImages() {
     if (assimilating) return;
@@ -381,32 +579,196 @@ function Catalog({ products, categories, query, setQuery, category, setCategory,
 
   return (
     <section className="panel catalog-panel">
-      <div className="panel-heading catalog-heading"><div><p className="overline">Vitrine e estoque</p><h2>Catalogo da loja</h2><p className="catalog-intro">Organize categorias, corrija descricoes e use fotos proprias sem perder preco e estoque sincronizados.</p></div><span className="counter">{filteredProducts.length}</span></div>
-      <div className="catalog-toolbar"><label className="search-box"><Search size={18} /><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Buscar por nome, SKU, EAN ou categoria" /></label><label className="category-select"><Tags size={17} /><select value={category} onChange={event => setCategory(event.target.value)}><option value="Todos">Todas as categorias</option>{categories.map(item => <option value={item.name} key={item.name}>{item.name} ({item.total})</option>)}</select></label><button type="button" className="primary" disabled={assimilating} onClick={assimilateLocalImages}><Images size={16} />{assimilating ? 'Assimilando...' : 'Assimilar fotos (EAN local)'}</button></div>
+      <div className="panel-heading catalog-heading">
+        <div>
+          <p className="overline">Vitrine e estoque</p>
+          <h2>Catalogo da loja</h2>
+          <p className="catalog-intro">Selecione um ou varios produtos para tirar foto, enviar arquivo ou editar. Preco e estoque continuam sincronizados.</p>
+        </div>
+        <span className="counter">{filteredProducts.length}</span>
+      </div>
+
+      <div className="catalog-toolbar">
+        <label className="search-box"><Search size={18} /><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Buscar por nome, SKU, EAN ou categoria" /></label>
+        <label className="category-select"><Tags size={17} /><select value={category} onChange={event => setCategory(event.target.value)}><option value="Todos">Todas as categorias</option>{categories.map(item => <option value={item.name} key={item.name}>{item.name} ({item.total})</option>)}</select></label>
+        <button type="button" className="primary" disabled={assimilating} onClick={assimilateLocalImages}><Images size={16} />{assimilating ? 'Assimilando...' : 'Assimilar fotos (EAN local)'}</button>
+      </div>
+
       {assimilateMsg && <div className="catalog-sync-note"><Images size={16} /><span>{assimilateMsg}</span></div>}
-      <div className="image-filter-bar"><span>Fotos do catalogo</span><div><button className={imageFilter === 'all' ? 'active' : ''} onClick={() => setImageFilter('all')}>Todos <b>{products.length}</b></button><button className={imageFilter === 'with' ? 'active' : ''} onClick={() => setImageFilter('with')}><Images size={14} /> Com imagem <b>{withImage}</b></button><button className={imageFilter === 'without' ? 'active warning' : 'warning'} onClick={() => setImageFilter('without')}><ImageOff size={14} /> Sem imagem <b>{withoutImage}</b></button><button className={imageFilter === 'internal_ean' ? 'active' : ''} onClick={() => setImageFilter('internal_ean')}><Tags size={14} /> EAN da empresa <b>{internalEanCount}</b></button><button className={imageFilter === 'out_of_stock' ? 'active danger' : 'danger'} onClick={() => setImageFilter('out_of_stock')}><Boxes size={14} /> Estoque zerado <b>{outOfStock}</b></button></div></div>
-      <div className="category-chips"><button className={category === 'Todos' ? 'active' : ''} onClick={() => setCategory('Todos')}>Todas</button>{categories.map(item => <button className={category === item.name ? 'active' : ''} onClick={() => setCategory(item.name)} key={item.name}>{item.name}<span>{item.total}</span></button>)}</div>
-      <div className="catalog-sync-note"><RefreshCw size={16} /><span><strong>Sincronizacao protegida</strong> Preco, promocao e quantidade vêm da API. Foto, categoria e texto personalizados permanecem salvos. EAN local busca foto no banco central (Pinheiro, Atacadao, etc.) pelo nome.</span></div>
-      <div className="table-wrap"><table><thead><tr><th>Produto</th><th>SKU / EAN</th><th>Categoria</th><th>Preco</th><th>Estoque</th><th>Vitrine</th><th /></tr></thead><tbody>{visibleProducts.map(product => {
-        let statusClass = 'stock-status';
-        let statusText = 'Publicado';
-        let statusIcon = <Eye size={14} />;
-        
-        if (!product.catalogVisible) {
-          statusClass = 'stock-status hidden';
-          statusText = 'Oculto';
-          statusIcon = <EyeOff size={14} />;
-        } else if (Number(product.stock) === 0) {
-          statusClass = 'stock-status low';
-          statusText = 'Estoque zerado';
-          statusIcon = <EyeOff size={14} />;
-        }
-        
-        return <tr key={product.id} className={!product.catalogVisible ? 'product-hidden' : ''}><td><div className="product-cell"><div className={`product-thumb ${product.hasImage ? '' : 'missing'}`} style={{ backgroundImage: product.hasImage && product.image ? `url(${product.image})` : 'none' }}>{!product.hasImage && <ImageOff size={17} />}</div><div><strong>{product.name}</strong>{product.catalogName && <small>Nome personalizado</small>}{!product.hasImage && <small className="missing-image-label">Imagem pendente</small>}</div></div></td><td><code>{product.barcode || product.sku}</code></td><td><span className="category-pill">{product.category}</span></td><td><strong>{money(product.price)}</strong></td><td>{product.stock} {product.unit}</td><td><span className={statusClass}>{statusIcon}{statusText}</span></td><td><button className="edit-product-button" onClick={() => setEditing(product)}><Pencil size={15} /> Editar</button></td></tr>;
-      })}</tbody></table></div>
-      {filteredProducts.length > pageSize && <div className="catalog-pagination"><span>Mostrando {(page - 1) * pageSize + 1}-{Math.min(page * pageSize, filteredProducts.length)} de {filteredProducts.length}</span><div><button disabled={page === 1} onClick={() => setPage(current => Math.max(1, current - 1))}>Anterior</button><strong>{page} / {totalPages}</strong><button disabled={page === totalPages} onClick={() => setPage(current => Math.min(totalPages, current + 1))}>Proxima</button></div></div>}
-      {!filteredProducts.length && <EmptyState title={imageFilter === 'without' ? 'Todos os produtos possuem imagem' : imageFilter === 'out_of_stock' ? 'Nenhum produto com estoque zerado' : 'Nenhum produto encontrado'} text={imageFilter === 'without' ? 'Nao existem pendencias de foto neste filtro.' : imageFilter === 'out_of_stock' ? 'Todos os produtos ativos possuem estoque disponível.' : 'Tente outro nome, codigo ou categoria.'} />}
+
+      <div className="image-filter-bar">
+        <span>Fotos do catalogo</span>
+        <div>
+          <button className={imageFilter === 'all' ? 'active' : ''} onClick={() => setImageFilter('all')}>Todos <b>{products.length}</b></button>
+          <button className={imageFilter === 'with' ? 'active' : ''} onClick={() => setImageFilter('with')}><Images size={14} /> Com imagem <b>{withImage}</b></button>
+          <button className={imageFilter === 'without' ? 'active warning' : 'warning'} onClick={() => setImageFilter('without')}><ImageOff size={14} /> Sem imagem <b>{withoutImage}</b></button>
+          <button className={imageFilter === 'internal_ean' ? 'active' : ''} onClick={() => setImageFilter('internal_ean')}><Tags size={14} /> EAN da empresa <b>{internalEanCount}</b></button>
+          <button className={imageFilter === 'out_of_stock' ? 'active danger' : 'danger'} onClick={() => setImageFilter('out_of_stock')}><Boxes size={14} /> Estoque zerado <b>{outOfStock}</b></button>
+        </div>
+      </div>
+
+      <div className="category-chips">
+        <button className={category === 'Todos' ? 'active' : ''} onClick={() => setCategory('Todos')}>Todas</button>
+        {categories.map(item => <button className={category === item.name ? 'active' : ''} onClick={() => setCategory(item.name)} key={item.name}>{item.name}<span>{item.total}</span></button>)}
+      </div>
+
+      <div className="catalog-select-bar">
+        <button type="button" className="catalog-select-btn" onClick={toggleSelectAllVisible}>
+          {allVisibleSelected ? <CheckSquare size={15} /> : <Square size={15} />}
+          {allVisibleSelected ? 'Desmarcar pagina' : 'Marcar pagina'}
+        </button>
+        <button type="button" className="catalog-select-btn" onClick={selectFilteredCategory}>
+          <CheckSquare size={15} /> Selecionar filtro ({filteredProducts.length})
+        </button>
+        <button type="button" className="catalog-select-btn" disabled={!selectedIds.size} onClick={() => setSelectedIds(new Set())}>
+          Limpar selecao
+        </button>
+        <span className="catalog-select-count">{selectedIds.size} selecionado(s)</span>
+      </div>
+
+      {selectedIds.size > 0 && (
+        <div className="catalog-bulk-bar">
+          <div>
+            <strong>{selectedIds.size} produto(s) selecionado(s)</strong>
+            <span>Acoes em massa para a vitrine</span>
+          </div>
+          <div className="catalog-bulk-actions">
+            <button type="button" className="primary" onClick={() => openPhotoQueue()}>
+              <Camera size={15} /> Tirar / enviar fotos
+            </button>
+            <button type="button" className="secondary" onClick={clearSelectedImages}>
+              <Trash2 size={15} /> Remover fotos
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="catalog-sync-note">
+        <RefreshCw size={16} />
+        <span><strong>Sincronizacao protegida</strong> Preco, promocao e quantidade vêm da API. Foto, categoria e texto personalizados permanecem salvos.</span>
+      </div>
+
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th className="catalog-check-col">
+                <input
+                  type="checkbox"
+                  checked={allVisibleSelected}
+                  onChange={toggleSelectAllVisible}
+                  aria-label="Selecionar todos da pagina"
+                />
+              </th>
+              <th>Produto</th>
+              <th>SKU / EAN</th>
+              <th>Categoria</th>
+              <th>Preco</th>
+              <th>Estoque</th>
+              <th>Vitrine</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {visibleProducts.map(product => {
+              let statusClass = 'stock-status';
+              let statusText = 'Publicado';
+              let statusIcon = <Eye size={14} />;
+              if (!product.catalogVisible) {
+                statusClass = 'stock-status hidden';
+                statusText = 'Oculto';
+                statusIcon = <EyeOff size={14} />;
+              } else if (Number(product.stock) === 0) {
+                statusClass = 'stock-status low';
+                statusText = 'Estoque zerado';
+                statusIcon = <EyeOff size={14} />;
+              }
+              const selected = selectedIds.has(product.id);
+              return (
+                <tr key={product.id} className={`${!product.catalogVisible ? 'product-hidden' : ''} ${selected ? 'catalog-row-selected' : ''}`}>
+                  <td className="catalog-check-col">
+                    <input
+                      type="checkbox"
+                      checked={selected}
+                      onChange={() => toggleSelect(product.id)}
+                      aria-label={`Selecionar ${product.name}`}
+                    />
+                  </td>
+                  <td>
+                    <div className="product-cell">
+                      <button
+                        type="button"
+                        className={`product-thumb ${product.hasImage ? '' : 'missing'} catalog-thumb-btn`}
+                        style={{ backgroundImage: product.hasImage && product.image ? `url(${product.image})` : 'none' }}
+                        onClick={() => openPhotoQueue([product])}
+                        title="Tirar ou enviar foto"
+                      >
+                        {!product.hasImage && <ImageOff size={17} />}
+                      </button>
+                      <div>
+                        <strong>{product.name}</strong>
+                        {product.catalogName && <small>Nome personalizado</small>}
+                        {!product.hasImage && <small className="missing-image-label">Imagem pendente</small>}
+                      </div>
+                    </div>
+                  </td>
+                  <td><code>{product.barcode || product.sku}</code></td>
+                  <td><span className="category-pill">{product.category}</span></td>
+                  <td><strong>{money(product.price)}</strong></td>
+                  <td>{product.stock} {product.unit}</td>
+                  <td><span className={statusClass}>{statusIcon}{statusText}</span></td>
+                  <td>
+                    <div className="catalog-row-actions">
+                      <button type="button" className="edit-product-button" onClick={() => openPhotoQueue([product])}>
+                        <Camera size={15} /> Foto
+                      </button>
+                      <button type="button" className="edit-product-button" onClick={() => setEditing(product)}>
+                        <Pencil size={15} /> Editar
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {filteredProducts.length > pageSize && (
+        <div className="catalog-pagination">
+          <span>Mostrando {(page - 1) * pageSize + 1}-{Math.min(page * pageSize, filteredProducts.length)} de {filteredProducts.length}</span>
+          <div>
+            <button disabled={page === 1} onClick={() => setPage(current => Math.max(1, current - 1))}>Anterior</button>
+            <strong>{page} / {totalPages}</strong>
+            <button disabled={page === totalPages} onClick={() => setPage(current => Math.min(totalPages, current + 1))}>Proxima</button>
+          </div>
+        </div>
+      )}
+
+      {!filteredProducts.length && (
+        <EmptyState
+          title={imageFilter === 'without' ? 'Todos os produtos possuem imagem' : imageFilter === 'out_of_stock' ? 'Nenhum produto com estoque zerado' : 'Nenhum produto encontrado'}
+          text={imageFilter === 'without' ? 'Nao existem pendencias de foto neste filtro.' : imageFilter === 'out_of_stock' ? 'Todos os produtos ativos possuem estoque disponível.' : 'Tente outro nome, codigo ou categoria.'}
+        />
+      )}
+
+      <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/avif" hidden onChange={handlePhotoFile} />
+      <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" hidden onChange={handlePhotoFile} />
+
       {editing && <ProductEditor product={editing} categories={categories} onClose={() => setEditing(null)} onSaved={onChanged} />}
+      {photoQueue.length > 0 && (
+        <CatalogPhotoQueue
+          products={photoQueue}
+          index={photoIndex}
+          busy={photoBusy}
+          previewUrl={photoPreview}
+          onClose={closePhotoQueue}
+          onSkip={skipPhotoCurrent}
+          onPickFile={() => fileInputRef.current?.click()}
+          onCapture={() => cameraInputRef.current?.click()}
+          onConfirm={confirmPhotoForCurrent}
+        />
+      )}
     </section>
   );
 }
