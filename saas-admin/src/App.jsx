@@ -193,7 +193,7 @@ function CatalogLibrary() {
   const [purging, setPurging] = useState(false);
   const [auditLimit, setAuditLimit] = useState(5000);
   const [, tick] = useState(0);
-  const running = ['STARTING', 'RUNNING', 'IMPORTING'].includes(library?.job?.status);
+  const running = ['STARTING', 'RUNNING', 'IMPORTING', 'CANCELLING'].includes(library?.job?.status);
   const auditRunning = ['STARTING', 'RUNNING'].includes(auditJob?.status);
 
   const load = useCallback(async (term = search) => {
@@ -289,10 +289,20 @@ function CatalogLibrary() {
 
   const job = library?.job;
   const completed = job?.status === 'COMPLETED';
-  const percentage = completed ? 100 : (job?.total > 0 ? Math.min(100, Math.round((job.current / job.total) * 100)) : 0);
-  const displayProcessed = completed && Number(job?.current || 0) === 0 ? Number(job?.imported || 0) : Number(job?.current || 0);
-  const totalIsScanGoal = completed && Number(job?.total || 0) === Number(job?.requestedLimit || 0);
-  const totalLabel = totalIsScanGoal ? 'meta da coleta' : 'encontrados';
+  const cancelled = job?.status === 'CANCELLED' || job?.phase === 'cancelled';
+  const failed = job?.status === 'FAILED';
+  const percentage = completed
+    ? 100
+    : (job?.total > 0 ? Math.min(100, Math.round((Number(job.current || 0) / Number(job.total)) * 100)) : 0);
+  const displayProcessed = Number(job?.current || 0);
+  const displaySaved = Number(job?.saved || 0);
+  const displayImported = Number(job?.imported || 0);
+  const phaseLabel = cancelled
+    ? 'cancelado'
+    : failed
+      ? 'falhou'
+      : (job?.phase || job?.status || '—');
+  const totalLabel = 'no coletor';
   const needsValue = ['CARREFOUR_SEARCH', 'CUSTOM_URL'].includes(form.sourceType);
   const maxLimit = SCAN_LIMITS[form.sourceType] || SCAN_LIMITS.DEFAULT;
   const flaggedItems = auditJob?.mismatches?.length ? auditJob.mismatches : (auditJob?.samples || []);
@@ -310,9 +320,9 @@ function CatalogLibrary() {
       <div className={`collector-pill ${library?.collector?.online ? 'online' : 'offline'}`}><i />{library?.collector?.online ? 'Coletor conectado' : 'Coletor desligado'}</div>
     </section>
     <section className="catalog-metrics">
-      <Metric label="EANs catalogados" value={library?.totalAssets || 0} detail="somente EAN 8-14 digitos" icon={Database} tone="lime" />
-      <Metric label="Armazenamento" value={bytes(library?.totalBytes)} detail="imagens no PostgreSQL" icon={HardDrive} tone="cyan" />
-      <Metric label="Importados no ciclo" value={job?.imported || 0} detail={job ? `ultima execucao: ${job.status}` : 'nenhuma execucao'} icon={Images} tone="blue" />
+      <Metric label="EANs catalogados" value={library?.totalAssets || 0} detail="somente EAN 8-14 digitos no PostgreSQL" icon={Database} tone="lime" />
+      <Metric label="Armazenamento" value={bytes(library?.totalBytes)} detail="imagens reais no PostgreSQL" icon={HardDrive} tone="cyan" />
+      <Metric label="Importados no ciclo" value={displayImported} detail={job ? `${job.status}${displaySaved ? ` · ${displaySaved} salvos no coletor` : ''}` : 'nenhuma execucao'} icon={Images} tone="blue" />
       <Metric label="Tempo da varredura" value={elapsed(job?.startedAt, job?.finishedAt)} detail={running ? 'em andamento agora' : 'duracao do ultimo ciclo'} icon={RefreshCw} tone="orange" />
     </section>
     {error && <div className="global-error catalog-error">{error}<button onClick={() => setError('')}><X size={17} /></button></div>}
@@ -324,8 +334,8 @@ function CatalogLibrary() {
         <div className="scan-fields"><label>Quantidade maxima<input type="number" min="1" max={maxLimit} value={form.limit} onChange={event => setForm(current => ({ ...current, limit: event.target.value }))}/></label><label>Processos simultaneos<input type="number" min="1" max="12" value={form.concurrency} onChange={event => setForm(current => ({ ...current, concurrency: event.target.value }))}/></label></div>
         <div className="scan-note"><CircleAlert size={17}/><span>A varredura grava no banco central apenas itens com EAN numerico, descricao e foto real. Depois, no supermercado cliente, EAN global casa automatico e EAN local usa o agente de IA.</span></div>
         {running ? (
-          <button type="button" className="danger-button scan-start" onClick={cancel} disabled={cancelling}>
-            <X size={18}/> {cancelling ? 'Cancelando...' : 'Cancelar varredura'}
+          <button type="button" className="danger-button scan-start" onClick={cancel} disabled={cancelling || job?.status === 'CANCELLING'}>
+            <X size={18}/> {cancelling || job?.status === 'CANCELLING' ? 'Cancelando e importando...' : 'Cancelar varredura'}
           </button>
         ) : (
           <button className="accent scan-start" disabled={starting || !library?.collector?.online}>
@@ -335,7 +345,7 @@ function CatalogLibrary() {
       </form>
       <section className="panel scan-progress">
         <div className="panel-head"><div><p className="eyebrow">Execucao atual</p><h2>{job ? (running ? 'Coleta em andamento' : 'Ultima varredura') : 'Aguardando primeira coleta'}</h2></div>{job && <span className={`job-status ${String(job.status).toLowerCase()}`}>{job.status}</span>}</div>
-        {job ? <><div className="progress-orbit"><div className="progress-number"><strong>{percentage}%</strong><span>{job.phase}</span></div></div><div className="progress-track"><i style={{width:`${percentage}%`}}/></div><div className="progress-stats"><span><b>{displayProcessed}</b> processados</span><span><b>{job.total}</b> {totalLabel}</span><span><b>{job.saved}</b> salvos</span><span><b>{job.imported}</b> importados</span></div><div className="event-list">{(job.events || []).slice(-3).reverse().map((event,index) => <div key={`${event.at}-${index}`}><i/><span>{event.message}<small>{new Date(event.at).toLocaleTimeString('pt-BR')}</small></span></div>)}</div>{job.error && <div className="error">{job.error}</div>}</> : <div className="scan-empty"><Images size={32}/><strong>Nenhuma varredura registrada</strong><span>Escolha uma fonte e inicie a construcao da biblioteca.</span></div>}
+        {job ? <><div className="progress-orbit"><div className="progress-number"><strong>{percentage}%</strong><span>{phaseLabel}</span></div></div><div className="progress-track"><i style={{width:`${percentage}%`}}/></div><div className="progress-stats"><span><b>{displayProcessed}</b> processados</span><span><b>{Number(job.total || 0)}</b> {totalLabel}</span><span><b>{displaySaved}</b> salvos coletor</span><span><b>{displayImported}</b> no Postgres</span></div><div className="event-list">{(job.events || []).slice(-3).reverse().map((event,index) => <div key={`${event.at}-${index}`}><i/><span>{event.message}<small>{new Date(event.at).toLocaleTimeString('pt-BR')}</small></span></div>)}</div>{job.error && <div className="error">{job.error}</div>}</> : <div className="scan-empty"><Images size={32}/><strong>Nenhuma varredura registrada</strong><span>Escolha uma fonte e inicie a construcao da biblioteca.</span></div>}
       </section>
     </section>
 

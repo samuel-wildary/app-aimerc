@@ -165,7 +165,7 @@ async function importLatestAssets(job) {
           String(item.source_site || ''), String(item.product_url || item.image_url || ''), item.scraped_at || null
         ]);
         imported += 1;
-        if (imported % 10 === 0) {
+        if (imported % 5 === 0 || imported === 1) {
           await query('UPDATE catalog_scan_jobs SET imported_count=$2,updated_at=NOW() WHERE id=$1', [job.id, imported]);
         }
       } catch {
@@ -175,16 +175,36 @@ async function importLatestAssets(job) {
     offset += items.length;
     if (items.length < pageSize) break;
   }
-  await appendEvent(job.id, `Importacao concluida: ${imported} salvas, ${skippedEmpty} sem arquivo de imagem utilizavel.`);
+  await query('UPDATE catalog_scan_jobs SET imported_count=$2,updated_at=NOW() WHERE id=$1', [job.id, imported]);
+  await appendEvent(job.id, `Importacao concluida: ${imported} no PostgreSQL, ${skippedEmpty} ignorados (sem EAN/descricao/foto utilizavel).`);
   return imported;
 }
 
 async function finishJob(id, status, values = {}) {
-  const imported = Number(values.imported || 0);
-  await query(`UPDATE catalog_scan_jobs SET status=$2,phase=$3,imported_count=$4,error_message=$5,
-    current_count=CASE WHEN $2::varchar='COMPLETED' AND current_count=0 THEN $4 ELSE current_count END,
-    saved_count=CASE WHEN $2::varchar='COMPLETED' AND saved_count=0 THEN $4 ELSE saved_count END,
-    finished_at=NOW(),updated_at=NOW() WHERE id=$1`, [id, status, values.phase || status.toLowerCase(), imported, values.error || '']);
+  const hasImported = Object.prototype.hasOwnProperty.call(values, 'imported');
+  const imported = hasImported ? Number(values.imported || 0) : null;
+  await query(`
+    UPDATE catalog_scan_jobs SET
+      status = $2,
+      phase = $3,
+      imported_count = CASE WHEN $4::int IS NULL THEN imported_count ELSE $4::int END,
+      error_message = $5,
+      current_count = CASE
+        WHEN $2::varchar IN ('COMPLETED', 'CANCELLED') AND current_count = 0 AND $4::int IS NOT NULL THEN $4::int
+        ELSE current_count
+      END,
+      saved_count = CASE
+        WHEN $2::varchar = 'COMPLETED' AND saved_count = 0 AND $4::int IS NOT NULL THEN $4::int
+        ELSE saved_count
+      END,
+      finished_at = NOW(),
+      updated_at = NOW()
+    WHERE id = $1
+  `, [id, status, values.phase || status.toLowerCase(), imported, values.error || '']);
+}
+
+function isStoppingStatus(status) {
+  return ['FAILED', 'CANCELLED', 'CANCELLING'].includes(String(status || '').toUpperCase());
 }
 
 async function monitorJob(id) {
@@ -197,9 +217,9 @@ async function monitorJob(id) {
     while (true) {
       await new Promise(resolve => setTimeout(resolve, 1_500));
       const jobRow = (await query('SELECT status FROM catalog_scan_jobs WHERE id=$1', [id])).rows[0];
-      if (jobRow && jobRow.status === 'FAILED') {
-        return;
-      }
+      if (jobRow && isStoppingStatus(jobRow.status)) return;
+      if (jobRow && jobRow.status === 'COMPLETED') return;
+
       const status = await scraperStatus();
       if (!status.online) {
         offlineChecks += 1;
@@ -210,26 +230,44 @@ async function monitorJob(id) {
       const scraper = status.scraper || {};
       const progress = scraper.progress || {};
       if (scraper.active || scraper.status === 'running') observedRunning = true;
+
+      const live = (await query('SELECT status FROM catalog_scan_jobs WHERE id=$1', [id])).rows[0];
+      if (live && isStoppingStatus(live.status)) return;
+
       await query(`UPDATE catalog_scan_jobs SET status=$2,phase=$3,current_count=$4,total_count=$5,
-        saved_count=$6,updated_at=NOW() WHERE id=$1`, [id, 'RUNNING', progress.phase || 'collecting',
-        Number(progress.current || 0), Number(progress.total || 0), Number(progress.saved || 0)]);
+        saved_count=$6,updated_at=NOW()
+        WHERE id=$1 AND status IN ('STARTING','RUNNING')`, [
+        id, 'RUNNING', progress.phase || 'collecting',
+        Number(progress.current || 0), Number(progress.total || 0), Number(progress.saved || 0)
+      ]);
       if (!scraper.active && scraper.status !== 'running' && observedRunning) break;
     }
+
+    const gate = (await query('SELECT status FROM catalog_scan_jobs WHERE id=$1', [id])).rows[0];
+    if (gate && isStoppingStatus(gate.status)) return;
+
     const row = (await query('SELECT * FROM catalog_scan_jobs WHERE id=$1', [id])).rows[0];
-    await query(`UPDATE catalog_scan_jobs SET status='IMPORTING',phase='importing',updated_at=NOW() WHERE id=$1`, [id]);
+    await query(`UPDATE catalog_scan_jobs SET status='IMPORTING',phase='importing',updated_at=NOW()
+      WHERE id=$1 AND status IN ('STARTING','RUNNING')`, [id]);
+    const still = (await query('SELECT status FROM catalog_scan_jobs WHERE id=$1', [id])).rows[0];
+    if (!still || still.status !== 'IMPORTING') return;
+
     const imported = await importLatestAssets(mapJob(row));
     await appendEvent(id, `${imported} registros importados para a biblioteca central.`);
     await finishJob(id, 'COMPLETED', { phase: 'complete', imported });
   } catch (error) {
     await appendEvent(id, `Falha: ${error.message}`).catch(() => {});
-    await finishJob(id, 'FAILED', { phase: 'failed', error: error.message }).catch(() => {});
+    const live = (await query('SELECT status FROM catalog_scan_jobs WHERE id=$1', [id])).rows[0];
+    if (!live || !['CANCELLED', 'CANCELLING'].includes(live.status)) {
+      await finishJob(id, 'FAILED', { phase: 'failed', error: error.message }).catch(() => {});
+    }
   } finally {
     activeMonitors.delete(id);
   }
 }
 
 export async function startCatalogScan(input, actorId) {
-  const running = (await query("SELECT id FROM catalog_scan_jobs WHERE status IN ('STARTING','RUNNING','IMPORTING') LIMIT 1")).rows[0];
+  const running = (await query("SELECT id FROM catalog_scan_jobs WHERE status IN ('STARTING','RUNNING','IMPORTING','CANCELLING') LIMIT 1")).rows[0];
   if (running) throw Object.assign(new Error('Ja existe uma varredura em andamento'), { status: 409 });
   const status = await scraperStatus();
   if (!status.online) throw Object.assign(new Error('O coletor local esta desligado. Inicie o EAN Scraper na porta 4300.'), { status: 503 });
@@ -245,7 +283,7 @@ export async function startCatalogScan(input, actorId) {
     await scraperRequest('/api/scrape', { method: 'POST', body: JSON.stringify(config.scraper), timeout: 15_000 });
     monitorJob(id);
   } catch (error) {
-    await finishJob(id, 'FAILED', { phase: 'failed', error: error.message });
+    await finishJob(id, 'FAILED', { phase: 'failed', error: error.message, imported: 0 });
     throw error;
   }
   return mapJob((await query('SELECT * FROM catalog_scan_jobs WHERE id=$1', [id])).rows[0]);
@@ -255,13 +293,30 @@ export async function cancelCatalogScan(actorId) {
   const runningJob = (await query("SELECT * FROM catalog_scan_jobs WHERE status IN ('STARTING','RUNNING','IMPORTING') ORDER BY started_at DESC LIMIT 1")).rows[0];
   if (!runningJob) return null;
 
+  // Trava o monitor para nao zerar contadores nem competir na importacao
+  await query(`UPDATE catalog_scan_jobs SET status='CANCELLING', phase='cancelling', updated_at=NOW() WHERE id=$1`, [runningJob.id]);
+  await appendEvent(runningJob.id, 'Cancelamento solicitado — importando o que ja foi coletado...');
+
   try {
     await scraperRequest('/api/scrape/cancel', { method: 'POST', timeout: 5000 });
   } catch (error) {
     console.error('Failed to send cancel request to scraper:', error.message);
   }
 
-  await finishJob(runningJob.id, 'FAILED', { phase: 'cancelled', error: 'Cancelado pelo administrador.' });
+  let imported = Number(runningJob.imported_count || 0);
+  try {
+    const fresh = (await query('SELECT * FROM catalog_scan_jobs WHERE id=$1', [runningJob.id])).rows[0];
+    imported = await importLatestAssets(mapJob(fresh));
+    await appendEvent(runningJob.id, `Importacao parcial apos cancelamento: ${imported} no banco central.`);
+  } catch (error) {
+    await appendEvent(runningJob.id, `Importacao parcial falhou: ${error.message}`).catch(() => {});
+  }
+
+  await finishJob(runningJob.id, 'CANCELLED', {
+    phase: 'cancelled',
+    imported,
+    error: 'Cancelado pelo administrador.'
+  });
   await appendEvent(runningJob.id, 'Varredura cancelada pelo administrador.').catch(() => {});
 
   return mapJob((await query('SELECT * FROM catalog_scan_jobs WHERE id=$1', [runningJob.id])).rows[0]);
