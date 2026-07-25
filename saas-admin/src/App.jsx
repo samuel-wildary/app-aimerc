@@ -22,7 +22,9 @@ import {
   RefreshCw,
   ServerCog,
   Search,
+  ShieldAlert,
   ShieldCheck,
+  Sparkles,
   Store,
   Trash2,
   UsersRound,
@@ -186,8 +188,13 @@ function CatalogLibrary() {
   const [starting, setStarting] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [error, setError] = useState('');
+  const [auditJob, setAuditJob] = useState(null);
+  const [auditing, setAuditing] = useState(false);
+  const [purging, setPurging] = useState(false);
+  const [auditLimit, setAuditLimit] = useState(5000);
   const [, tick] = useState(0);
   const running = ['STARTING', 'RUNNING', 'IMPORTING'].includes(library?.job?.status);
+  const auditRunning = ['STARTING', 'RUNNING'].includes(auditJob?.status);
 
   const load = useCallback(async (term = search) => {
     try { setLibrary(await api.catalogLibrary(term)); setError(''); }
@@ -201,6 +208,21 @@ function CatalogLibrary() {
     const clock = setInterval(() => tick(value => value + 1), 1_000);
     return () => { clearInterval(polling); clearInterval(clock); };
   }, [load, search]);
+
+  useEffect(() => {
+    if (!auditJob?.id || !auditRunning) return undefined;
+    const timer = setInterval(async () => {
+      try {
+        const next = await api.catalogAuditJob(auditJob.id);
+        setAuditJob(next);
+        if (next.status === 'COMPLETED' || next.status === 'FAILED') {
+          setAuditing(false);
+          load(search);
+        }
+      } catch (_) {}
+    }, 1500);
+    return () => clearInterval(timer);
+  }, [auditJob?.id, auditRunning, load, search]);
 
   async function start(event) {
     event.preventDefault();
@@ -226,6 +248,44 @@ function CatalogLibrary() {
     catch (requestError) { setError(requestError.message); }
   }
 
+  async function startAudit({ withAi = true } = {}) {
+    setAuditing(true);
+    setError('');
+    try {
+      const started = await api.startCatalogAudit({
+        limit: Number(auditLimit) || 5000,
+        useAi: withAi,
+        deleteMismatches: false
+      });
+      setAuditJob(started);
+    } catch (requestError) {
+      setAuditing(false);
+      setError(requestError.message);
+    }
+  }
+
+  async function purgeFlagged() {
+    const eans = (auditJob?.mismatches || auditJob?.samples || []).map(item => item.ean).filter(Boolean);
+    if (!eans.length) return;
+    if (!window.confirm(`Remover ${eans.length} EAN(s) com foto inconsistente do banco de imagens?`)) return;
+    setPurging(true);
+    setError('');
+    try {
+      const result = await api.purgeCatalogMismatches(eans);
+      setAuditJob(current => current ? {
+        ...current,
+        deleted: result.deleted,
+        message: `Removidos ${result.deleted} erros do banco`,
+        mismatches: [],
+        samples: []
+      } : current);
+      await load(search);
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setPurging(false);
+    }
+  }
 
   const job = library?.job;
   const completed = job?.status === 'COMPLETED';
@@ -235,6 +295,7 @@ function CatalogLibrary() {
   const totalLabel = totalIsScanGoal ? 'meta da coleta' : 'encontrados';
   const needsValue = ['CARREFOUR_SEARCH', 'CUSTOM_URL'].includes(form.sourceType);
   const maxLimit = SCAN_LIMITS[form.sourceType] || SCAN_LIMITS.DEFAULT;
+  const flaggedItems = auditJob?.mismatches?.length ? auditJob.mismatches : (auditJob?.samples || []);
   function chooseSource(sourceType) {
     setForm(current => ({
       ...current,
@@ -277,6 +338,62 @@ function CatalogLibrary() {
         {job ? <><div className="progress-orbit"><div className="progress-number"><strong>{percentage}%</strong><span>{job.phase}</span></div></div><div className="progress-track"><i style={{width:`${percentage}%`}}/></div><div className="progress-stats"><span><b>{displayProcessed}</b> processados</span><span><b>{job.total}</b> {totalLabel}</span><span><b>{job.saved}</b> salvos</span><span><b>{job.imported}</b> importados</span></div><div className="event-list">{(job.events || []).slice(-3).reverse().map((event,index) => <div key={`${event.at}-${index}`}><i/><span>{event.message}<small>{new Date(event.at).toLocaleTimeString('pt-BR')}</small></span></div>)}</div>{job.error && <div className="error">{job.error}</div>}</> : <div className="scan-empty"><Images size={32}/><strong>Nenhuma varredura registrada</strong><span>Escolha uma fonte e inicie a construcao da biblioteca.</span></div>}
       </section>
     </section>
+
+    <section className="panel audit-panel">
+      <div className="panel-head">
+        <div>
+          <p className="eyebrow">Qualidade do banco</p>
+          <h2>Auditar inconsistencias</h2>
+          <p className="catalog-library-hint">Acha foto errada (Monster com Baly, vagem com OMO, carne com arroz) por checksum duplicado, heuristica e IA.</p>
+        </div>
+        <div className="audit-actions">
+          <label className="audit-limit">Limite IA<input type="number" min="0" max="50000" value={auditLimit} onChange={event => setAuditLimit(event.target.value)} disabled={auditRunning || auditing} /></label>
+          <button type="button" className="ghost" disabled={auditRunning || auditing} onClick={() => startAudit({ withAi: false })}>
+            <ShieldAlert size={16} /> So heuristicas
+          </button>
+          <button type="button" className="accent" disabled={auditRunning || auditing} onClick={() => startAudit({ withAi: true })}>
+            <Sparkles size={16} /> {auditRunning || auditing ? 'Auditando...' : 'Auditar com IA'}
+          </button>
+          {flaggedItems.length > 0 && !auditRunning && (
+            <button type="button" className="danger-button" disabled={purging} onClick={purgeFlagged}>
+              <Trash2 size={16} /> {purging ? 'Removendo...' : `Remover ${flaggedItems.length} erros`}
+            </button>
+          )}
+        </div>
+      </div>
+      {auditJob && (
+        <div className="audit-summary">
+          <div className="progress-track"><i style={{ width: `${Number(auditJob.percent || 0)}%` }} /></div>
+          <div className="progress-stats">
+            <span><b>{auditJob.flagged || 0}</b> erros</span>
+            <span><b>{auditJob.aiChecked || 0}</b> checados IA</span>
+            <span><b>{auditJob.aiMismatches || 0}</b> IA mismatch</span>
+            <span><b>{auditJob.duplicateGroups || 0}</b> checksums</span>
+            <span><b>{auditJob.deleted || 0}</b> removidos</span>
+          </div>
+          <p className="audit-message">{auditJob.message || auditJob.status}{auditJob.phase ? ` · ${auditJob.phase}` : ''}</p>
+          {auditJob.error && <div className="error">{auditJob.error}</div>}
+        </div>
+      )}
+      {flaggedItems.length > 0 && (
+        <div className="mismatch-grid">
+          {flaggedItems.slice(0, 60).map(item => (
+            <article className="mismatch-card" key={`${item.ean}-${item.type}`}>
+              <div className="mismatch-thumb" style={item.image ? { backgroundImage: `url(${item.image})` } : undefined} />
+              <div>
+                <code>{item.ean}</code>
+                <strong>{item.description || 'Sem descricao'}</strong>
+                <span className="mismatch-type">{item.type}{item.confidence != null ? ` · ${Math.round(Number(item.confidence) * 100)}%` : ''}</span>
+                <small>{item.reason}</small>
+                {item.seenProduct ? <small>IA viu: {item.seenProduct}</small> : null}
+                <button type="button" className="link" onClick={() => remove(item.ean)}>Excluir este EAN</button>
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
+    </section>
+
     <section className="panel asset-library">
       <div className="panel-head"><div><p className="eyebrow">Biblioteca central</p><h2>Imagens por EAN</h2><p className="catalog-library-hint">{library?.assets?.total || 0} produtos com codigo EAN, descricao e foto</p></div><form className="search" onSubmit={event => { event.preventDefault(); load(search); }}><Search size={17}/><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Buscar EAN, descricao ou origem"/></form></div>
       {loading ? <div className="asset-loading"><RefreshCw className="spin"/> Carregando biblioteca...</div> : library?.assets?.items?.length ? <div className="asset-grid">{library.assets.items.map(item => <article className="asset-card" key={item.ean}><div className="asset-image"><img src={item.image} alt={item.description || `Produto ${item.ean}`}/><button onClick={() => remove(item.ean)} title="Excluir"><Trash2 size={15}/></button></div><div className="asset-body"><code>{item.ean}</code><h3>{item.description || 'Descricao ainda nao identificada'}</h3><span>{item.sourceName || 'Fonte nao informada'}</span><small>{bytes(item.byteSize)} · {new Date(item.updatedAt).toLocaleDateString('pt-BR')}</small></div></article>)}</div> : <div className="scan-empty"><Database size={34}/><strong>Nenhum EAN encontrado</strong><span>So aparecem produtos com EAN numerico (8 a 14 digitos), descricao e foto real. VIRTUAL_ e PLU_ ficam fora desta lista.</span></div>}

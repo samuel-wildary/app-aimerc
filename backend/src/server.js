@@ -81,11 +81,13 @@ import { encryptIntegrationSecret } from './lib/store-integration.js';
 import { normalizeCategory } from './lib/categories.js';
 import { ApiError, normalizeEmail, oneOf, optionalText, positiveNumber, requiredText, slugify } from './lib/validation.js';
 import { assimilateStoreCatalogImages, linkCatalogImageToProduct, searchCatalogImages, syncStoreEanImages } from './lib/catalog-image-match.js';
+import { runCatalogImageAudit, deleteCatalogMismatches } from './lib/catalog-audit.js';
 import { resolveAiCredentials } from './lib/ai-image-match.js';
 import { getAiSearchAgent, saveAiSearchAgent } from './lib/platform-settings.js';
 import crypto from 'node:crypto';
 
 const assimilateJobs = new Map();
+const catalogAuditJobs = new Map();
 
 const app = express();
 const PORT = Number(process.env.PORT || 4100);
@@ -1263,6 +1265,113 @@ app.delete('/api/admin/catalog-library/:ean', requireAuth('PLATFORM_ADMIN'), asy
   if (!await deleteCatalogAsset(req.params.ean)) throw new ApiError(404, 'Produto nao encontrado na biblioteca');
   await writeAuditLog({ actorId: req.user.sub, action: 'CATALOG_ASSET_DELETED', entityType: 'CATALOG_ASSET', entityId: req.params.ean });
   res.status(204).end();
+}));
+
+app.post('/api/admin/catalog-library/audit', requireAuth('PLATFORM_ADMIN'), asyncRoute(async (req, res) => {
+  const existing = [...catalogAuditJobs.values()].find(job => job.status === 'RUNNING');
+  if (existing) {
+    res.status(202).json(existing);
+    return;
+  }
+  const limit = Math.min(50_000, Math.max(0, Number(req.body?.limit ?? 3000)));
+  const useAi = req.body?.useAi !== false;
+  const deleteMismatches = req.body?.deleteMismatches === true;
+  const jobId = `audit_${crypto.randomUUID().slice(0, 12)}`;
+  const job = {
+    id: jobId,
+    status: 'RUNNING',
+    percent: 0,
+    phase: 'HEURISTICS',
+    examined: 0,
+    flagged: 0,
+    deleted: 0,
+    duplicateGroups: 0,
+    aiChecked: 0,
+    aiMismatches: 0,
+    total: 0,
+    samples: [],
+    mismatches: [],
+    error: '',
+    message: 'Iniciando auditoria do banco de imagens',
+    startedAt: new Date().toISOString(),
+    finishedAt: null
+  };
+  catalogAuditJobs.set(jobId, job);
+  res.status(202).json(job);
+
+  const base = publicApiBase(req);
+  runCatalogImageAudit({
+    limit,
+    useAi,
+    deleteMismatches,
+    onProgress: progress => {
+      Object.assign(job, {
+        status: progress.status || 'RUNNING',
+        percent: progress.percent || 0,
+        phase: progress.phase || job.phase,
+        examined: progress.examined || 0,
+        flagged: progress.flagged || 0,
+        deleted: progress.deleted || 0,
+        duplicateGroups: progress.duplicateGroups || 0,
+        aiChecked: progress.aiChecked || 0,
+        aiMismatches: progress.aiMismatches || 0,
+        total: progress.total || 0,
+        message: progress.message || job.message,
+        samples: (progress.samples || []).slice(0, 80).map(item => ({
+          ...item,
+          image: item.ean ? `${base}/public/catalog-library/${encodeURIComponent(item.ean)}/image?v=${Date.now()}` : null
+        }))
+      });
+    }
+  }).then(summary => {
+    Object.assign(job, {
+      status: 'COMPLETED',
+      percent: 100,
+      phase: 'DONE',
+      examined: summary.examined || 0,
+      flagged: summary.flagged || 0,
+      deleted: summary.deleted || 0,
+      duplicateGroups: summary.duplicateGroups || 0,
+      aiChecked: summary.aiChecked || 0,
+      aiMismatches: summary.aiMismatches || 0,
+      total: summary.total || 0,
+      message: summary.message,
+      mismatches: (summary.mismatches || []).map(item => ({
+        ...item,
+        image: item.ean ? `${base}/public/catalog-library/${encodeURIComponent(item.ean)}/image?v=${Date.now()}` : null
+      })),
+      samples: (summary.mismatches || summary.samples || []).slice(0, 120).map(item => ({
+        ...item,
+        image: item.ean ? `${base}/public/catalog-library/${encodeURIComponent(item.ean)}/image?v=${Date.now()}` : null
+      })),
+      finishedAt: new Date().toISOString()
+    });
+  }).catch(error => {
+    Object.assign(job, {
+      status: 'FAILED',
+      error: error.message || 'Falha na auditoria',
+      message: error.message || 'Falha na auditoria',
+      finishedAt: new Date().toISOString()
+    });
+  });
+}));
+
+app.get('/api/admin/catalog-library/audit/:jobId', requireAuth('PLATFORM_ADMIN'), asyncRoute(async (req, res) => {
+  const job = catalogAuditJobs.get(req.params.jobId);
+  if (!job) throw new ApiError(404, 'Job de auditoria nao encontrado');
+  res.json(job);
+}));
+
+app.post('/api/admin/catalog-library/audit/purge', requireAuth('PLATFORM_ADMIN'), asyncRoute(async (req, res) => {
+  const eans = Array.isArray(req.body?.eans) ? req.body.eans : [];
+  const result = await deleteCatalogMismatches(eans);
+  await writeAuditLog({
+    actorId: req.user.sub,
+    action: 'CATALOG_MISMATCHES_PURGED',
+    entityType: 'CATALOG_ASSET',
+    metadata: result
+  });
+  res.json({ success: true, ...result });
 }));
 
 app.use((req, res) => res.status(404).json({ error: 'Rota nao encontrada' }));

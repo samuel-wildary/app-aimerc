@@ -41,6 +41,21 @@ class AdminApi {
   startCatalogScan(data) { return this.request('/admin/catalog-library/scans', { method: 'POST', body: JSON.stringify(data) }); }
   cancelCatalogScan() { return this.request('/admin/catalog-library/scans/cancel', { method: 'POST' }); }
   deleteCatalogAsset(ean) { return this.request(`/admin/catalog-library/${encodeURIComponent(ean)}`, { method: 'DELETE' }); }
+  startCatalogAudit({ limit = 3000, useAi = true, deleteMismatches = false } = {}) {
+    return this.request('/admin/catalog-library/audit', {
+      method: 'POST',
+      body: JSON.stringify({ limit, useAi, deleteMismatches })
+    });
+  }
+  catalogAuditJob(jobId) {
+    return this.request(`/admin/catalog-library/audit/${encodeURIComponent(jobId)}`);
+  }
+  purgeCatalogMismatches(eans = []) {
+    return this.request('/admin/catalog-library/audit/purge', {
+      method: 'POST',
+      body: JSON.stringify({ eans })
+    });
+  }
   syncStoreEanImages(storeId, { force = false } = {}) {
     return this.request(`/admin/stores/${encodeURIComponent(storeId)}/sync-ean-images`, {
       method: 'POST',
