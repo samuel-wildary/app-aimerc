@@ -214,6 +214,7 @@ export default function StoreDetail({ storeId, onBack, onEditBrand, onDelete }) 
   const [assimilating, setAssimilating] = useState(false);
   const [assimilateCategory, setAssimilateCategory] = useState('Hortifruti');
   const [clearingShortEan, setClearingShortEan] = useState(false);
+  const [syncingEan, setSyncingEan] = useState(false);
   const [photoQueue, setPhotoQueue] = useState([]);
   const [photoIndex, setPhotoIndex] = useState(0);
   const [photoBusy, setPhotoBusy] = useState(false);
@@ -222,8 +223,8 @@ export default function StoreDetail({ storeId, onBack, onEditBrand, onDelete }) 
   const fileInputRef = useRef(null);
   const cameraInputRef = useRef(null);
 
-  const loadDetail = useCallback(async () => {
-    setLoading(true);
+  const loadDetail = useCallback(async ({ quiet = false } = {}) => {
+    if (!quiet) setLoading(true);
     setError('');
     try {
       const data = await api.storeDetail(storeId);
@@ -231,7 +232,7 @@ export default function StoreDetail({ storeId, onBack, onEditBrand, onDelete }) 
     } catch (err) {
       setError(err.message);
     } finally {
-      setLoading(false);
+      if (!quiet) setLoading(false);
     }
   }, [storeId]);
 
@@ -272,6 +273,32 @@ export default function StoreDetail({ storeId, onBack, onEditBrand, onDelete }) 
   }, [imageSearch]);
 
   useEffect(() => { loadDetail(); }, [loadDetail]);
+
+  // Toda vez que abre um supermercado: sincroniza fotos do banco por EAN
+  useEffect(() => {
+    if (!storeId) return undefined;
+    let cancelled = false;
+    (async () => {
+      setSyncingEan(true);
+      try {
+        const result = await api.syncStoreEanImages(storeId);
+        if (cancelled) return;
+        const updated = Number(result.updated || 0);
+        setMessage(
+          updated > 0
+            ? `Fotos por EAN atualizadas: ${updated} produto(s) do banco de imagens.`
+            : 'Fotos por EAN conferidas — nada novo para sincronizar.'
+        );
+        await loadDetail({ quiet: true });
+      } catch (err) {
+        if (!cancelled) setError(err.message || 'Falha ao sincronizar fotos por EAN');
+      } finally {
+        if (!cancelled) setSyncingEan(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [storeId, loadDetail]);
+
   useEffect(() => {
     if (tab === 'catalogo' || tab === 'promocoes' || tab === 'buscar') {
       loadProducts({ append: false, offset: 0 });
@@ -540,7 +567,32 @@ export default function StoreDetail({ storeId, onBack, onEditBrand, onDelete }) 
           <p>{store.owner} · {store.city}/{store.state} · slug {store.slug}</p>
         </div>
         <div className="store-hero-actions">
-          <button className="ghost light" onClick={loadDetail}><RefreshCw size={16} /> Atualizar</button>
+          <button
+            className="ghost light"
+            disabled={syncingEan}
+            onClick={() => {
+              loadDetail({ quiet: true });
+              setSyncingEan(true);
+              api.syncStoreEanImages(storeId)
+                .then(async result => {
+                  const updated = Number(result.updated || 0);
+                  setMessage(
+                    updated > 0
+                      ? `Fotos por EAN atualizadas: ${updated} produto(s) do banco de imagens.`
+                      : 'Fotos por EAN conferidas — nada novo para sincronizar.'
+                  );
+                  await loadDetail({ quiet: true });
+                  if (tab === 'catalogo' || tab === 'promocoes' || tab === 'buscar') {
+                    await loadProducts({ append: false, offset: 0 });
+                  }
+                })
+                .catch(err => setError(err.message || 'Falha ao sincronizar fotos por EAN'))
+                .finally(() => setSyncingEan(false));
+            }}
+          >
+            <RefreshCw size={16} className={syncingEan ? 'spin' : ''} />
+            {syncingEan ? 'Atualizando fotos...' : 'Atualizar'}
+          </button>
           <button className="ghost light" onClick={() => onEditBrand(store)}>Cores</button>
           <button className="accent" disabled={assimilating} onClick={openAssimilateTab}>
             <Sparkles size={16} /> Assimilar com IA
@@ -549,7 +601,8 @@ export default function StoreDetail({ storeId, onBack, onEditBrand, onDelete }) 
       </section>
 
       {error && <div className="error">{error}</div>}
-      {message && <div className="toast-ok">{message}</div>}
+      {syncingEan && <div className="toast-ok">Sincronizando fotos por EAN com o banco de imagens...</div>}
+      {message && !syncingEan && <div className="toast-ok">{message}</div>}
 
       <div className="metrics store-metrics">
         <Metric label="Produtos ativos" value={stats.activeProducts || 0} detail={`${stats.totalProducts || stats.activeProducts || 0} no total`} />

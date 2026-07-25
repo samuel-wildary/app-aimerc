@@ -358,6 +358,73 @@ export async function linkCatalogImageToProduct(storeId, productId, catalogEan) 
   };
 }
 
+/**
+ * Ao abrir um supermercado: copia do banco de imagens (catalog_assets)
+ * para product_images todo produto com EAN real (8–14 digitos) que bate no banco.
+ * Nao usa IA. Preserva upload manual (admin-upload / catalog-import).
+ */
+export async function syncStoreEanImages(storeId) {
+  const eligible = (await dbQuery(`
+    SELECT COUNT(*)::int AS total
+    FROM products p
+    WHERE p.store_id = $1
+      AND p.active = 1
+      AND length(regexp_replace(COALESCE(p.barcode, ''), '[^0-9]', '', 'g')) BETWEEN 8 AND 14
+  `, [storeId])).rows[0]?.total || 0;
+
+  const synced = await dbQuery(`
+    INSERT INTO product_images (store_id, product_id, content_type, image_data, checksum, byte_size, source, updated_at)
+    SELECT
+      p.store_id,
+      p.id,
+      ca.content_type,
+      ca.image_data,
+      ca.checksum,
+      ca.byte_size,
+      'ean-sync:' || ca.ean,
+      NOW()
+    FROM products p
+    INNER JOIN catalog_assets ca
+      ON ca.ean = regexp_replace(COALESCE(p.barcode, ''), '[^0-9]', '', 'g')
+     AND ca.content_type <> 'image/svg+xml'
+     AND COALESCE(ca.byte_size, 0) > 3000
+    LEFT JOIN product_images pi
+      ON pi.store_id = p.store_id AND pi.product_id = p.id
+    WHERE p.store_id = $1
+      AND p.active = 1
+      AND length(regexp_replace(COALESCE(p.barcode, ''), '[^0-9]', '', 'g')) BETWEEN 8 AND 14
+      AND (
+        pi.product_id IS NULL
+        OR COALESCE(pi.source, '') NOT IN ('admin-upload', 'catalog-import')
+      )
+    ON CONFLICT (store_id, product_id) DO UPDATE SET
+      content_type = EXCLUDED.content_type,
+      image_data = EXCLUDED.image_data,
+      checksum = EXCLUDED.checksum,
+      byte_size = EXCLUDED.byte_size,
+      source = EXCLUDED.source,
+      updated_at = NOW()
+    WHERE product_images.checksum IS DISTINCT FROM EXCLUDED.checksum
+       OR product_images.source IS DISTINCT FROM EXCLUDED.source
+    RETURNING product_id
+  `, [storeId]);
+
+  const productIds = synced.rows.map(row => row.product_id);
+  if (productIds.length) {
+    await dbQuery(`
+      UPDATE products
+      SET updated_at = NOW()
+      WHERE store_id = $1 AND id = ANY($2::text[])
+    `, [storeId, productIds]);
+  }
+
+  return {
+    eligible,
+    updated: productIds.length,
+    skippedManual: Math.max(0, eligible - productIds.length)
+  };
+}
+
 export async function assimilateStoreCatalogImages(storeId, {
   limit = 800,
   onProgress = null,

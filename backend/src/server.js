@@ -80,7 +80,7 @@ import { integrationProvider, integrationProviders, publicIntegrationProvider } 
 import { encryptIntegrationSecret } from './lib/store-integration.js';
 import { normalizeCategory } from './lib/categories.js';
 import { ApiError, normalizeEmail, oneOf, optionalText, positiveNumber, requiredText, slugify } from './lib/validation.js';
-import { assimilateStoreCatalogImages, linkCatalogImageToProduct, searchCatalogImages } from './lib/catalog-image-match.js';
+import { assimilateStoreCatalogImages, linkCatalogImageToProduct, searchCatalogImages, syncStoreEanImages } from './lib/catalog-image-match.js';
 import { resolveAiCredentials } from './lib/ai-image-match.js';
 import { getAiSearchAgent, saveAiSearchAgent } from './lib/platform-settings.js';
 import crypto from 'node:crypto';
@@ -876,6 +876,21 @@ app.post('/api/admin/stores/:id/products/:productId/link-image', requireAuth('PL
     metadata: { catalogEan }
   });
   res.json({ success: true, ...linked, product: { id: product.id, name: product.name } });
+}));
+
+app.post('/api/admin/stores/:id/sync-ean-images', requireAuth('PLATFORM_ADMIN'), asyncRoute(async (req, res) => {
+  const store = await getStore(req.params.id);
+  if (!store) throw new ApiError(404, 'Supermercado nao encontrado');
+  const summary = await syncStoreEanImages(store.id);
+  await writeAuditLog({
+    storeId: store.id,
+    actorId: req.user.sub,
+    action: 'STORE_EAN_IMAGES_SYNCED',
+    entityType: 'STORE',
+    entityId: store.id,
+    metadata: summary
+  });
+  res.json({ success: true, storeId: store.id, ...summary });
 }));
 
 app.post(
