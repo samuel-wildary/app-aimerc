@@ -701,25 +701,27 @@ export async function seedVirtualAssets({ force = false } = {}) {
           updated_at = NOW()
       `, [ean, item.description, item.contentType || 'image/jpeg', buffer, checksum, buffer.length, item.sourceName, item.sourceUrl]);
 
-      await pool.query(`
-        INSERT INTO product_images (store_id, product_id, content_type, image_data, checksum, byte_size, source, updated_at)
-        SELECT p.store_id, p.id, $3, $4, $5, $6, $7, NOW()
-        FROM products p
-        WHERE (
-          p.barcode = $1 OR p.sku = $1 OR p.id = $1 
-          OR p.barcode = REPLACE($1, 'PLU_', '') 
-          OR p.sku = REPLACE($1, 'PLU_', '') 
-          OR p.id = REPLACE($1, 'PLU_', '')
-          OR p.id = CONCAT('store_85176df6:', REPLACE($1, 'PLU_', ''))
-        )
-        ON CONFLICT (store_id, product_id) DO UPDATE SET
-          content_type = EXCLUDED.content_type,
-          image_data = EXCLUDED.image_data,
-          checksum = EXCLUDED.checksum,
-          byte_size = EXCLUDED.byte_size,
-          source = EXCLUDED.source,
-          updated_at = NOW()
-      `, [ean, item.description, item.contentType || 'image/jpeg', buffer, checksum, buffer.length, item.sourceName]);
+      if (String(process.env.AIMERC_SEED_VIRTUAL_LINK || '').trim() === '1') {
+        await pool.query(`
+          INSERT INTO product_images (store_id, product_id, content_type, image_data, checksum, byte_size, source, updated_at)
+          SELECT p.store_id, p.id, $3, $4, $5, $6, $7, NOW()
+          FROM products p
+          WHERE (
+            p.barcode = $1 OR p.sku = $1 OR p.id = $1
+            OR p.barcode = REPLACE($1, 'PLU_', '')
+            OR p.sku = REPLACE($1, 'PLU_', '')
+            OR p.id = REPLACE($1, 'PLU_', '')
+            OR p.id = CONCAT('store_85176df6:', REPLACE($1, 'PLU_', ''))
+          )
+          ON CONFLICT (store_id, product_id) DO UPDATE SET
+            content_type = EXCLUDED.content_type,
+            image_data = EXCLUDED.image_data,
+            checksum = EXCLUDED.checksum,
+            byte_size = EXCLUDED.byte_size,
+            source = EXCLUDED.source,
+            updated_at = NOW()
+        `, [ean, item.description, item.contentType || 'image/jpeg', buffer, checksum, buffer.length, item.sourceName]);
+      }
       seeded++;
     } catch (err) {
       console.error(`[SEED REAL] Erro ao cadastrar foto real ${ean}:`, err.message);
@@ -727,18 +729,21 @@ export async function seedVirtualAssets({ force = false } = {}) {
   }
 
   try {
-    const { getVirtualEan } = await import('./database.js');
-    const productsRes = await pool.query('SELECT store_id, id, name, category FROM products');
-    for (const p of productsRes.rows) {
-      const virtualEan = getVirtualEan(p.name, p.category);
-      if (virtualEan) {
-        await pool.query(`
-          INSERT INTO product_images (store_id, product_id, content_type, image_data, checksum, byte_size, source, updated_at)
-          SELECT $1, $2, ca.content_type, ca.image_data, ca.checksum, ca.byte_size, 'auto-virtual', NOW()
-          FROM catalog_assets ca
-          WHERE ca.ean = $3
-          ON CONFLICT (store_id, product_id) DO NOTHING
-        `, [p.store_id, p.id, virtualEan]);
+    // Vinculo automatico so sob demanda explicita (evita repovoar lojas apos limpeza).
+    if (String(process.env.AIMERC_SEED_VIRTUAL_LINK || '').trim() === '1') {
+      const { getVirtualEan } = await import('./database.js');
+      const productsRes = await pool.query('SELECT store_id, id, name, category FROM products');
+      for (const p of productsRes.rows) {
+        const virtualEan = getVirtualEan(p.name, p.category);
+        if (virtualEan) {
+          await pool.query(`
+            INSERT INTO product_images (store_id, product_id, content_type, image_data, checksum, byte_size, source, updated_at)
+            SELECT $1, $2, ca.content_type, ca.image_data, ca.checksum, ca.byte_size, 'auto-virtual', NOW()
+            FROM catalog_assets ca
+            WHERE ca.ean = $3
+            ON CONFLICT (store_id, product_id) DO NOTHING
+          `, [p.store_id, p.id, virtualEan]);
+        }
       }
     }
   } catch (err) {
@@ -766,7 +771,11 @@ export function initializePostgres() {
       } catch (err) {
         console.error('[MIGRATION] Erro ao adicionar novas colunas/tabelas:', err.message);
       }
-      seedVirtualAssets().catch(err => console.error('[SEED] Erro em seedVirtualAssets:', err.message));
+      // Nao reseedar automaticamente: apagar o banco e reiniciar a API
+      // voltava a gravar VIRTUAL_/auto-virtual em catalog_assets e product_images.
+      if (String(process.env.AIMERC_SEED_VIRTUAL || '').trim() === '1') {
+        seedVirtualAssets().catch(err => console.error('[SEED] Erro em seedVirtualAssets:', err.message));
+      }
     })();
   }
   return initialization;
