@@ -311,7 +311,7 @@ function CatalogLibrary() {
       ...current,
       sourceType,
       limit: ['ATACADAO_ALL', 'PINHEIRO_ALL', 'CARREFOUR_ALL', 'PAO_DE_ACUCAR_ALL', 'SAO_LUIZ_ALL', 'GUARA_ALL', 'SUPER_DO_POVO_ALL'].includes(sourceType) ? 100000 : Math.min(Number(current.limit) || 120, SCAN_LIMITS.DEFAULT),
-      concurrency: ['ATACADAO_ALL', 'PINHEIRO_ALL', 'CARREFOUR_ALL', 'PAO_DE_ACUCAR_ALL', 'SAO_LUIZ_ALL', 'GUARA_ALL', 'SUPER_DO_POVO_ALL'].includes(sourceType) ? Math.min(Math.max(Number(current.concurrency) || 8, 1), 10) : current.concurrency
+      concurrency: ['ATACADAO_ALL', 'PINHEIRO_ALL', 'CARREFOUR_ALL', 'PAO_DE_ACUCAR_ALL', 'SAO_LUIZ_ALL', 'GUARA_ALL', 'SUPER_DO_POVO_ALL'].includes(sourceType) ? Math.min(Math.max(Number(current.concurrency) || 8, 1), 30) : current.concurrency
     }));
   }
   return <div className="catalog-page">
@@ -331,7 +331,7 @@ function CatalogLibrary() {
         <div className="panel-head"><div><p className="eyebrow">Nova coleta</p><h2>Configurar varredura</h2></div><span className="scan-lock"><ShieldCheck size={15}/> Somente administrador</span></div>
         <label>Fonte de produtos<select value={form.sourceType} onChange={event => chooseSource(event.target.value)}>{SCAN_SOURCES.map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select></label>
         {needsValue && <label>{form.sourceType === 'CUSTOM_URL' ? 'URL HTTPS do supermercado' : 'Termo para pesquisar'}<input value={form.value} onChange={event => setForm(current => ({ ...current, value: event.target.value }))} placeholder={form.sourceType === 'CUSTOM_URL' ? 'https://loja.exemplo.com/produtos' : 'Ex.: cafe, arroz, limpeza'} required /></label>}
-        <div className="scan-fields"><label>Quantidade maxima<input type="number" min="1" max={maxLimit} value={form.limit} onChange={event => setForm(current => ({ ...current, limit: event.target.value }))}/></label><label>Processos simultaneos<input type="number" min="1" max="12" value={form.concurrency} onChange={event => setForm(current => ({ ...current, concurrency: event.target.value }))}/></label></div>
+        <div className="scan-fields"><label>Quantidade maxima<input type="number" min="1" max={maxLimit} value={form.limit} onChange={event => setForm(current => ({ ...current, limit: event.target.value }))}/></label><label>Processos simultaneos<input type="number" min="1" max="30" value={form.concurrency} onChange={event => setForm(current => ({ ...current, concurrency: event.target.value }))}/></label></div>
         <div className="scan-note"><CircleAlert size={17}/><span>A varredura grava no banco central apenas itens com EAN numerico, descricao e foto real. Depois, no supermercado cliente, EAN global casa automatico e EAN local usa o agente de IA.</span></div>
         {running ? (
           <button type="button" className="danger-button scan-start" onClick={cancel} disabled={cancelling || job?.status === 'CANCELLING'}>

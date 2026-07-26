@@ -77,7 +77,7 @@ function scraperPayload(input) {
   const sourceType = String(input.sourceType || '').toUpperCase();
   const maxLimit = ['ATACADAO_ALL', 'PINHEIRO_ALL', 'CARREFOUR_ALL', 'PAO_DE_ACUCAR_ALL', 'SAO_LUIZ_ALL', 'GUARA_ALL', 'SUPER_DO_POVO_ALL'].includes(sourceType) ? 100_000 : 5_000;
   const requestedLimit = clamp(input.limit, 100, 1, maxLimit);
-  const concurrency = clamp(input.concurrency, 6, 1, 12);
+  const concurrency = clamp(input.concurrency, 6, 1, 30);
   const sourceValue = String(input.value || '').trim();
   const presets = {
     CARREFOUR_ALL: { type: 'carrefour_all', value: String(requestedLimit) },
