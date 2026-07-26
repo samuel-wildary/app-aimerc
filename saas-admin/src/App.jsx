@@ -152,13 +152,13 @@ const SCAN_SOURCES = [
 ];
 
 const SCAN_LIMITS = {
-  ATACADAO_ALL: 50_000,
-  PINHEIRO_ALL: 50_000,
-  CARREFOUR_ALL: 50_000,
-  PAO_DE_ACUCAR_ALL: 50_000,
-  SAO_LUIZ_ALL: 50_000,
-  GUARA_ALL: 50_000,
-  SUPER_DO_POVO_ALL: 50_000,
+  ATACADAO_ALL: 100_000,
+  PINHEIRO_ALL: 100_000,
+  CARREFOUR_ALL: 100_000,
+  PAO_DE_ACUCAR_ALL: 100_000,
+  SAO_LUIZ_ALL: 100_000,
+  GUARA_ALL: 100_000,
+  SUPER_DO_POVO_ALL: 100_000,
   DEFAULT: 5_000
 };
 
@@ -183,7 +183,7 @@ function elapsed(start, finish) {
 function CatalogLibrary() {
   const [library, setLibrary] = useState(null);
   const [search, setSearch] = useState('');
-  const [form, setForm] = useState({ sourceType: 'CARREFOUR_ALL', value: '', limit: 50000, concurrency: 8 });
+  const [form, setForm] = useState({ sourceType: 'CARREFOUR_ALL', value: '', limit: 100000, concurrency: 8 });
   const [loading, setLoading] = useState(true);
   const [starting, setStarting] = useState(false);
   const [cancelling, setCancelling] = useState(false);
@@ -310,7 +310,7 @@ function CatalogLibrary() {
     setForm(current => ({
       ...current,
       sourceType,
-      limit: ['ATACADAO_ALL', 'PINHEIRO_ALL', 'CARREFOUR_ALL', 'PAO_DE_ACUCAR_ALL', 'SAO_LUIZ_ALL', 'GUARA_ALL', 'SUPER_DO_POVO_ALL'].includes(sourceType) ? 50000 : Math.min(Number(current.limit) || 120, SCAN_LIMITS.DEFAULT),
+      limit: ['ATACADAO_ALL', 'PINHEIRO_ALL', 'CARREFOUR_ALL', 'PAO_DE_ACUCAR_ALL', 'SAO_LUIZ_ALL', 'GUARA_ALL', 'SUPER_DO_POVO_ALL'].includes(sourceType) ? 100000 : Math.min(Number(current.limit) || 120, SCAN_LIMITS.DEFAULT),
       concurrency: ['ATACADAO_ALL', 'PINHEIRO_ALL', 'CARREFOUR_ALL', 'PAO_DE_ACUCAR_ALL', 'SAO_LUIZ_ALL', 'GUARA_ALL', 'SUPER_DO_POVO_ALL'].includes(sourceType) ? Math.min(Math.max(Number(current.concurrency) || 8, 1), 10) : current.concurrency
     }));
   }
