@@ -167,7 +167,7 @@ export function scoreDescriptionMatch(productName, description, headword, produc
 
 function preferredSourceBoost(sourceName) {
   const source = normalizeMatchText(sourceName);
-  if (/(pinheiro|atacadao|gbarbosa|comper|prezunic|bretas|carrefour|pao de acucar|guara|sao luiz)/.test(source)) return 0.05;
+  if (/(pinheiro|atacadao|gbarbosa|comper|prezunic|bretas|savegnago|carrefour|pao de acucar|guara|sao luiz)/.test(source)) return 0.05;
   return 0;
 }
 
