@@ -5,5 +5,6 @@ Cada supermercado possui um projeto Android independente nesta pasta. Isso permi
 ## Estrutura
 
 - `mercadinho-queiroz`: aplicativo do Mercadinho Queiroz.
+- `mercadinho-aldilene`: aplicativo do Mercadinho Aldilene (Supermercado Aldilene).
 
-Ao criar um novo aplicativo, use `android-customer-app` como base, defina um `applicationId` exclusivo e conecte o `STORE_SLUG` ao cadastro correto no SaaS.
+Ao criar um novo aplicativo, use `android-customer-app` ou um cliente existente como base, defina um `applicationId` exclusivo e conecte o `STORE_SLUG` ao cadastro correto no SaaS.
