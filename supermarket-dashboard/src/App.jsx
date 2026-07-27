@@ -406,7 +406,6 @@ function Catalog({ products, categories, query, setQuery, category, setCategory,
   const [editing, setEditing] = useState(null);
   const [page, setPage] = useState(1);
   const [imageFilter, setImageFilter] = useState('all');
-  const [assimilating, setAssimilating] = useState(false);
   const [assimilateMsg, setAssimilateMsg] = useState('');
   const [selectedIds, setSelectedIds] = useState(() => new Set());
   const [photoQueue, setPhotoQueue] = useState([]);
@@ -562,21 +561,6 @@ function Catalog({ products, categories, query, setQuery, category, setCategory,
     }
   }
 
-  async function assimilateLocalImages() {
-    if (assimilating) return;
-    setAssimilating(true);
-    setAssimilateMsg('');
-    try {
-      const result = await api.assimilateImages(500);
-      setAssimilateMsg(`Assimilacao: ${result.matched} fotos aplicadas de ${result.examined} produtos sem imagem.`);
-      if (onChanged) await onChanged();
-    } catch (error) {
-      setAssimilateMsg(error.message || 'Falha ao assimilar imagens');
-    } finally {
-      setAssimilating(false);
-    }
-  }
-
   return (
     <section className="panel catalog-panel">
       <div className="panel-heading catalog-heading">
@@ -591,7 +575,6 @@ function Catalog({ products, categories, query, setQuery, category, setCategory,
       <div className="catalog-toolbar">
         <label className="search-box"><Search size={18} /><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Buscar por nome, SKU, EAN ou categoria" /></label>
         <label className="category-select"><Tags size={17} /><select value={category} onChange={event => setCategory(event.target.value)}><option value="Todos">Todas as categorias</option>{categories.map(item => <option value={item.name} key={item.name}>{item.name} ({item.total})</option>)}</select></label>
-        <button type="button" className="primary" disabled={assimilating} onClick={assimilateLocalImages}><Images size={16} />{assimilating ? 'Assimilando...' : 'Assimilar fotos (EAN local)'}</button>
       </div>
 
       {assimilateMsg && <div className="catalog-sync-note"><Images size={16} /><span>{assimilateMsg}</span></div>}

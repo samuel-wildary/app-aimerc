@@ -48,12 +48,6 @@ export class ApiClient {
       body: JSON.stringify(product)
     });
   }
-  assimilateImages(limit = 400) {
-    return this.request('/products/assimilate-images', {
-      method: 'POST',
-      body: JSON.stringify({ limit, onlyLocalBarcode: true })
-    });
-  }
   clearProductImages(productIds = []) {
     return this.request('/products/clear-images', {
       method: 'POST',
