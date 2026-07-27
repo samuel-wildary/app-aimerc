@@ -82,6 +82,14 @@ const MAX_COMPER_PRODUCT_LIMIT = 100000;
 const DEFAULT_COMPER_CONCURRENCY = 6;
 const MAX_COMPER_CONCURRENCY = 30;
 
+const PREZUNIC_BASE_URL = 'https://www.prezunic.com.br';
+const PREZUNIC_API_URL = `${PREZUNIC_BASE_URL}/api/catalog_system/pub/products/search`;
+const PREZUNIC_PAGE_SIZE = 50;
+const DEFAULT_PREZUNIC_PRODUCT_LIMIT = 120;
+const MAX_PREZUNIC_PRODUCT_LIMIT = 100000;
+const DEFAULT_PREZUNIC_CONCURRENCY = 6;
+const MAX_PREZUNIC_CONCURRENCY = 30;
+
 const GUARA_BASE_URL = 'https://www.supermercadoguara.com.br';
 const GUARA_API_URL = 'https://apiecommerce.regexsolutions.com.br/ecommerce/produto/lista';
 const GUARA_KEY = 'eba4c904146ade03ae6e34ac521c8129b8954dd1a68a20f8fe814913d6a25ff1';
@@ -1918,6 +1926,190 @@ async function scrapeComperAll(value, logCallback, options = {}) {
   return totalSaved;
 }
 
+function prezunicCandidates(products) {
+  const candidates = [];
+
+  for (const product of products) {
+    const productName = normalizeProductName(product.productName || product.productTitle || product.description);
+    const productUrl = product.link || (product.linkText ? `${PREZUNIC_BASE_URL}/${product.linkText}/p` : null);
+
+    for (const item of product.items || []) {
+      const ean = normalizePaoEAN(item.ean);
+      const imageUrls = collectImageUrls(
+        (item.images || []).map(image => image?.imageUrl),
+        PREZUNIC_BASE_URL
+      );
+
+      if (ean && imageUrls.length) candidates.push({ ean, imageUrls, productName, productUrl });
+    }
+  }
+
+  return candidates;
+}
+
+async function scrapePrezunicProduct(candidate, logCallback) {
+  const { ean, imageUrls, productName, productUrl } = candidate;
+
+  if (await productExists(ean)) {
+    await attachProductUrlToExistingEAN(ean, productUrl);
+    await attachNameToExistingEAN(ean, productName);
+    logCallback(`[PULADO] EAN ${ean} ja existe no banco.`);
+    return 0;
+  }
+
+  logCallback(`[PRODUTO] ${productName || 'Sem nome'} | EAN: ${ean} | imagens: ${imageUrls.length}`);
+  const saved = await saveProductImages(
+    ean,
+    imageUrls,
+    'prezunic.com.br',
+    logCallback,
+    productUrl,
+    productName
+  );
+  return saved ? 1 : 0;
+}
+
+async function scrapePrezunicAll(value, logCallback, options = {}) {
+  const onProgress = typeof options.onProgress === 'function' ? options.onProgress : () => {};
+  const productLimit = clampInteger(value, DEFAULT_PREZUNIC_PRODUCT_LIMIT, 1, MAX_PREZUNIC_PRODUCT_LIMIT);
+  const concurrency = clampInteger(options.concurrency, DEFAULT_PREZUNIC_CONCURRENCY, 1, MAX_PREZUNIC_CONCURRENCY);
+  const candidates = [];
+  const seenEANs = new Set();
+
+  logCallback(`[INFO] Iniciando Prezunic Completo. Limite: ${productLimit}. Velocidade: ${concurrency} produtos em paralelo.`);
+  onProgress({ phase: 'catalog', current: 0, total: productLimit, remaining: productLimit, saved: 0 });
+
+  logCallback(`[INFO] Carregando a arvore de categorias do Prezunic para contornar limites VTEX...`);
+  let leafPaths = [];
+  try {
+    const treeResponse = await axios.get(`${PREZUNIC_BASE_URL}/api/catalog_system/pub/category/tree/2`, {
+      headers: DEFAULT_HEADERS,
+      timeout: 20000
+    });
+
+    function getLeafCategoryPaths(categories) {
+      const paths = [];
+      function traverse(item) {
+        if (Array.isArray(item.children) && item.children.length > 0) {
+          item.children.forEach(traverse);
+        } else if (item.url) {
+          try {
+            const path = new URL(item.url, PREZUNIC_BASE_URL).pathname.replace(/^\/|\/$/g, '');
+            if (path && !paths.includes(path)) paths.push(path);
+          } catch {}
+        }
+      }
+      categories.forEach(traverse);
+      return paths;
+    }
+
+    leafPaths = getLeafCategoryPaths(Array.isArray(treeResponse.data) ? treeResponse.data : []);
+    logCallback(`[INFO] Arvore de categorias carregada. Encontradas ${leafPaths.length} categorias folha.`);
+  } catch (error) {
+    logCallback(`[AVISO] Falha ao obter arvore de categorias: ${error.message}. Usando busca geral (limite VTEX ativo)...`);
+  }
+
+  if (leafPaths.length > 0) {
+    for (const categoryPath of leafPaths) {
+      if (candidates.length >= productLimit) break;
+      if (shouldCancel) break;
+
+      logCallback(`[CATEGORIA] Varrendo produtos de: ${categoryPath} | Coletados: ${candidates.length}/${productLimit}`);
+
+      for (let from = 0; candidates.length < productLimit; from += PREZUNIC_PAGE_SIZE) {
+        if (shouldCancel) break;
+        const to = from + PREZUNIC_PAGE_SIZE - 1;
+
+        let products;
+        try {
+          const response = await axios.get(`${PREZUNIC_BASE_URL}/api/catalog_system/pub/products/search/${categoryPath}`, {
+            params: { _from: from, _to: to },
+            headers: { ...DEFAULT_HEADERS, Accept: 'application/json', Referer: `${PREZUNIC_BASE_URL}/` },
+            timeout: 30000
+          });
+          products = Array.isArray(response.data) ? response.data : [];
+        } catch (error) {
+          if (error.response?.status === 416) break;
+          logCallback(`[AVISO] Erro ao consultar produtos na categoria ${categoryPath}: ${error.message}`);
+          break;
+        }
+
+        if (!products.length) break;
+
+        for (const candidate of prezunicCandidates(products)) {
+          if (candidates.length >= productLimit) break;
+          if (seenEANs.has(candidate.ean)) continue;
+          seenEANs.add(candidate.ean);
+          candidates.push(candidate);
+        }
+
+        onProgress({
+          phase: 'catalog', current: candidates.length, total: productLimit,
+          remaining: Math.max(productLimit - candidates.length, 0), saved: 0
+        });
+
+        if (products.length < PREZUNIC_PAGE_SIZE) break;
+        await delay(60);
+      }
+    }
+  } else {
+    for (let from = 0; candidates.length < productLimit; from += PREZUNIC_PAGE_SIZE) {
+      if (shouldCancel) break;
+      const to = from + PREZUNIC_PAGE_SIZE - 1;
+      logCallback(`[CATALOGO] Prezunic produtos ${from + 1}-${to + 1} | selecionados: ${candidates.length}/${productLimit}`);
+
+      let products;
+      try {
+        const response = await axios.get(PREZUNIC_API_URL, {
+          params: { _from: from, _to: to },
+          headers: { ...DEFAULT_HEADERS, Accept: 'application/json', Referer: `${PREZUNIC_BASE_URL}/` },
+          timeout: 30000,
+          maxRedirects: 5
+        });
+        products = Array.isArray(response.data) ? response.data : [];
+      } catch (error) {
+        if (error.response?.status === 416) break;
+        throw new Error(`Falha ao consultar o catalogo do Prezunic: ${error.message}`);
+      }
+
+      if (!products.length) break;
+
+      for (const candidate of prezunicCandidates(products)) {
+        if (candidates.length >= productLimit) break;
+        if (seenEANs.has(candidate.ean)) continue;
+        seenEANs.add(candidate.ean);
+        candidates.push(candidate);
+      }
+
+      onProgress({
+        phase: 'catalog', current: candidates.length, total: productLimit,
+        remaining: Math.max(productLimit - candidates.length, 0), saved: 0
+      });
+      if (products.length < PREZUNIC_PAGE_SIZE) break;
+      await delay(60);
+    }
+  }
+
+  let completed = 0;
+  let saved = 0;
+  onProgress({ phase: 'products', current: 0, total: candidates.length, remaining: candidates.length, saved: 0 });
+
+  const totalSaved = await runWithConcurrency(candidates, concurrency, async candidate => {
+    const result = await scrapePrezunicProduct(candidate, logCallback);
+    completed++;
+    saved += result;
+    onProgress({
+      phase: 'products', current: completed, total: candidates.length,
+      remaining: Math.max(candidates.length - completed, 0), saved
+    });
+    return result;
+  });
+
+  onProgress({ phase: 'complete', current: candidates.length, total: candidates.length, remaining: 0, saved: totalSaved });
+  logCallback(`[FIM] Prezunic finalizado. Produtos consultados: ${candidates.length}. Produtos novos salvos: ${totalSaved}.`);
+  return totalSaved;
+}
+
 async function scrapeCarrefourAll(value, logCallback, options = {}) {
   const onProgress = typeof options.onProgress === 'function' ? options.onProgress : () => {};
   const productLimit = clampInteger(
@@ -2626,6 +2818,8 @@ export async function runScraper(options, logCallback) {
     return await scrapeGbarbosaAll(value, logCallback, { concurrency, onProgress });
   } else if (type === 'comper_all') {
     return await scrapeComperAll(value, logCallback, { concurrency, onProgress });
+  } else if (type === 'prezunic_all') {
+    return await scrapePrezunicAll(value, logCallback, { concurrency, onProgress });
   } else if (type === 'guara_all') {
     return await scrapeGuaraAll(value, logCallback, { concurrency, onProgress });
   } else if (type === 'super_do_povo_all') {
@@ -2645,6 +2839,10 @@ export async function runScraper(options, logCallback) {
       if (domain.includes('comper.com.br')) {
         logCallback(`[INFO] URL do Comper detectada. Usando API VTEX de catalogo em lotes.`);
         return await scrapeComperAll(value, logCallback, { concurrency, onProgress });
+      }
+      if (domain.includes('prezunic.com.br')) {
+        logCallback(`[INFO] URL do Prezunic detectada. Usando API VTEX de catalogo em lotes.`);
+        return await scrapePrezunicAll(value, logCallback, { concurrency, onProgress });
       }
       if (domain.includes('supermercadoguara.com.br')) {
         logCallback(`[INFO] URL do Supermercado Guará detectada. Usando API de catálogo em lotes.`);

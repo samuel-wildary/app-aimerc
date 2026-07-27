@@ -75,7 +75,7 @@ async function appendEvent(id, message) {
 
 function scraperPayload(input) {
   const sourceType = String(input.sourceType || '').toUpperCase();
-  const maxLimit = ['ATACADAO_ALL', 'GBARBOSA_ALL', 'COMPER_ALL', 'PINHEIRO_ALL', 'CARREFOUR_ALL', 'PAO_DE_ACUCAR_ALL', 'SAO_LUIZ_ALL', 'GUARA_ALL', 'SUPER_DO_POVO_ALL'].includes(sourceType) ? 100_000 : 5_000;
+  const maxLimit = ['ATACADAO_ALL', 'GBARBOSA_ALL', 'COMPER_ALL', 'PREZUNIC_ALL', 'PINHEIRO_ALL', 'CARREFOUR_ALL', 'PAO_DE_ACUCAR_ALL', 'SAO_LUIZ_ALL', 'GUARA_ALL', 'SUPER_DO_POVO_ALL'].includes(sourceType) ? 100_000 : 5_000;
   const requestedLimit = clamp(input.limit, 100, 1, maxLimit);
   const concurrency = clamp(input.concurrency, 6, 1, 30);
   const sourceValue = String(input.value || '').trim();
@@ -87,6 +87,7 @@ function scraperPayload(input) {
     ATACADAO_ALL: { type: 'atacadao_all', value: String(requestedLimit) },
     GBARBOSA_ALL: { type: 'gbarbosa_all', value: String(requestedLimit) },
     COMPER_ALL: { type: 'comper_all', value: String(requestedLimit) },
+    PREZUNIC_ALL: { type: 'prezunic_all', value: String(requestedLimit) },
     GUARA_ALL: { type: 'guara_all', value: String(requestedLimit) },
     SUPER_DO_POVO_ALL: { type: 'super_do_povo_all', value: String(requestedLimit) },
     CARREFOUR_SEARCH: { type: 'keyword', value: sourceValue },
@@ -104,7 +105,7 @@ function scraperPayload(input) {
 }
 
 async function importLatestAssets(job) {
-  const limit = Math.min(job.requestedLimit, ['ATACADAO_ALL', 'GBARBOSA_ALL', 'COMPER_ALL', 'PINHEIRO_ALL', 'CARREFOUR_ALL', 'PAO_DE_ACUCAR_ALL', 'SAO_LUIZ_ALL', 'GUARA_ALL', 'SUPER_DO_POVO_ALL'].includes(job.sourceType) ? 100_000 : 5_000);
+  const limit = Math.min(job.requestedLimit, ['ATACADAO_ALL', 'GBARBOSA_ALL', 'COMPER_ALL', 'PREZUNIC_ALL', 'PINHEIRO_ALL', 'CARREFOUR_ALL', 'PAO_DE_ACUCAR_ALL', 'SAO_LUIZ_ALL', 'GUARA_ALL', 'SUPER_DO_POVO_ALL'].includes(job.sourceType) ? 100_000 : 5_000);
   let offset = 0;
   let imported = 0;
   let examined = 0;
