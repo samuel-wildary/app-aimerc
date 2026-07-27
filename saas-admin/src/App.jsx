@@ -146,6 +146,7 @@ const SCAN_SOURCES = [
   ['PINHEIRO_ALL', 'Pinheiro completo em lotes'],
   ['ATACADAO_ALL', 'Atacadao completo em lotes'],
   ['GBARBOSA_ALL', 'GBarbosa completo em lotes'],
+  ['COMPER_ALL', 'Comper completo em lotes'],
   ['GUARA_ALL', 'Supermercado Guara completo'],
   ['SUPER_DO_POVO_ALL', 'Super do Povo completo'],
   ['CARREFOUR_SEARCH', 'Carrefour por termo'],
@@ -155,6 +156,7 @@ const SCAN_SOURCES = [
 const SCAN_LIMITS = {
   ATACADAO_ALL: 100_000,
   GBARBOSA_ALL: 100_000,
+  COMPER_ALL: 100_000,
   PINHEIRO_ALL: 100_000,
   CARREFOUR_ALL: 100_000,
   PAO_DE_ACUCAR_ALL: 100_000,
@@ -167,6 +169,7 @@ const SCAN_LIMITS = {
 const BULK_SCAN_SOURCES = [
   'ATACADAO_ALL',
   'GBARBOSA_ALL',
+  'COMPER_ALL',
   'PINHEIRO_ALL',
   'CARREFOUR_ALL',
   'PAO_DE_ACUCAR_ALL',
