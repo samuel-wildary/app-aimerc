@@ -145,6 +145,7 @@ const SCAN_SOURCES = [
   ['SAO_LUIZ_ALL', 'Mercadinho Sao Luiz completo'],
   ['PINHEIRO_ALL', 'Pinheiro completo em lotes'],
   ['ATACADAO_ALL', 'Atacadao completo em lotes'],
+  ['GBARBOSA_ALL', 'GBarbosa completo em lotes'],
   ['GUARA_ALL', 'Supermercado Guara completo'],
   ['SUPER_DO_POVO_ALL', 'Super do Povo completo'],
   ['CARREFOUR_SEARCH', 'Carrefour por termo'],
@@ -153,6 +154,7 @@ const SCAN_SOURCES = [
 
 const SCAN_LIMITS = {
   ATACADAO_ALL: 100_000,
+  GBARBOSA_ALL: 100_000,
   PINHEIRO_ALL: 100_000,
   CARREFOUR_ALL: 100_000,
   PAO_DE_ACUCAR_ALL: 100_000,
@@ -161,6 +163,17 @@ const SCAN_LIMITS = {
   SUPER_DO_POVO_ALL: 100_000,
   DEFAULT: 5_000
 };
+
+const BULK_SCAN_SOURCES = [
+  'ATACADAO_ALL',
+  'GBARBOSA_ALL',
+  'PINHEIRO_ALL',
+  'CARREFOUR_ALL',
+  'PAO_DE_ACUCAR_ALL',
+  'SAO_LUIZ_ALL',
+  'GUARA_ALL',
+  'SUPER_DO_POVO_ALL'
+];
 
 function bytes(value) {
   const amount = Number(value || 0);
@@ -310,8 +323,8 @@ function CatalogLibrary() {
     setForm(current => ({
       ...current,
       sourceType,
-      limit: ['ATACADAO_ALL', 'PINHEIRO_ALL', 'CARREFOUR_ALL', 'PAO_DE_ACUCAR_ALL', 'SAO_LUIZ_ALL', 'GUARA_ALL', 'SUPER_DO_POVO_ALL'].includes(sourceType) ? 100000 : Math.min(Number(current.limit) || 120, SCAN_LIMITS.DEFAULT),
-      concurrency: ['ATACADAO_ALL', 'PINHEIRO_ALL', 'CARREFOUR_ALL', 'PAO_DE_ACUCAR_ALL', 'SAO_LUIZ_ALL', 'GUARA_ALL', 'SUPER_DO_POVO_ALL'].includes(sourceType) ? Math.min(Math.max(Number(current.concurrency) || 8, 1), 30) : current.concurrency
+      limit: BULK_SCAN_SOURCES.includes(sourceType) ? 100000 : Math.min(Number(current.limit) || 120, SCAN_LIMITS.DEFAULT),
+      concurrency: BULK_SCAN_SOURCES.includes(sourceType) ? Math.min(Math.max(Number(current.concurrency) || 8, 1), 30) : current.concurrency
     }));
   }
   return <div className="catalog-page">
