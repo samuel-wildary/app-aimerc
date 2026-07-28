@@ -31,15 +31,31 @@ async function loadConfigFile() {
   }
 }
 
-async function launchInstaller() {
+async function launchInstaller(smokeTest = false) {
   if (!installerScript) throw new Error('Assistente de instalacao indisponivel nesta compilacao');
   const scriptPath = path.join(os.tmpdir(), `aimerc-configure-${Date.now()}.ps1`);
   await fs.writeFile(scriptPath, installerScript, 'utf8');
   try {
-    execFileSync('powershell.exe', [
-      '-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', scriptPath,
-      '-Install', '-SourceExecutable', process.execPath
-    ], { stdio: 'ignore' });
+    try {
+      const installerArguments = [
+        '-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', scriptPath,
+        '-Install', '-SourceExecutable', process.execPath
+      ];
+      if (smokeTest) installerArguments.push('-SmokeTest');
+      execFileSync('powershell.exe', installerArguments, { stdio: 'pipe', windowsHide: true });
+    } catch (error) {
+      const detail = String(error.stderr || error.stdout || error.message || error).trim().slice(0, 2_000);
+      const errorLog = path.join(os.tmpdir(), 'AiMerc-Agent-Setup-error.log');
+      await fs.writeFile(errorLog, `${detail}\n`, 'utf8');
+      const message = `O instalador AiMerc encontrou um erro.\n\n${detail || 'Falha desconhecida'}\n\nDetalhes: ${errorLog}`;
+      try {
+        execFileSync('powershell.exe', [
+          '-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command',
+          'Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.MessageBox]::Show($env:AIMERC_INSTALL_ERROR, "AiMerc", "OK", "Error") | Out-Null'
+        ], { stdio: 'ignore', windowsHide: true, env: { ...process.env, AIMERC_INSTALL_ERROR: message } });
+      } catch {}
+      throw error;
+    }
   } finally {
     await fs.rm(scriptPath, { force: true });
   }
@@ -167,14 +183,14 @@ async function synchronize() {
 
 async function main() {
   if (process.argv.includes('--version')) {
-    console.log('AiMerc Sync Agent 1.1.0');
+    console.log('AiMerc Sync Agent 1.1.1');
     return;
   }
   const isPackagedExecutable = path.extname(process.execPath).toLowerCase() === '.exe'
     && path.basename(process.execPath).toLowerCase() !== 'node.exe';
   const isAgentExecution = configArgument >= 0 || process.argv.includes('--once');
   if (isPackagedExecutable && !isAgentExecution) {
-    await launchInstaller();
+    await launchInstaller(process.argv.includes('--installer-smoke-test'));
     return;
   }
   await loadConfigFile();
@@ -199,7 +215,7 @@ async function main() {
     firebirdTimeoutMs: Math.max(30_000, Number(process.env.FIREBIRD_TIMEOUT_SECONDS || 120) * 1_000),
     interval: Math.max(30, Number(process.env.SYNC_INTERVAL_SECONDS) || 300),
     batchSize: Math.max(50, Math.min(1_000, Number(process.env.SYNC_BATCH_SIZE) || 500)),
-    version: String(process.env.AGENT_VERSION || '1.1.0')
+    version: String(process.env.AGENT_VERSION || '1.1.1')
   };
   dataDirectory = path.resolve(process.env.AIMERC_DATA_DIR || path.join(path.dirname(configPath), 'data'));
   queuePath = path.join(dataDirectory, 'pending-products.json');

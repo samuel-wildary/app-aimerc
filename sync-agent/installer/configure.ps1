@@ -1,5 +1,6 @@
 param(
   [switch]$Install,
+  [switch]$SmokeTest,
   [string]$SourceDirectory = '',
   [string]$SourceExecutable = '',
   [string]$InstallConfigPath = ''
@@ -72,37 +73,52 @@ function Firebird-Target($hostName, $portNumber, $databaseName) {
   return ('{0}/{1}:{2}' -f $hostName.Trim(), [int]$portNumber, $databaseName.Trim())
 }
 
+function Wait-FileWritable($path, $timeoutMilliseconds = 10000) {
+  if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { return }
+  $deadline = [DateTime]::UtcNow.AddMilliseconds($timeoutMilliseconds)
+  while ([DateTime]::UtcNow -lt $deadline) {
+    try {
+      $stream = [System.IO.File]::Open($path, 'Open', 'ReadWrite', 'None')
+      $stream.Dispose()
+      return
+    } catch {
+      Start-Sleep -Milliseconds 200
+    }
+  }
+  throw 'A versao anterior do agente ainda esta em execucao. Aguarde alguns segundos e tente novamente.'
+}
+
 function Add-Field($form, $label, $top, $value = '', $password = $false) {
   $caption = New-Object System.Windows.Forms.Label
   $caption.Text = $label
   $caption.Location = New-Object System.Drawing.Point(24, $top)
   $caption.Size = New-Object System.Drawing.Size(430, 20)
-  $form.Controls.Add($caption)
-  $input = New-Object System.Windows.Forms.TextBox
-  $input.Location = New-Object System.Drawing.Point(24, ($top + 22))
-  $input.Size = New-Object System.Drawing.Size(430, 28)
-  $input.Text = $value
-  $input.UseSystemPasswordChar = $password
-  $input.Tag = $caption
-  $form.Controls.Add($input)
-  return $input
+  [void]$form.Controls.Add($caption)
+  $textBox = New-Object System.Windows.Forms.TextBox
+  $textBox.Location = New-Object System.Drawing.Point(24, ($top + 22))
+  $textBox.Size = New-Object System.Drawing.Size(430, 28)
+  $textBox.Text = $value
+  $textBox.UseSystemPasswordChar = $password
+  $textBox.Tag = $caption
+  [void]$form.Controls.Add($textBox)
+  return $textBox
 }
 
-function Add-BrowseButton($form, $input, $top, $filter) {
-  $input.Size = New-Object System.Drawing.Size(360, 28)
+function Add-BrowseButton($form, $textBox, $top, $filter) {
+  $textBox.Size = New-Object System.Drawing.Size(360, 28)
   $browse = New-Object System.Windows.Forms.Button
   $browse.Text = 'Procurar'
   $browse.Location = New-Object System.Drawing.Point(390, ($top + 21))
   $browse.Size = New-Object System.Drawing.Size(64, 29)
-  $browse.Tag = [pscustomobject]@{ Input = $input; Filter = $filter }
+  $browse.Tag = [pscustomobject]@{ TextBox = $textBox; Filter = $filter }
   $browse.Add_Click({
     $settings = $this.Tag
     $dialog = New-Object System.Windows.Forms.OpenFileDialog
     $dialog.Filter = $settings.Filter
     $dialog.CheckFileExists = $true
-    if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { $settings.Input.Text = $dialog.FileName }
+    if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { $settings.TextBox.Text = $dialog.FileName }
   })
-  $form.Controls.Add($browse)
+  [void]$form.Controls.Add($browse)
   return $browse
 }
 
@@ -423,8 +439,14 @@ $save.Add_Click({
 
     New-Item -ItemType Directory -Force -Path $installDirectory, $dataDirectory | Out-Null
     if ($Install) {
+      $existingTask = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+      if ($existingTask) {
+        Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+      }
       if ([string]::IsNullOrWhiteSpace($SourceExecutable)) { $SourceExecutable = Join-Path $SourceDirectory 'AiMerc-Agent.exe' }
-      Copy-Item $SourceExecutable (Join-Path $installDirectory 'AiMerc-Agent.exe') -Force
+      $installedExecutable = Join-Path $installDirectory 'AiMerc-Agent.exe'
+      Wait-FileWritable $installedExecutable
+      Copy-Item $SourceExecutable $installedExecutable -Force
       Copy-Item $PSCommandPath (Join-Path $installDirectory 'configure.ps1') -Force
       @'
 $ErrorActionPreference = 'SilentlyContinue'
@@ -457,7 +479,7 @@ Write-Host 'AiMerc Sync Agent removido. A configuracao foi preservada em Program
       'SYNC_INTERVAL_SECONDS=' + [int]$interval.Text
       'START_WITH_WINDOWS=' + $startWithWindows.Checked.ToString().ToLowerInvariant()
       'SYNC_BATCH_SIZE=500'
-      'AGENT_VERSION=1.1.0'
+      'AGENT_VERSION=1.1.1'
       'AIMERC_DATA_DIR=' + $dataDirectory
     ) | Set-Content -Path $configPath -Encoding UTF8
     & icacls.exe $dataDirectory /inheritance:r /grant:r 'SYSTEM:(OI)(CI)F' 'Administrators:(OI)(CI)F' | Out-Null
@@ -491,6 +513,12 @@ Write-Host 'AiMerc Sync Agent removido. A configuracao foi preservada em Program
 
 if (-not [string]::IsNullOrWhiteSpace($InstallConfigPath)) {
   $form.Add_Shown({ $save.PerformClick() })
+}
+
+if ($SmokeTest) {
+  Write-Output 'AIMERC_INSTALLER_FORM_OK'
+  $form.Dispose()
+  return
 }
 
 [void]$form.ShowDialog()
