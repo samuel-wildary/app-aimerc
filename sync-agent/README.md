@@ -22,6 +22,28 @@ O perfil escolhido fornece apenas os campos padrao. O mapeamento avancado salvo 
 
 Configuracao e logs ficam em `C:\ProgramData\AiMerc\SyncAgent`. O executavel fica em `C:\Program Files\AiMerc\Sync Agent`.
 
+### SysPDV com banco Firebird
+
+Para instalacoes do SysPDV sem API HTTP, selecione `FIREBIRD` no assistente. Informe o
+`isql.exe` da mesma instalacao do Firebird usada pelo SysPDV, o servidor e porta, o
+caminho ou alias do banco, o usuario e a senha. O agente usa uma transacao
+explicitamente `READ ONLY` e executa apenas consultas `SELECT`.
+
+O conector le:
+
+- produto e preco vigente em `PRODUTO`;
+- EAN em `PRODUTOAUX`;
+- unidade em `PRODUTO.PROUNID`, incluindo venda por peso por `PROPESVAR`;
+- categoria em `SECAO`;
+- estoque em `ESTOQUE`, preservando saldo zero;
+- oferta ativa em `ENCARTE` e `ENCARTE_PRODUTO`;
+- preco anterior em `AUDITORIA_PRECO`, quando existe historico valido anterior ao encarte.
+
+O Firebird nao e exposto na internet. O `isql.exe` e executado localmente e o agente
+abre para fora apenas a conexao HTTPS com o backend AiMerc. A senha do banco fica em
+`C:\ProgramData\AiMerc\SyncAgent\agent.env`, cuja permissao e limitada a `SYSTEM` e
+administradores.
+
 ## Instalar manualmente para desenvolvimento
 
 1. Instale Node.js 22 LTS no servidor Windows da loja.

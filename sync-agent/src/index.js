@@ -3,6 +3,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { execFileSync } from 'node:child_process';
 import { normalizeProducts } from './normalizer.js';
+import { loadSysPdvProducts } from './firebird-syspdv.js';
 
 const installerScript = typeof __AIMERC_INSTALLER_SCRIPT__ === 'string' ? __AIMERC_INSTALLER_SCRIPT__ : '';
 
@@ -59,8 +60,21 @@ async function log(level, payload) {
 }
 
 function validateConfig() {
-  for (const [key, value] of [['AIMERC_API_URL', config.apiUrl], ['AIMERC_AGENT_TOKEN', config.agentToken], ['ERP_API_URL', config.erpUrl]]) {
+  for (const [key, value] of [['AIMERC_API_URL', config.apiUrl], ['AIMERC_AGENT_TOKEN', config.agentToken]]) {
     if (!value) throw new Error(`${key} nao configurada`);
+  }
+  if (config.connectionMode === 'FIREBIRD') {
+    for (const [key, value] of [
+      ['FIREBIRD_ISQL_PATH', config.firebirdIsqlPath],
+      ['FIREBIRD_DATABASE', config.database],
+      ['FIREBIRD_USER', config.firebirdUser],
+      ['FIREBIRD_PASSWORD', config.firebirdPassword]
+    ]) {
+      if (!value) throw new Error(`${key} nao configurado`);
+    }
+    if (config.provider !== 'SYSPDV') throw new Error('O modo FIREBIRD esta disponivel para o perfil SYSPDV');
+  } else if (!config.erpUrl) {
+    throw new Error('ERP_API_URL nao configurada');
   }
 }
 
@@ -77,6 +91,9 @@ async function request(url, options = {}) {
 }
 
 async function loadProducts() {
+  if (config.connectionMode === 'FIREBIRD') {
+    return loadSysPdvProducts({ ...config, dataDirectory });
+  }
   const headers = { Accept: 'application/json' };
   if (config.erpAuthType === 'BEARER') headers.Authorization = `Bearer ${config.erpToken}`;
   if (config.erpAuthType === 'API_KEY') headers[config.erpAuthHeader] = config.erpToken;
@@ -124,10 +141,12 @@ async function sendProducts(products) {
 }
 
 async function heartbeat() {
+  const capabilities = ['PRODUCT_SYNC', 'OFFLINE_QUEUE', 'REMOTE_CONFIG'];
+  if (config.connectionMode === 'FIREBIRD') capabilities.push('FIREBIRD_SYSPDV');
   return request(`${config.apiUrl}/agent/heartbeat`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${config.agentToken}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ version: config.version, capabilities: ['PRODUCT_SYNC', 'OFFLINE_QUEUE', 'REMOTE_CONFIG'] })
+    body: JSON.stringify({ version: config.version, capabilities })
   });
 }
 
@@ -148,7 +167,7 @@ async function synchronize() {
 
 async function main() {
   if (process.argv.includes('--version')) {
-    console.log('AiMerc Sync Agent 1.0.0');
+    console.log('AiMerc Sync Agent 1.1.0');
     return;
   }
   const isPackagedExecutable = path.extname(process.execPath).toLowerCase() === '.exe'
@@ -163,14 +182,24 @@ async function main() {
     apiUrl: String(process.env.AIMERC_API_URL || '').replace(/\/$/, ''),
     agentToken: String(process.env.AIMERC_AGENT_TOKEN || ''),
     provider: String(process.env.ERP_PROVIDER || 'GENERIC_JSON').toUpperCase(),
+    connectionMode: String(process.env.ERP_CONNECTION_MODE || 'HTTP_JSON').toUpperCase(),
     erpUrl: String(process.env.ERP_API_URL || ''),
     erpAuthType: String(process.env.ERP_AUTH_TYPE || 'NONE').toUpperCase(),
     erpToken: String(process.env.ERP_API_TOKEN || ''),
     erpAuthHeader: String(process.env.ERP_AUTH_HEADER || 'X-API-Key'),
     itemsPath: String(process.env.ERP_ITEMS_PATH || ''),
+    firebirdIsqlPath: String(process.env.FIREBIRD_ISQL_PATH || ''),
+    host: String(process.env.FIREBIRD_HOST || '127.0.0.1'),
+    port: Number(process.env.FIREBIRD_PORT) || 3050,
+    database: String(process.env.FIREBIRD_DATABASE || ''),
+    firebirdUser: String(process.env.FIREBIRD_USER || ''),
+    firebirdPassword: String(process.env.FIREBIRD_PASSWORD || ''),
+    firebirdCharset: String(process.env.FIREBIRD_CHARSET || 'WIN1252'),
+    firebirdOutputEncoding: String(process.env.FIREBIRD_OUTPUT_ENCODING || 'windows-1252'),
+    firebirdTimeoutMs: Math.max(30_000, Number(process.env.FIREBIRD_TIMEOUT_SECONDS || 120) * 1_000),
     interval: Math.max(30, Number(process.env.SYNC_INTERVAL_SECONDS) || 300),
     batchSize: Math.max(50, Math.min(1_000, Number(process.env.SYNC_BATCH_SIZE) || 500)),
-    version: String(process.env.AGENT_VERSION || '1.0.0')
+    version: String(process.env.AGENT_VERSION || '1.1.0')
   };
   dataDirectory = path.resolve(process.env.AIMERC_DATA_DIR || path.join(path.dirname(configPath), 'data'));
   queuePath = path.join(dataDirectory, 'pending-products.json');

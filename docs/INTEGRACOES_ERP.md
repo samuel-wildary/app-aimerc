@@ -7,7 +7,7 @@ O AiMerc usa um contrato canonico de produtos e um agente instalado na rede do s
 ```text
 SysPDV / Varejo Facil / Solidcon / Solicom / outro ERP
                     |
-              API ou arquivo local
+          API, arquivo ou Firebird local
                     |
             AiMerc Sync Agent
         normalizacao + fila offline
@@ -34,6 +34,14 @@ Modos suportados pelo AiMerc:
 - `LOCAL_AGENT`: recomendado para servidor dentro da loja.
 - `CLOUD_API`: quando a API homologada estiver publicamente acessivel por HTTPS.
 - `FILE_LAYOUT`: para instalacoes que entregam arquivos em pasta local.
+- `FIREBIRD`: conexao local somente leitura para instalacoes SysPDV homologadas sem API.
+
+No modo `FIREBIRD`, o agente usa o `isql.exe` instalado no servidor do SysPDV e
+executa uma transacao `READ ONLY`. Produtos e preco vigente vem de `PRODUTO`, EAN
+de `PRODUTOAUX`, categoria de `SECAO`, unidade e venda por peso de
+`PRODUTO.PROUNID`/`PROPESVAR`, estoque de `ESTOQUE`, ofertas de
+`ENCARTE`/`ENCARTE_PRODUTO` e o preco anterior de `AUDITORIA_PRECO`. O banco
+continua acessivel apenas dentro da rede local.
 
 ### Varejo Facil
 
