@@ -479,7 +479,7 @@ Write-Host 'AiMerc Sync Agent removido. A configuracao foi preservada em Program
       'SYNC_INTERVAL_SECONDS=' + [int]$interval.Text
       'START_WITH_WINDOWS=' + $startWithWindows.Checked.ToString().ToLowerInvariant()
       'SYNC_BATCH_SIZE=500'
-      'AGENT_VERSION=1.1.1'
+      'AGENT_VERSION=1.1.2'
       'AIMERC_DATA_DIR=' + $dataDirectory
     ) | Set-Content -Path $configPath -Encoding UTF8
     & icacls.exe $dataDirectory /inheritance:r /grant:r 'SYSTEM:(OI)(CI)F' 'Administrators:(OI)(CI)F' | Out-Null

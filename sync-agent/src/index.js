@@ -42,7 +42,7 @@ async function launchInstaller(smokeTest = false) {
         '-Install', '-SourceExecutable', process.execPath
       ];
       if (smokeTest) installerArguments.push('-SmokeTest');
-      execFileSync('powershell.exe', installerArguments, { stdio: 'pipe', windowsHide: true });
+      execFileSync('powershell.exe', installerArguments, { stdio: 'pipe' });
     } catch (error) {
       const detail = String(error.stderr || error.stdout || error.message || error).trim().slice(0, 2_000);
       const errorLog = path.join(os.tmpdir(), 'AiMerc-Agent-Setup-error.log');
@@ -52,7 +52,7 @@ async function launchInstaller(smokeTest = false) {
         execFileSync('powershell.exe', [
           '-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command',
           'Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.MessageBox]::Show($env:AIMERC_INSTALL_ERROR, "AiMerc", "OK", "Error") | Out-Null'
-        ], { stdio: 'ignore', windowsHide: true, env: { ...process.env, AIMERC_INSTALL_ERROR: message } });
+        ], { stdio: 'ignore', env: { ...process.env, AIMERC_INSTALL_ERROR: message } });
       } catch {}
       throw error;
     }
@@ -183,7 +183,7 @@ async function synchronize() {
 
 async function main() {
   if (process.argv.includes('--version')) {
-    console.log('AiMerc Sync Agent 1.1.1');
+    console.log('AiMerc Sync Agent 1.1.2');
     return;
   }
   const isPackagedExecutable = path.extname(process.execPath).toLowerCase() === '.exe'
@@ -215,7 +215,7 @@ async function main() {
     firebirdTimeoutMs: Math.max(30_000, Number(process.env.FIREBIRD_TIMEOUT_SECONDS || 120) * 1_000),
     interval: Math.max(30, Number(process.env.SYNC_INTERVAL_SECONDS) || 300),
     batchSize: Math.max(50, Math.min(1_000, Number(process.env.SYNC_BATCH_SIZE) || 500)),
-    version: String(process.env.AGENT_VERSION || '1.1.1')
+    version: String(process.env.AGENT_VERSION || '1.1.2')
   };
   dataDirectory = path.resolve(process.env.AIMERC_DATA_DIR || path.join(path.dirname(configPath), 'data'));
   queuePath = path.join(dataDirectory, 'pending-products.json');
