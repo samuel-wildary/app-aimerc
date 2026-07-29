@@ -1,7 +1,9 @@
 import express from 'express';
 import cors from 'cors';
+import http from 'node:http';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { attachRealtime, notifyCatalogUpdated, notifyOrderCreated, notifyOrderUpdated } from './lib/realtime.js';
 import {
   adminOverview,
   adminStoreDetail,
@@ -425,6 +427,9 @@ app.post('/api/public/stores/:slug/orders', asyncRoute(async (req, res) => {
     scheduledTo: req.body.scheduledTo || null,
     items
   });
+  const { trackingToken, ...publicOrder } = order;
+  notifyOrderCreated(store.id, publicOrder);
+  notifyCatalogUpdated(store.id);
   res.status(201).json(order);
 }));
 
@@ -441,6 +446,7 @@ app.post('/api/public/stores/:slug/orders/:id/cancel', asyncRoute(async (req, re
   const token = requiredText(req.headers['x-order-token'], 'Token de acompanhamento', 200);
   const order = await cancelOrderByCustomer(store.id, req.params.id, token);
   if (!order) throw new ApiError(404, 'Pedido nao encontrado neste aparelho');
+  notifyOrderUpdated(store.id, order);
   res.json(order);
 }));
 
@@ -463,6 +469,7 @@ app.patch('/api/orders/:id/status', requireAuth('STORE_MANAGER'), asyncRoute(asy
   const order = await updateOrderStatus(req.user.storeId, req.params.id, status);
   if (!order) throw new ApiError(404, 'Pedido nao encontrado');
   await writeAuditLog({ storeId: req.user.storeId, actorId: req.user.sub, action: 'ORDER_STATUS_CHANGED', entityType: 'ORDER', entityId: req.params.id, metadata: { status } });
+  notifyOrderUpdated(req.user.storeId, order);
   res.json(order);
 }));
 
@@ -492,6 +499,7 @@ app.patch('/api/products/:productId/catalog', requireAuth('STORE_MANAGER'), asyn
     catalogVisible: req.body.catalogVisible !== false
   });
   if (!product) throw new ApiError(404, 'Produto nao encontrado');
+  notifyCatalogUpdated(req.user.storeId);
   await writeAuditLog({
     storeId: req.user.storeId,
     actorId: req.user.sub,
@@ -533,6 +541,7 @@ app.patch('/api/store/settings', requireAuth('STORE_MANAGER'), asyncRoute(async 
     disablePromotions: Boolean(req.body.disablePromotions)
   });
   await writeAuditLog({ storeId: req.user.storeId, actorId: req.user.sub, action: 'STORE_SETTINGS_UPDATED', entityType: 'STORE', entityId: req.user.storeId });
+  notifyCatalogUpdated(req.user.storeId);
   res.json(store);
 }));
 
@@ -558,19 +567,23 @@ app.post(
 
 app.post('/api/banners', requireAuth('STORE_MANAGER'), asyncRoute(async (req, res) => {
   await managerStore(req);
-  res.status(201).json(await createBanner(req.user.storeId, normalizeBanner(req.body)));
+  const banner = await createBanner(req.user.storeId, normalizeBanner(req.body));
+  notifyCatalogUpdated(req.user.storeId);
+  res.status(201).json(banner);
 }));
 
 app.patch('/api/banners/:id', requireAuth('STORE_MANAGER'), asyncRoute(async (req, res) => {
   await managerStore(req);
   const banner = await updateBanner(req.user.storeId, req.params.id, normalizeBanner(req.body));
   if (!banner) throw new ApiError(404, 'Banner nao encontrado');
+  notifyCatalogUpdated(req.user.storeId);
   res.json(banner);
 }));
 
 app.delete('/api/banners/:id', requireAuth('STORE_MANAGER'), asyncRoute(async (req, res) => {
   await managerStore(req);
   if (!await deleteBanner(req.user.storeId, req.params.id)) throw new ApiError(404, 'Banner nao encontrado');
+  notifyCatalogUpdated(req.user.storeId);
   res.status(204).end();
 }));
 
@@ -652,6 +665,7 @@ app.post('/api/sync/products', requireAuth('STORE_MANAGER'), asyncRoute(async (r
     req.body.items.map((item) => normalizeProduct(item, { providerCode: integration?.providerCode }))
   );
   await writeAuditLog({ storeId: req.user.storeId, actorId: req.user.sub, action: 'PRODUCTS_SYNCHRONIZED', entityType: 'PRODUCT', metadata: result });
+  notifyCatalogUpdated(req.user.storeId);
   res.json({ success: true, ...result, synchronizedAt: new Date().toISOString() });
 }));
 
@@ -709,6 +723,7 @@ app.post('/api/agent/products', requireIntegrationAgent, asyncRoute(async (req, 
       startedAt,
       message: `${products.length} produtos processados; ${rejected.length} rejeitados`
     });
+    notifyCatalogUpdated(agent.storeId);
     await writeAuditLog({
       storeId: agent.storeId, actorId: agent.id, action: 'AGENT_PRODUCTS_SYNCHRONIZED',
       entityType: 'INTEGRATION_AGENT', entityId: agent.id,
@@ -910,6 +925,7 @@ app.post('/api/admin/stores/:id/sync-ean-images', requireAuth('PLATFORM_ADMIN'),
     entityId: store.id,
     metadata: summary
   });
+  notifyCatalogUpdated(store.id);
   res.json({ success: true, storeId: store.id, ...summary });
 }));
 
@@ -1232,6 +1248,7 @@ app.post('/api/admin/stores/:id/assimilate-images', requireAuth('PLATFORM_ADMIN'
         skipped: summary.skipped
       }
     });
+    notifyCatalogUpdated(store.id);
   }).catch(error => {
     Object.assign(job, {
       status: 'FAILED',
@@ -1258,6 +1275,7 @@ app.post('/api/products/assimilate-images', requireAuth('STORE_MANAGER'), asyncR
     entityId: req.user.storeId,
     metadata: { examined: summary.examined, matched: summary.matched, skipped: summary.skipped }
   });
+  notifyCatalogUpdated(req.user.storeId);
   res.json({ success: true, ...summary });
 }));
 
@@ -1428,8 +1446,11 @@ async function start() {
   }, 60_000);
   pushAutomationTimer.unref();
   processPushAutomations().catch(error => console.error('Falha ao iniciar automacoes de push', error));
-  app.listen(PORT, '0.0.0.0', () => {
+  const server = http.createServer(app);
+  attachRealtime(server);
+  server.listen(PORT, '0.0.0.0', () => {
     console.log(`AiMerc backend PostgreSQL running on port ${PORT}`);
+    console.log('Realtime WebSocket available at /api/realtime');
   });
 }
 

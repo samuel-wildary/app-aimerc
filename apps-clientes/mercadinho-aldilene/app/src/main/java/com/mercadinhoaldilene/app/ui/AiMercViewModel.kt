@@ -10,6 +10,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKeys
 import com.mercadinhoaldilene.app.data.AiMercApi
+import com.mercadinhoaldilene.app.data.AiMercRealtime
 import com.mercadinhoaldilene.app.model.CartLine
 import com.mercadinhoaldilene.app.model.CepAddress
 import com.mercadinhoaldilene.app.model.Catalog
@@ -97,12 +98,25 @@ class AiMercViewModel(application: Application) : AndroidViewModel(application) 
 
     private val quantities = mutableStateMapOf<String, Int>()
 
+    private val realtime = AiMercRealtime(
+        storeSlug = "mercadinho-aldilene",
+        scope = viewModelScope,
+        onEvent = { event ->
+            when (event.optString("type")) {
+                "catalog.updated" -> loadCatalog()
+                "order.updated", "order.created" -> refreshOrders(showLoading = false)
+            }
+        }
+    )
+
     init {
         loadCatalog()
         refreshOrders()
+        syncRealtimeSubscriptions()
+        realtime.start()
         viewModelScope.launch {
             while (true) {
-                delay(8_000L)
+                delay(60_000L)
                 if (trackingReferences().isNotEmpty()) refreshOrders(showLoading = false)
             }
         }
@@ -112,6 +126,11 @@ class AiMercViewModel(application: Application) : AndroidViewModel(application) 
                 loadCatalog()
             }
         }
+    }
+
+    override fun onCleared() {
+        realtime.stop()
+        super.onCleared()
     }
 
     val products: List<Product>
@@ -265,11 +284,16 @@ class AiMercViewModel(application: Application) : AndroidViewModel(application) 
                     runCatching { AiMercApi.order(reference.id, reference.token) }.getOrNull()
                 }
                 orders = refreshed.sortedByDescending { it.createdAt }
+                syncRealtimeSubscriptions()
             } finally {
                 ordersLoading = false
                 refreshingOrders = false
             }
         }
+    }
+
+    private fun syncRealtimeSubscriptions() {
+        realtime.updateTrackedOrders(trackingReferences().map { it.id to it.token })
     }
 
     fun submit(checkout: CheckoutData, onSuccess: () -> Unit) {
@@ -281,6 +305,7 @@ class AiMercViewModel(application: Application) : AndroidViewModel(application) 
                 val receipt = AiMercApi.createOrder(checkout, cartLines)
                 confirmedOrderId = receipt.id
                 saveTrackingReference(receipt)
+                syncRealtimeSubscriptions()
                 saveProfile(checkout.name, checkout.phone, checkout.cep, checkout.street, checkout.number, checkout.complement, checkout.neighborhood, checkout.city, checkout.state, checkout.reference)
                 orders = (listOf(receipt.order) + orders.filterNot { it.id == receipt.id }).sortedByDescending { it.createdAt }
                 quantities.clear()

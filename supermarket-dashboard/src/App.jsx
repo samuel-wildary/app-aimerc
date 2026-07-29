@@ -43,6 +43,7 @@ import {
   X
 } from 'lucide-react';
 import { api } from './api.js';
+import { realtime } from './realtime.js';
 
 const STATUS = {
   RECEIVED: { label: 'Novo', tone: 'blue', next: 'PICKING', action: 'Iniciar separacao' },
@@ -1138,9 +1139,25 @@ export default function App() {
   useEffect(() => {
     if (!api.token) return;
     load();
-    const interval = window.setInterval(load, 15_000);
-    return () => window.clearInterval(interval);
+    realtime.connect(api.token);
+    const unsubscribe = realtime.onEvent((event) => {
+      if (!event?.type) return;
+      if (event.type === 'order.created' || event.type === 'order.updated' || event.type === 'catalog.updated') {
+        load();
+      }
+    });
+    const interval = window.setInterval(load, 60_000);
+    return () => {
+      unsubscribe();
+      realtime.disconnect();
+      window.clearInterval(interval);
+    };
   }, [load]);
+
+  useEffect(() => {
+    if (!session) return;
+    realtime.connect(api.token);
+  }, [session]);
 
   useEffect(() => {
     if (!session || active !== 'catalog') return;
@@ -1155,6 +1172,7 @@ export default function App() {
   }, [customerQuery, active, session, load]);
 
   function logout() {
+    realtime.disconnect();
     api.setToken('');
     setSession(null);
     setOrders([]);
