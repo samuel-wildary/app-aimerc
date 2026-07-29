@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import { hashPassword } from './auth.js';
 import { initializePostgres, query, transaction } from './postgres.js';
 import { normalizeCategory } from './categories.js';
+import { beautifyProductName } from './product-names.js';
 
 function isoNow() {
   return new Date().toISOString();
@@ -53,11 +54,12 @@ function mapStore(row) {
 export function mapProduct(row) {
   const sourceName = row.source_name || row.name;
   const sourceCategory = normalizeCategory(row.source_category || row.category);
+  const displayName = row.catalog_name || beautifyProductName(sourceName) || sourceName;
   return {
     id: row.id,
     sku: row.sku,
     barcode: row.barcode,
-    name: row.catalog_name || sourceName,
+    name: displayName,
     sourceName,
     category: normalizeCategory(row.catalog_category || sourceCategory),
     sourceCategory,

@@ -78,10 +78,11 @@ import {
   cancelCatalogScan
 } from './lib/catalog-library.js';
 import { seedVirtualAssets } from './lib/postgres.js';
+import { normalizeCategory } from './lib/categories.js';
+import { beautifyProductName } from './lib/product-names.js';
 import { createToken, passwordNeedsUpgrade, requireAuth, verifyPassword } from './lib/auth.js';
 import { integrationProvider, integrationProviders, publicIntegrationProvider } from './lib/integration-providers.js';
 import { encryptIntegrationSecret } from './lib/store-integration.js';
-import { normalizeCategory } from './lib/categories.js';
 import { ApiError, normalizeEmail, oneOf, optionalText, positiveNumber, requiredText, slugify } from './lib/validation.js';
 import { assimilateStoreCatalogImages, linkCatalogImageToProduct, searchCatalogImages, syncStoreEanImages } from './lib/catalog-image-match.js';
 import { runCatalogImageAudit, deleteCatalogMismatches } from './lib/catalog-audit.js';
@@ -206,10 +207,11 @@ function normalizeProductBarcode(rawBarcode, providerCode = '') {
 }
 
 function normalizeProduct(item, { providerCode = '' } = {}) {
+  const rawName = requiredText(item.name, 'Nome do produto');
   return {
     sku: requiredText(item.sku, 'SKU', 80),
     barcode: normalizeProductBarcode(optionalText(item.barcode, 80), providerCode),
-    name: requiredText(item.name, 'Nome do produto'),
+    name: beautifyProductName(rawName) || rawName,
     category: normalizeCategory(requiredText(item.category, 'Categoria', 100)),
     price: positiveNumber(item.price, 'Preco', { min: 0 }),
     oldPrice: item.oldPrice == null || item.oldPrice === '' ? null : positiveNumber(item.oldPrice, 'Preco anterior'),
