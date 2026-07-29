@@ -215,7 +215,7 @@ $firebirdDatabase = Add-Field $form 'Caminho ou alias do banco Firebird' 484 (Co
 $firebirdDatabaseBrowse = Add-BrowseButton $form $firebirdDatabase 484 'Banco Firebird (*.fdb;*.gdb)|*.fdb;*.gdb|Todos os arquivos (*.*)|*.*'
 $firebirdUser = Add-Field $form 'Usuario Firebird' 544 (Config-Value $current 'FIREBIRD_USER' 'SYSDBA')
 $firebirdPassword = Add-Field $form 'Senha Firebird' 604 (Config-Value $current 'FIREBIRD_PASSWORD' '') $true
-$firebirdCharset = Add-Field $form 'Charset Firebird' 664 (Config-Value $current 'FIREBIRD_CHARSET' 'WIN1252')
+$firebirdCharset = Add-Field $form 'Charset Firebird' 664 (Config-Value $current 'FIREBIRD_CHARSET' 'NONE')
 
 $httpControls = @($erpUrl, $erpUrl.Tag, $authLabel, $authType, $erpToken, $erpToken.Tag, $itemsPath, $itemsPath.Tag)
 $firebirdControls = @(
@@ -296,51 +296,24 @@ $testConnection.Add_Click({
       $previousUser = $env:ISC_USER
       $previousPassword = $env:ISC_PASSWORD
       try {
+        # Teste minimo: Firebird 2.5 do SysPDV rejeita SET TRANSACTION ... RECORD_VERSION no isql.
         @'
 SET ECHO OFF;
 SET HEADING OFF;
-SET LIST OFF;
+SET LIST ON;
 SET BAIL ON;
-SET TRANSACTION READ ONLY READ COMMITTED RECORD_VERSION;
 SELECT FIRST 1
   'AIMERC_FIREBIRD_OK' AS STATUS,
   TRIM(p.PROCOD) AS SKU,
-  TRIM(p.PRODES) AS PRODUCT_NAME,
-  TRIM(s.SECDES) AS CATEGORY_NAME,
-  TRIM(p.PROUNID) AS UNIT_NAME,
-  p.PROPESVAR AS VARIABLE_WEIGHT,
-  p.PROFORLIN AS OUT_OF_LINE,
-  TRIM(pa.PROCODAUX) AS BARCODE,
-  p.PROPRC1 AS CURRENT_PRICE,
-  COALESCE((
-    SELECT FIRST 1 es.ESTATU
-    FROM ESTOQUE es
-    WHERE es.PROCOD = p.PROCOD
-  ), 0) AS STOCK,
-  COALESCE((
-    SELECT FIRST 1 ep.ENCPROPRCOFE
-    FROM ENCARTE e
-    JOIN ENCARTE_PRODUTO ep ON ep.ENCCOD = e.ENCCOD
-    WHERE ep.PROCOD = p.PROCOD
-      AND e.ENCSTATUS = 'A'
-      AND CURRENT_DATE BETWEEN CAST(e.ENCDATINI AS DATE) AND CAST(e.ENCDATFIM AS DATE)
-  ), 0) AS PROMO_PRICE,
-  (
-    SELECT FIRST 1 ap.AUPPRCVDAVAR
-    FROM AUDITORIA_PRECO ap
-    WHERE ap.PROCOD = p.PROCOD
-    ORDER BY ap.AUPDAT DESC
-  ) AS AUDITED_PRICE
-FROM PRODUTO p
-LEFT JOIN PRODUTOAUX pa ON pa.PROCOD = p.PROCOD
-LEFT JOIN SECAO s ON s.SECCOD = p.SECCOD;
+  TRIM(p.PRODES) AS PRODUCT_NAME
+FROM PRODUTO p;
 QUIT;
 '@ | Set-Content -LiteralPath $testScript -Encoding ASCII
         $env:ISC_USER = $firebirdUser.Text
         $env:ISC_PASSWORD = $firebirdPassword.Text
         $output = & $firebirdIsql.Text '-charset' $firebirdCharset.Text '-input' $testScript $target 2>&1 | Out-String
-        if ($LASTEXITCODE -ne 0 -or $output -notmatch 'AIMERC_FIREBIRD_OK') {
-          throw ("Firebird recusou a conexao. {0}" -f $output.Trim())
+        if ($output -notmatch 'AIMERC_FIREBIRD_OK') {
+          throw ("Firebird recusou a conexao.`n{0}" -f $output.Trim())
         }
       } finally {
         $env:ISC_USER = $previousUser
@@ -364,7 +337,9 @@ QUIT;
     }
   } catch {
     $status.ForeColor = [System.Drawing.Color]::Firebrick
-    $status.Text = $_.Exception.Message
+    $message = $_.Exception.Message
+    $status.Text = if ($message.Length -gt 180) { $message.Substring(0, 177) + '...' } else { $message }
+    [System.Windows.Forms.MessageBox]::Show($message, 'AiMerc Sync Agent', 'OK', 'Error') | Out-Null
   }
 })
 
@@ -410,8 +385,8 @@ $save.Add_Click({
         FIREBIRD_USER = $firebirdUser.Text
         FIREBIRD_PASSWORD = $firebirdPassword.Text
         FIREBIRD_CHARSET = $firebirdCharset.Text
-        FIREBIRD_OUTPUT_ENCODING = 'windows-1252'
-        FIREBIRD_TIMEOUT_SECONDS = '120'
+        FIREBIRD_OUTPUT_ENCODING = 'latin1'
+        FIREBIRD_TIMEOUT_SECONDS = '300'
         SYNC_INTERVAL_SECONDS = $interval.Text
         START_WITH_WINDOWS = $startWithWindows.Checked.ToString().ToLowerInvariant()
       }
@@ -474,8 +449,8 @@ Write-Host 'AiMerc Sync Agent removido. A configuracao foi preservada em Program
       'FIREBIRD_USER=' + (& $clean $firebirdUser.Text)
       'FIREBIRD_PASSWORD=' + (& $clean $firebirdPassword.Text)
       'FIREBIRD_CHARSET=' + (& $clean $firebirdCharset.Text)
-      'FIREBIRD_OUTPUT_ENCODING=windows-1252'
-      'FIREBIRD_TIMEOUT_SECONDS=120'
+      'FIREBIRD_OUTPUT_ENCODING=latin1'
+      'FIREBIRD_TIMEOUT_SECONDS=300'
       'SYNC_INTERVAL_SECONDS=' + [int]$interval.Text
       'START_WITH_WINDOWS=' + $startWithWindows.Checked.ToString().ToLowerInvariant()
       'SYNC_BATCH_SIZE=500'

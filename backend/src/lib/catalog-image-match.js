@@ -110,13 +110,47 @@ export function gtinCheckDigitOk(digits) {
   return (10 - (sum % 10)) % 10 === expected;
 }
 
+/** Remove padding de zero a esquerda tipico de CHAR do SysPDV / Firebird. */
+export function normalizeGtinDigits(raw) {
+  const digits = String(raw || '').replace(/\D/g, '');
+  if (!digits) return '';
+
+  const candidates = [];
+  const seen = new Set();
+  const push = (value) => {
+    if (!value || seen.has(value)) return;
+    seen.add(value);
+    candidates.push(value);
+  };
+
+  const stripped = digits.replace(/^0+/, '');
+  if (stripped) push(stripped);
+  push(digits);
+  let walking = digits;
+  while (walking.startsWith('0') && walking.length > 8) {
+    walking = walking.slice(1);
+    push(walking);
+  }
+
+  const valid = candidates.filter(gtinCheckDigitOk);
+  if (valid.length) {
+    const rank = (value) => ({ 13: 0, 12: 1, 8: 2, 14: 3 }[value.length] ?? 9);
+    return valid.sort((left, right) => rank(left) - rank(right) || left.length - right.length)[0];
+  }
+  for (const candidate of candidates) {
+    if ([8, 12, 13, 14].includes(candidate.length)) return candidate;
+  }
+  return '';
+}
+
 /** EAN interno da loja (PLU / código próprio) — não casa com GTIN global. */
 export function isLocalBarcode(barcode, sku = '') {
-  const digits = String(barcode || '').replace(/\D/g, '');
+  const digits = normalizeGtinDigits(barcode) || String(barcode || '').replace(/\D/g, '');
   if (!digits) return true;
   if (digits.length < 8) return true;
   const skuDigits = String(sku || '').replace(/\D/g, '');
   if (skuDigits && digits === skuDigits) return true;
+  if (skuDigits && normalizeGtinDigits(sku) === digits) return true;
   if (![8, 12, 13, 14].includes(digits.length)) return true;
   return !gtinCheckDigitOk(digits);
 }
@@ -366,24 +400,59 @@ export async function linkCatalogImageToProduct(storeId, productId, catalogEan) 
  * force=false: preserva admin-upload / catalog-import.
  */
 export async function syncStoreEanImages(storeId, { force = false } = {}) {
+  const providerCode = String((await dbQuery(
+    `SELECT provider_code FROM store_integrations WHERE store_id = $1 LIMIT 1`,
+    [storeId]
+  )).rows[0]?.provider_code || '').toUpperCase();
+  const isSysPdv = providerCode === 'SYSPDV';
+
+  // Só SysPDV usa EAN com zero a esquerda no CHAR do Firebird.
+  if (isSysPdv) {
+    await dbQuery(`
+      UPDATE products AS p
+      SET barcode = cleaned.ean,
+          updated_at = NOW()
+      FROM (
+        SELECT
+          id,
+          NULLIF(LTRIM(regexp_replace(COALESCE(barcode, ''), '[^0-9]', '', 'g'), '0'), '') AS ean
+        FROM products
+        WHERE store_id = $1
+      ) AS cleaned
+      WHERE p.store_id = $1
+        AND p.id = cleaned.id
+        AND cleaned.ean IS NOT NULL
+        AND length(cleaned.ean) BETWEEN 8 AND 14
+        AND p.barcode IS DISTINCT FROM cleaned.ean
+    `, [storeId]);
+  }
+
+  const rawExpr = `regexp_replace(COALESCE(p.barcode, ''), '[^0-9]', '', 'g')`;
+  const eanExpr = isSysPdv
+    ? `NULLIF(LTRIM(${rawExpr}, '0'), '')`
+    : rawExpr;
+  const matchExpr = isSysPdv
+    ? `(ca.ean = ${eanExpr} OR ca.ean = ${rawExpr})`
+    : `ca.ean = ${rawExpr}`;
+
   const eligible = (await dbQuery(`
     SELECT COUNT(*)::int AS total
     FROM products p
     WHERE p.store_id = $1
       AND p.active = 1
-      AND length(regexp_replace(COALESCE(p.barcode, ''), '[^0-9]', '', 'g')) BETWEEN 8 AND 14
+      AND length(COALESCE(${eanExpr}, '')) BETWEEN 8 AND 14
   `, [storeId])).rows[0]?.total || 0;
 
   const withCatalog = (await dbQuery(`
     SELECT COUNT(*)::int AS total
     FROM products p
     INNER JOIN catalog_assets ca
-      ON ca.ean = regexp_replace(COALESCE(p.barcode, ''), '[^0-9]', '', 'g')
+      ON ${matchExpr}
      AND ca.content_type <> 'image/svg+xml'
      AND COALESCE(ca.byte_size, 0) > 3000
     WHERE p.store_id = $1
       AND p.active = 1
-      AND length(regexp_replace(COALESCE(p.barcode, ''), '[^0-9]', '', 'g')) BETWEEN 8 AND 14
+      AND length(COALESCE(${eanExpr}, '')) BETWEEN 8 AND 14
   `, [storeId])).rows[0]?.total || 0;
 
   const synced = await dbQuery(`
@@ -399,14 +468,14 @@ export async function syncStoreEanImages(storeId, { force = false } = {}) {
       NOW()
     FROM products p
     INNER JOIN catalog_assets ca
-      ON ca.ean = regexp_replace(COALESCE(p.barcode, ''), '[^0-9]', '', 'g')
+      ON ${matchExpr}
      AND ca.content_type <> 'image/svg+xml'
      AND COALESCE(ca.byte_size, 0) > 3000
     LEFT JOIN product_images pi
       ON pi.store_id = p.store_id AND pi.product_id = p.id
     WHERE p.store_id = $1
       AND p.active = 1
-      AND length(regexp_replace(COALESCE(p.barcode, ''), '[^0-9]', '', 'g')) BETWEEN 8 AND 14
+      AND length(COALESCE(${eanExpr}, '')) BETWEEN 8 AND 14
       AND (
         $2::boolean = true
         OR pi.product_id IS NULL

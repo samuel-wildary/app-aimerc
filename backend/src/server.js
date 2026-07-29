@@ -189,10 +189,23 @@ function publicProduct(req, store, product) {
   };
 }
 
-function normalizeProduct(item) {
+function normalizeProductBarcode(rawBarcode, providerCode = '') {
+  const digits = String(rawBarcode || '').replace(/\D/g, '');
+  if (!digits) return '';
+  const isSysPdv = String(providerCode || '').toUpperCase() === 'SYSPDV';
+  if (!isSysPdv) return digits;
+
+  // SysPDV grava EAN em CHAR com zero a esquerda (0789... -> 789...).
+  const stripped = digits.replace(/^0+/, '');
+  if (stripped && [8, 12, 13, 14].includes(stripped.length)) return stripped;
+  if ([8, 12, 13, 14].includes(digits.length)) return digits;
+  return stripped || digits;
+}
+
+function normalizeProduct(item, { providerCode = '' } = {}) {
   return {
     sku: requiredText(item.sku, 'SKU', 80),
-    barcode: optionalText(item.barcode, 80),
+    barcode: normalizeProductBarcode(optionalText(item.barcode, 80), providerCode),
     name: requiredText(item.name, 'Nome do produto'),
     category: normalizeCategory(requiredText(item.category, 'Categoria', 100)),
     price: positiveNumber(item.price, 'Preco', { min: 0 }),
@@ -633,7 +646,11 @@ app.delete('/api/push-automations/:id', requireAuth('STORE_MANAGER'), asyncRoute
 app.post('/api/sync/products', requireAuth('STORE_MANAGER'), asyncRoute(async (req, res) => {
   await managerStore(req);
   if (!Array.isArray(req.body.items) || req.body.items.length === 0 || req.body.items.length > 10_000) throw new ApiError(400, 'Lista de produtos invalida');
-  const result = await upsertProducts(req.user.storeId, req.body.items.map(normalizeProduct));
+  const integration = await getStoreIntegration(req.user.storeId);
+  const result = await upsertProducts(
+    req.user.storeId,
+    req.body.items.map((item) => normalizeProduct(item, { providerCode: integration?.providerCode }))
+  );
   await writeAuditLog({ storeId: req.user.storeId, actorId: req.user.sub, action: 'PRODUCTS_SYNCHRONIZED', entityType: 'PRODUCT', metadata: result });
   res.json({ success: true, ...result, synchronizedAt: new Date().toISOString() });
 }));
@@ -671,7 +688,7 @@ app.post('/api/agent/products', requireIntegrationAgent, asyncRoute(async (req, 
     const rejected = [];
     for (const [index, item] of req.body.items.entries()) {
       try {
-        products.push(normalizeProduct(item));
+        products.push(normalizeProduct(item, { providerCode: integration.providerCode }));
       } catch (error) {
         rejected.push({
           index,

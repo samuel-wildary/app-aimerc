@@ -183,7 +183,7 @@ async function synchronize() {
 
 async function main() {
   if (process.argv.includes('--version')) {
-    console.log('AiMerc Sync Agent 1.1.2');
+    console.log('AiMerc Sync Agent 1.1.5');
     return;
   }
   const isPackagedExecutable = path.extname(process.execPath).toLowerCase() === '.exe'
@@ -210,12 +210,12 @@ async function main() {
     database: String(process.env.FIREBIRD_DATABASE || ''),
     firebirdUser: String(process.env.FIREBIRD_USER || ''),
     firebirdPassword: String(process.env.FIREBIRD_PASSWORD || ''),
-    firebirdCharset: String(process.env.FIREBIRD_CHARSET || 'WIN1252'),
-    firebirdOutputEncoding: String(process.env.FIREBIRD_OUTPUT_ENCODING || 'windows-1252'),
-    firebirdTimeoutMs: Math.max(30_000, Number(process.env.FIREBIRD_TIMEOUT_SECONDS || 120) * 1_000),
+    firebirdCharset: String(process.env.FIREBIRD_CHARSET || 'NONE'),
+    firebirdOutputEncoding: String(process.env.FIREBIRD_OUTPUT_ENCODING || 'latin1'),
+    firebirdTimeoutMs: Math.max(30_000, Number(process.env.FIREBIRD_TIMEOUT_SECONDS || 300) * 1_000),
     interval: Math.max(30, Number(process.env.SYNC_INTERVAL_SECONDS) || 300),
     batchSize: Math.max(50, Math.min(1_000, Number(process.env.SYNC_BATCH_SIZE) || 500)),
-    version: String(process.env.AGENT_VERSION || '1.1.2')
+    version: String(process.env.AGENT_VERSION || '1.1.5')
   };
   dataDirectory = path.resolve(process.env.AIMERC_DATA_DIR || path.join(path.dirname(configPath), 'data'));
   queuePath = path.join(dataDirectory, 'pending-products.json');

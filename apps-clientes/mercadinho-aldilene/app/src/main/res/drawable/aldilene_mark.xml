@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Gold shopping-cart mark only. Blue background comes from adaptive-icon / theme. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- handle -->
+    <path
+        android:fillColor="#E8C96A"
+        android:pathData="M34,42 C34,28 45,20 58,20 v7 C49,27 41,32 41,42 Z" />
+    <!-- basket frame (outer minus inner via evenOdd) -->
+    <path
+        android:fillColor="#E8C96A"
+        android:fillType="evenOdd"
+        android:pathData="M26,42 h56 l-6,38 H32 Z
+            M34,50 h40 l-3.5,24 H37.5 Z" />
+    <!-- vertical bars -->
+    <path android:fillColor="#E8C96A" android:pathData="M42,52 h5 v20 h-5 Z" />
+    <path android:fillColor="#E8C96A" android:pathData="M52,52 h5 v20 h-5 Z" />
+    <path android:fillColor="#E8C96A" android:pathData="M62,52 h5 v20 h-5 Z" />
+    <!-- horizontal bar -->
+    <path android:fillColor="#E8C96A" android:pathData="M36,62 h36 v5 H36 Z" />
+    <!-- wheels -->
+    <path
+        android:fillColor="#E8C96A"
+        android:fillType="evenOdd"
+        android:pathData="M40,88 m-8,0 a8,8 0 1,0 16,0 a8,8 0 1,0 -16,0
+            M40,88 m-3.5,0 a3.5,3.5 0 1,0 7,0 a3.5,3.5 0 1,0 -7,0" />
+    <path
+        android:fillColor="#E8C96A"
+        android:fillType="evenOdd"
+        android:pathData="M66,88 m-8,0 a8,8 0 1,0 16,0 a8,8 0 1,0 -16,0
+            M66,88 m-3.5,0 a3.5,3.5 0 1,0 7,0 a3.5,3.5 0 1,0 -7,0" />
+</vector>

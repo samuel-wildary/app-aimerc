@@ -1,15 +1,15 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item>
-        <shape android:shape="rectangle">
-            <solid android:color="@color/aldilene_logo_blue" />
+        <shape android:shape="oval">
+            <solid android:color="@color/aldilene_blue" />
         </shape>
     </item>
     <item
-        android:top="8dp"
-        android:bottom="8dp"
-        android:left="8dp"
-        android:right="8dp">
+        android:top="4dp"
+        android:bottom="4dp"
+        android:left="4dp"
+        android:right="4dp">
         <bitmap
             android:gravity="fill"
             android:src="@drawable/aldilene_logo_square" />

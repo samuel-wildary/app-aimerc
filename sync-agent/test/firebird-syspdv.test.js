@@ -113,8 +113,7 @@ test('usa secao, unidade por peso e status fora de linha do SysPDV', () => {
   assert.equal(product.active, false);
 });
 
-test('consulta e explicitamente somente leitura e inclui estoque zerado', () => {
-  assert.match(SYSPDV_PRODUCTS_QUERY, /SET TRANSACTION READ ONLY/i);
+test('consulta nao altera dados e inclui estoque zerado', () => {
   assert.match(SYSPDV_PRODUCTS_QUERY, /LEFT JOIN \(\s*SELECT es\.PROCOD, SUM\(es\.ESTATU\)/i);
   assert.match(SYSPDV_PRODUCTS_QUERY, /LEFT JOIN SECAO s ON s\.SECCOD = p\.SECCOD/i);
   assert.doesNotMatch(SYSPDV_PRODUCTS_QUERY, /\b(INSERT|UPDATE|DELETE|MERGE)\b/i);

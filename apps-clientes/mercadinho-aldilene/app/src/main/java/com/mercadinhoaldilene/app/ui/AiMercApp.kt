@@ -18,8 +18,8 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -107,14 +107,14 @@ import java.text.NumberFormat
 import java.util.Locale
 
 private val Forest = Color(0xFF0B1440)
-private val ForestLight = Color(0xFF2A407A)
-private val Mint = Color(0xFFD4C4A8)
-private val MintSoft = Color(0xFFFFF0E3)
-private val Canvas = Color(0xFFF7F8FC)
+private val ForestLight = Color(0xFF1A2A6A)
+private val Mint = Color(0xFFE8C96A)
+private val MintSoft = Color(0xFFF8F1DC)
+private val Canvas = Color(0xFFF7F5F0)
 private val Ink = Color(0xFF17213D)
 private val Muted = Color(0xFF68718A)
 private val Line = Color(0xFFE1E5EF)
-private val Orange = Color(0xFFD4C4A8)
+private val Orange = Color(0xFFE8C96A)
 
 private enum class Screen { HOME, SEARCH, CATEGORY, PRODUCT, CART, CHECKOUT, SUCCESS, ORDERS, PROFILE }
 
@@ -206,11 +206,10 @@ private fun HomeHeader(storeName: String, open: Boolean, deliveryAddress: String
                 contentDescription = "Mercadinho Aldilene",
                 contentScale = ContentScale.Fit,
                 modifier = Modifier
-                    .width(78.dp)
-                    .height(58.dp)
-                    .offset(y = (-6).dp)
+                    .height(84.dp)
+                    .width(104.dp)
             )
-            Spacer(Modifier.width(17.dp))
+            Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) { Text(storeName, color = Color.White, fontWeight = FontWeight.ExtraBold, maxLines = 1, overflow = TextOverflow.Ellipsis); Text(if (open) "Aberto agora" else "Fechado", color = if (open) Mint else Orange, fontSize = 11.sp, fontWeight = FontWeight.Bold) }
             IconButton(onClick = {}) { Icon(Icons.Default.Person, null, tint = Color.White) }
         }
@@ -771,9 +770,11 @@ private fun LoadingScreen(branded: Boolean = false) {
                     painter = painterResource(R.drawable.aldilene_splash_transparent),
                     contentDescription = "Mercadinho Aldilene",
                     contentScale = ContentScale.Fit,
-                    modifier = Modifier.size(230.dp)
+                    modifier = Modifier
+                        .fillMaxWidth(0.90f)
+                        .heightIn(max = 420.dp)
                 )
-                Spacer(Modifier.height(24.dp))
+                Spacer(Modifier.height(28.dp))
             }
             CircularProgressIndicator(color = Mint)
             Spacer(Modifier.height(14.dp))

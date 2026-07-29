@@ -25,7 +25,6 @@ SET COUNT OFF;
 SET HEADING ON;
 SET LIST ON;
 SET BAIL ON;
-SET TRANSACTION READ ONLY READ COMMITTED RECORD_VERSION;
 
 SELECT
     TRIM(p.PROCOD) AS SKU,
@@ -72,11 +71,17 @@ QUIT;
 `.trimStart();
 
 function decodeOutput(buffer, encoding) {
-  const normalized = String(encoding || 'windows-1252').toLowerCase().replace('_', '-');
+  if (buffer == null) return '';
+  if (typeof buffer === 'string') return buffer;
+  if (!Buffer.isBuffer(buffer) && !(buffer instanceof Uint8Array)) {
+    return String(buffer);
+  }
+  const normalized = String(encoding || 'latin1').toLowerCase().replaceAll('_', '-');
+  const alias = normalized === 'iso8859-1' || normalized === 'iso-8859-1' ? 'latin1' : normalized;
   try {
-    return new TextDecoder(normalized).decode(buffer);
+    return new TextDecoder(alias).decode(buffer);
   } catch {
-    return new TextDecoder('windows-1252').decode(buffer);
+    return Buffer.from(buffer).toString('latin1');
   }
 }
 
@@ -210,7 +215,8 @@ export async function loadSysPdvProducts(config, dependencies = {}) {
   const scriptPath = path.join(workDirectory, `syspdv-products-${process.pid}-${Date.now()}.sql`);
   await writeFile(scriptPath, SYSPDV_PRODUCTS_QUERY, 'utf8');
 
-  const charset = String(config.firebirdCharset || 'WIN1252').trim().toUpperCase();
+  // NONE evita SQLSTATE 22018 (Cannot transliterate) em nomes com bytes invalidos no SysPDV.
+  const charset = String(config.firebirdCharset || 'NONE').trim().toUpperCase() || 'NONE';
   const target = firebirdDatabaseTarget(config);
   try {
     const result = await run(isqlPath, [
@@ -220,8 +226,9 @@ export async function loadSysPdvProducts(config, dependencies = {}) {
     ], {
       cwd: path.dirname(isqlPath),
       windowsHide: true,
-      timeout: Math.max(30_000, Number(config.firebirdTimeoutMs) || 120_000),
-      maxBuffer: Math.max(10 * 1024 * 1024, Number(config.firebirdMaxBuffer) || 100 * 1024 * 1024),
+      encoding: 'buffer',
+      timeout: Math.max(30_000, Number(config.firebirdTimeoutMs) || 300_000),
+      maxBuffer: Math.max(10 * 1024 * 1024, Number(config.firebirdMaxBuffer) || 200 * 1024 * 1024),
       env: {
         ...process.env,
         ISC_USER: String(config.firebirdUser || ''),
@@ -236,9 +243,7 @@ export async function loadSysPdvProducts(config, dependencies = {}) {
     }
     return sysPdvRowsToProducts(rows);
   } catch (error) {
-    const stderr = Buffer.isBuffer(error.stderr)
-      ? decodeOutput(error.stderr, config.firebirdOutputEncoding).trim()
-      : String(error.stderr || '').trim();
+    const stderr = decodeOutput(error.stderr, config.firebirdOutputEncoding).trim();
     const detail = stderr || String(error.message || error);
     throw new Error(`Falha ao consultar o Firebird do SysPDV: ${detail.slice(0, 800)}`);
   } finally {
