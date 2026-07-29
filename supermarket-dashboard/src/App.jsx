@@ -1110,16 +1110,17 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [creatingDemo, setCreatingDemo] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const catalogRefreshTimer = useRef(null);
+  const ordersRefreshTimer = useRef(null);
 
   const load = useCallback(async () => {
     if (!api.token) return;
     setRefreshing(true);
     try {
-      const [summaryData, ordersData, productsData, categoriesData, bannersData, customersData, reportData, campaignsData, automationsData] = await Promise.all([api.summary(), api.orders(), api.products(query, category), api.productCategories(), api.banners(), api.customers(customerQuery), api.reports(), api.pushCampaigns(), api.pushAutomations()]);
+      const [summaryData, ordersData, categoriesData, bannersData, customersData, reportData, campaignsData, automationsData] = await Promise.all([api.summary(), api.orders(), api.productCategories(), api.banners(), api.customers(customerQuery), api.reports(), api.pushCampaigns(), api.pushAutomations()]);
       setSummary(summaryData);
       setSession(current => current || { user: summaryData.user, store: summaryData.store });
       setOrders(ordersData);
-      setProducts(productsData);
       setCategories(categoriesData);
       setBanners(bannersData);
       setCustomers(customersData);
@@ -1134,7 +1135,39 @@ export default function App() {
     } finally {
       setRefreshing(false);
     }
-  }, [query, category, customerQuery]);
+  }, [customerQuery]);
+
+  const refreshOrdersLive = useCallback(async () => {
+    if (!api.token) return;
+    try {
+      const [summaryData, ordersData] = await Promise.all([api.summary(), api.orders()]);
+      setSummary(summaryData);
+      setSession(current => current || { user: summaryData.user, store: summaryData.store });
+      setOrders(ordersData);
+      setSelected(current => current ? ordersData.find(order => order.id === current.id) || null : null);
+    } catch (requestError) {
+      if (requestError.status === 401) logout();
+    }
+  }, []);
+
+  const refreshCatalogLive = useCallback(async () => {
+    if (!api.token) return;
+    try {
+      const [productsData, categoriesData, bannersData, summaryData] = await Promise.all([
+        api.products(query, category),
+        api.productCategories(),
+        api.banners(),
+        api.summary()
+      ]);
+      setProducts(productsData);
+      setCategories(categoriesData);
+      setBanners(bannersData);
+      setSummary(summaryData);
+      setSession(current => current || { user: summaryData.user, store: summaryData.store });
+    } catch (requestError) {
+      if (requestError.status === 401) logout();
+    }
+  }, [query, category]);
 
   useEffect(() => {
     if (!api.token) return;
@@ -1142,17 +1175,30 @@ export default function App() {
     realtime.connect(api.token);
     const unsubscribe = realtime.onEvent((event) => {
       if (!event?.type) return;
-      if (event.type === 'order.created' || event.type === 'order.updated' || event.type === 'catalog.updated') {
-        load();
+      if (event.type === 'order.created' || event.type === 'order.updated') {
+        if (ordersRefreshTimer.current) window.clearTimeout(ordersRefreshTimer.current);
+        ordersRefreshTimer.current = window.setTimeout(() => {
+          refreshOrdersLive();
+        }, 250);
+        return;
+      }
+      if (event.type === 'catalog.updated') {
+        // Sync do agente manda varios lotes: espera estabilizar antes de puxar o catalogo.
+        if (catalogRefreshTimer.current) window.clearTimeout(catalogRefreshTimer.current);
+        catalogRefreshTimer.current = window.setTimeout(() => {
+          refreshCatalogLive();
+        }, 4_000);
       }
     });
-    const interval = window.setInterval(load, 60_000);
+    const interval = window.setInterval(refreshOrdersLive, 60_000);
     return () => {
       unsubscribe();
       realtime.disconnect();
       window.clearInterval(interval);
+      if (catalogRefreshTimer.current) window.clearTimeout(catalogRefreshTimer.current);
+      if (ordersRefreshTimer.current) window.clearTimeout(ordersRefreshTimer.current);
     };
-  }, [load]);
+  }, [load, refreshOrdersLive, refreshCatalogLive]);
 
   useEffect(() => {
     if (!session) return;
@@ -1161,9 +1207,9 @@ export default function App() {
 
   useEffect(() => {
     if (!session || active !== 'catalog') return;
-    const timeout = window.setTimeout(load, 250);
+    const timeout = window.setTimeout(refreshCatalogLive, 250);
     return () => window.clearTimeout(timeout);
-  }, [query, category, active, session, load]);
+  }, [query, category, active, session, refreshCatalogLive]);
 
   useEffect(() => {
     if (!session || active !== 'customers') return;
@@ -1184,7 +1230,7 @@ export default function App() {
     try {
       const updated = await api.updateStatus(order.id, status);
       setSelected(updated);
-      await load();
+      await refreshOrdersLive();
     } catch (requestError) {
       setError(requestError.message);
     } finally {

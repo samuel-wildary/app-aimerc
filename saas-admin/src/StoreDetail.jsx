@@ -157,8 +157,12 @@ function PhotoQueueModal({
 
         <div className="catalog-photo-stage">
           <div className="catalog-photo-current">
-            <div className="catalog-photo-thumb" style={{ backgroundImage: current.hasImage ? `url(${current.imageUrl})` : undefined }}>
-              {!current.hasImage && <span>Sem foto atual</span>}
+            <div className="catalog-photo-thumb">
+              {current.hasImage ? (
+                <img src={`${current.imageUrl}?v=${encodeURIComponent(current.updatedAt || '1')}`} alt="" />
+              ) : (
+                <span>Sem foto atual</span>
+              )}
             </div>
             <div>
               <strong>{current.name}</strong>
@@ -274,30 +278,8 @@ export default function StoreDetail({ storeId, onBack, onEditBrand, onDelete }) 
 
   useEffect(() => { loadDetail(); }, [loadDetail]);
 
-  // Toda vez que abre um supermercado: sincroniza fotos do banco por EAN
-  useEffect(() => {
-    if (!storeId) return undefined;
-    let cancelled = false;
-    (async () => {
-      setSyncingEan(true);
-      try {
-        const result = await api.syncStoreEanImages(storeId, { force: true });
-        if (cancelled) return;
-        const updated = Number(result.updated || 0);
-        setMessage(
-          updated > 0
-            ? `Fotos por EAN substituidas: ${updated} produto(s) do banco de imagens.`
-            : 'Fotos por EAN conferidas — nada novo para sincronizar.'
-        );
-        await loadDetail({ quiet: true });
-      } catch (err) {
-        if (!cancelled) setError(err.message || 'Falha ao sincronizar fotos por EAN');
-      } finally {
-        if (!cancelled) setSyncingEan(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [storeId, loadDetail]);
+  // Nao sincroniza fotos automaticamente ao abrir — force sync de 20k+ produtos trava a tela.
+  // O botao "Atualizar fotos" no hero continua disponivel sob demanda.
 
   useEffect(() => {
     if (tab === 'catalogo' || tab === 'promocoes' || tab === 'buscar') {
@@ -573,7 +555,7 @@ export default function StoreDetail({ storeId, onBack, onEditBrand, onDelete }) 
             onClick={() => {
               loadDetail({ quiet: true });
               setSyncingEan(true);
-              api.syncStoreEanImages(storeId, { force: true })
+              api.syncStoreEanImages(storeId, { force: false })
                 .then(async result => {
                   const updated = Number(result.updated || 0);
                   setMessage(
@@ -761,11 +743,19 @@ export default function StoreDetail({ storeId, onBack, onEditBrand, onDelete }) 
                   <button
                     type="button"
                     className="product-tile-media"
-                    style={{ backgroundImage: item.hasImage ? `url(${item.imageUrl}?t=${item.updatedAt || ''})` : undefined }}
                     onClick={() => openPhotoQueue([item])}
                     title="Tirar ou enviar foto"
                   >
-                    {!item.hasImage && <span>Sem foto</span>}
+                    {item.hasImage ? (
+                      <img
+                        src={`${item.imageUrl}?v=${encodeURIComponent(item.updatedAt || '1')}`}
+                        alt=""
+                        loading="lazy"
+                        decoding="async"
+                      />
+                    ) : (
+                      <span>Sem foto</span>
+                    )}
                     {item.promo ? <b className="promo-tag">Promo</b> : null}
                     <em className="product-tile-camera"><Camera size={14} /></em>
                   </button>

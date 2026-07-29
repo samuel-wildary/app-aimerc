@@ -38,6 +38,7 @@ import {
   listOrders,
   listProductCategories,
   listProducts,
+  countProducts,
   listActivePushDevices,
   listPendingPushCampaigns,
   listPushCampaigns,
@@ -429,7 +430,6 @@ app.post('/api/public/stores/:slug/orders', asyncRoute(async (req, res) => {
   });
   const { trackingToken, ...publicOrder } = order;
   notifyOrderCreated(store.id, publicOrder);
-  notifyCatalogUpdated(store.id);
   res.status(201).json(order);
 }));
 
@@ -845,33 +845,36 @@ app.get('/api/admin/stores/:id', requireAuth('PLATFORM_ADMIN'), asyncRoute(async
 app.get('/api/admin/stores/:id/products', requireAuth('PLATFORM_ADMIN'), asyncRoute(async (req, res) => {
   const store = await getStore(req.params.id);
   if (!store) throw new ApiError(404, 'Supermercado nao encontrado');
-  const products = await listProducts(store.id, {
-    q: req.query.q || '',
-    category: req.query.category || 'Todos',
-    includeDisabled: true,
-    includeHidden: true
-  });
   const limit = Math.min(200, Math.max(1, Number(req.query.limit || 60)));
   const offset = Math.max(0, Number(req.query.offset || 0));
   const filter = String(req.query.filter || 'all');
-  let filtered = products;
-  if (filter === 'promo') filtered = products.filter(item => item.promo);
-  if (filter === 'without_image') filtered = products.filter(item => !(item.hasStoredImage || item.hasCatalogImage || item.image));
-  if (filter === 'local_ean') {
-    filtered = products.filter(item => !item.barcode || item.barcode.length < 8 || item.barcode === item.sku);
-  }
+  const productFilters = {
+    q: req.query.q || '',
+    category: req.query.category || 'Todos',
+    includeDisabled: true,
+    includeHidden: true,
+    includeInactive: true,
+    promoOnly: filter === 'promo',
+    withoutImage: filter === 'without_image',
+    localEan: filter === 'local_ean',
+    limit,
+    offset
+  };
+  const [items, total] = await Promise.all([
+    listProducts(store.id, productFilters),
+    countProducts(store.id, productFilters)
+  ]);
   const base = publicApiBase(req);
-  const page = filtered.slice(offset, offset + limit).map(item => ({
-    ...item,
-    hasImage: Boolean(item.hasStoredImage || item.hasCatalogImage || item.image),
-    imageUrl: `${base}/public/stores/${encodeURIComponent(store.slug)}/products/${encodeURIComponent(item.id)}/image`
-  }));
   res.json({
     store: { id: store.id, name: store.name, slug: store.slug },
-    total: filtered.length,
+    total,
     limit,
     offset,
-    items: page
+    items: items.map(item => ({
+      ...item,
+      hasImage: Boolean(item.hasStoredImage || item.hasCatalogImage || item.image),
+      imageUrl: `${base}/public/stores/${encodeURIComponent(store.slug)}/products/${encodeURIComponent(item.id)}/image`
+    }))
   });
 }));
 

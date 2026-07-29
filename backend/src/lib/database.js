@@ -453,58 +453,81 @@ export async function listProducts(storeId, filters = {}) {
     const index = values.length;
     clauses.push(`(lower(COALESCE(NULLIF(p.catalog_name,''),p.source_name,p.name)) LIKE $${index} OR lower(p.sku) LIKE $${index} OR p.barcode LIKE $${index} OR lower(COALESCE(NULLIF(p.catalog_category,''),p.source_category,p.category)) LIKE $${index})`);
   }
-  const result = await query(`SELECT p.*,EXISTS(
-      SELECT 1 FROM product_images pi WHERE pi.store_id=p.store_id AND pi.product_id=p.id
-    ) AS has_stored_image,EXISTS(
-      SELECT 1 FROM catalog_assets ca WHERE ca.ean=p.barcode
-    ) AS has_catalog_image FROM products p WHERE ${clauses.join(' AND ')}
-    ORDER BY CASE WHEN (p.image != '' OR EXISTS(SELECT 1 FROM product_images pi WHERE pi.store_id=p.store_id AND pi.product_id=p.id) OR EXISTS(SELECT 1 FROM catalog_assets ca WHERE ca.ean=p.barcode)) THEN 0 ELSE 1 END, p.promo DESC, COALESCE(NULLIF(p.catalog_name,''),p.source_name,p.name)`, values);
-  const virtualEansRes = await query("SELECT ean FROM catalog_assets WHERE ean LIKE 'VIRTUAL_%'");
-  const activeVirtualEans = new Set(virtualEansRes.rows.map(row => row.ean));
+  if (filters.promoOnly) clauses.push('p.promo=1');
+  if (filters.withoutImage) {
+    clauses.push(`pi.product_id IS NULL AND ca.ean IS NULL AND COALESCE(p.image, '') = ''`);
+  }
+  if (filters.localEan) {
+    clauses.push(`(COALESCE(p.barcode, '') = '' OR length(regexp_replace(COALESCE(p.barcode, ''), '\\D', '', 'g')) < 8 OR p.barcode = p.sku)`);
+  }
+  if (filters.category && filters.category !== 'Todos') {
+    values.push(normalizeCategory(filters.category));
+    clauses.push(`COALESCE(NULLIF(p.catalog_category,''),p.source_category,p.category) = $${values.length}`);
+  }
+
+  const limit = Number.isFinite(Number(filters.limit)) ? Math.min(500, Math.max(1, Number(filters.limit))) : null;
+  const offset = Number.isFinite(Number(filters.offset)) ? Math.max(0, Number(filters.offset)) : 0;
+
+  const result = await query(`
+    SELECT p.*,
+      (pi.product_id IS NOT NULL) AS has_stored_image,
+      (ca.ean IS NOT NULL) AS has_catalog_image
+    FROM products p
+    LEFT JOIN product_images pi
+      ON pi.store_id = p.store_id AND pi.product_id = p.id
+    LEFT JOIN catalog_assets ca
+      ON ca.ean = p.barcode
+    WHERE ${clauses.join(' AND ')}
+    ORDER BY
+      CASE WHEN (COALESCE(p.image,'') <> '' OR pi.product_id IS NOT NULL OR ca.ean IS NOT NULL) THEN 0 ELSE 1 END,
+      p.promo DESC,
+      COALESCE(NULLIF(p.catalog_name,''),p.source_name,p.name)
+    ${limit ? `LIMIT $${values.length + 1} OFFSET $${values.length + 2}` : ''}
+  `, limit ? [...values, limit, offset] : values);
 
   const store = await getStore(storeId);
   const disabledCats = new Set(
     String(store?.disabledCategories || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
   );
 
-  const products = result.rows.map(row => {
+  let filteredList = result.rows.map(row => {
     const product = mapProduct(row);
-    // So conta VIRTUAL se existir de verdade no banco — nao inventar "com imagem" so pelo nome.
-    if (!product.hasCatalogImage) {
-      const virtualEan = getVirtualEan(product.name, product.category);
-      if (virtualEan && activeVirtualEans.has(virtualEan)) {
-        product.hasCatalogImage = true;
-      }
-    }
-    if (store?.disablePromotions) {
-      product.promo = false;
-    }
+    if (store?.disablePromotions) product.promo = false;
     return product;
   });
 
-  let filteredList = products;
   if (!filters.includeDisabled && disabledCats.size > 0) {
-    filteredList = filteredList.filter(p => !disabledCats.has(p.category.toLowerCase()));
+    filteredList = filteredList.filter(p => !disabledCats.has(String(p.category || '').toLowerCase()));
   }
-
-  if (filters.category && filters.category !== 'Todos') {
-    const category = normalizeCategory(filters.category);
-    filteredList = filteredList.filter(product => product.category === category);
-  }
-
-  filteredList.sort((a, b) => {
-    const aHasImg = Boolean(a.hasStoredImage || a.hasCatalogImage || a.image);
-    const bHasImg = Boolean(b.hasStoredImage || b.hasCatalogImage || b.image);
-    if (aHasImg !== bHasImg) {
-      return aHasImg ? -1 : 1;
-    }
-    if (a.promo !== b.promo) {
-      return a.promo ? -1 : 1;
-    }
-    return a.name.localeCompare(b.name, 'pt-BR');
-  });
 
   return filteredList;
+}
+
+export async function countProducts(storeId, filters = {}) {
+  const clauses = ['p.store_id=$1'];
+  const values = [storeId];
+  if (!filters.includeInactive) clauses.push('p.active=1');
+  if (!filters.includeHidden) clauses.push('p.catalog_visible=1');
+  if (filters.q) {
+    values.push(`%${String(filters.q).toLowerCase()}%`);
+    const index = values.length;
+    clauses.push(`(lower(COALESCE(NULLIF(p.catalog_name,''),p.source_name,p.name)) LIKE $${index} OR lower(p.sku) LIKE $${index} OR p.barcode LIKE $${index} OR lower(COALESCE(NULLIF(p.catalog_category,''),p.source_category,p.category)) LIKE $${index})`);
+  }
+  if (filters.promoOnly) clauses.push('p.promo=1');
+  if (filters.withoutImage) {
+    clauses.push(`NOT EXISTS (SELECT 1 FROM product_images pi WHERE pi.store_id=p.store_id AND pi.product_id=p.id)
+      AND NOT EXISTS (SELECT 1 FROM catalog_assets ca WHERE ca.ean=p.barcode)
+      AND COALESCE(p.image, '') = ''`);
+  }
+  if (filters.localEan) {
+    clauses.push(`(COALESCE(p.barcode, '') = '' OR length(regexp_replace(COALESCE(p.barcode, ''), '\\D', '', 'g')) < 8 OR p.barcode = p.sku)`);
+  }
+  if (filters.category && filters.category !== 'Todos') {
+    values.push(normalizeCategory(filters.category));
+    clauses.push(`COALESCE(NULLIF(p.catalog_category,''),p.source_category,p.category) = $${values.length}`);
+  }
+  const total = (await query(`SELECT COUNT(*)::int AS total FROM products p WHERE ${clauses.join(' AND ')}`, values)).rows[0]?.total || 0;
+  return Number(total);
 }
 
 export async function getProduct(storeId, productId) {
@@ -974,11 +997,37 @@ export async function storeReports(storeId) {
 export async function adminStoreDetail(storeId) {
   const store = await getStore(storeId);
   if (!store) return null;
-  const [summary, categories, products, promoStats, integration, subscription] = await Promise.all([
+  const [summary, categories, catalogStatsRow, promoStats, integration, subscription] = await Promise.all([
     dashboardSummary(storeId),
     listProductCategories(storeId, true),
-    // Mesma base do painel da loja (/api/products): inclui ocultos, inativos e categorias desabilitadas
-    listProducts(storeId, { includeHidden: true, includeInactive: true, includeDisabled: true }),
+    query(`
+      SELECT
+        COUNT(*)::int AS total_products,
+        COUNT(*) FILTER (WHERE active = 1)::int AS active_products,
+        COUNT(*) FILTER (WHERE active = 1 AND promo = 1)::int AS promo_products,
+        COUNT(*) FILTER (
+          WHERE EXISTS (
+            SELECT 1 FROM product_images pi
+            WHERE pi.store_id = p.store_id AND pi.product_id = p.id
+          )
+        )::int AS stored_images,
+        COUNT(*) FILTER (
+          WHERE EXISTS (
+            SELECT 1 FROM product_images pi
+            WHERE pi.store_id = p.store_id AND pi.product_id = p.id
+          )
+          OR EXISTS (
+            SELECT 1 FROM catalog_assets ca WHERE ca.ean = p.barcode
+          )
+        )::int AS with_image,
+        COUNT(*) FILTER (
+          WHERE COALESCE(p.barcode, '') = ''
+             OR length(regexp_replace(COALESCE(p.barcode, ''), '\\D', '', 'g')) < 8
+             OR p.barcode = p.sku
+        )::int AS local_ean
+      FROM products p
+      WHERE p.store_id = $1
+    `, [storeId]),
     query(`
       SELECT id, sku, barcode, name, category, price, old_price, stock, unit, promo, catalog_visible
       FROM products
@@ -990,13 +1039,9 @@ export async function adminStoreDetail(storeId) {
     query('SELECT * FROM subscriptions WHERE store_id=$1 ORDER BY created_at DESC LIMIT 1', [storeId])
   ]);
 
-  // Contagem alinhada ao supermarket-dashboard (todos os produtos listados)
-  const withImage = products.filter(item => Boolean(item.hasStoredImage || item.hasCatalogImage)).length;
-  const localEan = products.filter(item => {
-    const barcode = String(item.barcode || '');
-    return !barcode || barcode.length < 8 || barcode === String(item.sku || '');
-  }).length;
-  const activeProducts = products.filter(item => item.active !== false);
+  const stats = catalogStatsRow.rows[0] || {};
+  const totalProducts = Number(stats.total_products || 0);
+  const withImage = Number(stats.with_image || 0);
 
   return {
     store,
@@ -1012,13 +1057,13 @@ export async function adminStoreDetail(storeId) {
       nextDueDate: subscription.rows[0].next_due_date
     } : null,
     catalogStats: {
-      activeProducts: activeProducts.length,
-      totalProducts: products.length,
-      promoProducts: activeProducts.filter(item => item.promo).length,
+      activeProducts: Number(stats.active_products || 0),
+      totalProducts,
+      promoProducts: Number(stats.promo_products || 0),
       withImage,
-      withoutImage: Math.max(0, products.length - withImage),
-      localEan,
-      storedImages: products.filter(item => item.hasStoredImage).length
+      withoutImage: Math.max(0, totalProducts - withImage),
+      localEan: Number(stats.local_ean || 0),
+      storedImages: Number(stats.stored_images || 0)
     },
     promotions: promoStats.rows.map(row => ({
       id: row.id,

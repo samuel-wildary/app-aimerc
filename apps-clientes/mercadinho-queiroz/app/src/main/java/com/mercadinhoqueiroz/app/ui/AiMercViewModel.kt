@@ -18,6 +18,7 @@ import com.mercadinhoqueiroz.app.model.CheckoutData
 import com.mercadinhoqueiroz.app.model.CustomerOrder
 import com.mercadinhoqueiroz.app.model.OrderReceipt
 import com.mercadinhoqueiroz.app.model.Product
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.json.JSONArray
@@ -98,12 +99,20 @@ class AiMercViewModel(application: Application) : AndroidViewModel(application) 
 
     private val quantities = mutableStateMapOf<String, Int>()
 
+    private var catalogRealtimeJob: Job? = null
+
     private val realtime = AiMercRealtime(
         storeSlug = "mecadinho-queiroz",
         scope = viewModelScope,
         onEvent = { event ->
             when (event.optString("type")) {
-                "catalog.updated" -> loadCatalog()
+                "catalog.updated" -> {
+                    catalogRealtimeJob?.cancel()
+                    catalogRealtimeJob = viewModelScope.launch {
+                        delay(5_000L)
+                        loadCatalog()
+                    }
+                }
                 "order.updated", "order.created" -> refreshOrders(showLoading = false)
             }
         }
@@ -129,6 +138,7 @@ class AiMercViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     override fun onCleared() {
+        catalogRealtimeJob?.cancel()
         realtime.stop()
         super.onCleared()
     }

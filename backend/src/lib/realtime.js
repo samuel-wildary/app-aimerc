@@ -80,7 +80,7 @@ export function notifyCatalogUpdated(storeId) {
   catalogDebounce.set(storeId, setTimeout(() => {
     catalogDebounce.delete(storeId);
     publishCatalogEvent(storeId, { type: 'catalog.updated', storeId });
-  }, 1_200));
+  }, 5_000));
 }
 
 const catalogDebounce = new Map();

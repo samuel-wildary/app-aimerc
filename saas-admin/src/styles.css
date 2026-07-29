@@ -51,7 +51,8 @@
 .product-tile.selected{border-color:#9fc43a;box-shadow:0 0 0 2px rgba(200,240,91,.35)}
 .product-tile-check{position:absolute;z-index:3;left:10px;top:10px;width:28px;height:28px;border-radius:8px;background:rgba(255,255,255,.94);border:1px solid #d7ded8;display:grid;place-items:center;box-shadow:0 4px 12px rgba(16,32,26,.08)}
 .product-tile-check input{width:15px;height:15px;accent-color:#6f8f18;margin:0}
-.product-tile-media{width:100%;height:140px;border:0;padding:0;background:#eef2ed center/contain no-repeat;display:grid;place-items:center;position:relative;cursor:pointer}
+.product-tile-media{width:100%;height:140px;border:0;padding:0;background-color:#eef2ed;display:grid;place-items:center;position:relative;cursor:pointer;overflow:hidden}
+.product-tile-media img{width:100%;height:100%;object-fit:contain;object-position:center;background:#fff;display:block}
 .product-tile-media span{color:#8a948e;font-size:11px;font-weight:700}
 .product-tile-camera{position:absolute;right:8px;bottom:8px;width:28px;height:28px;border-radius:8px;background:rgba(14,28,26,.78);color:#c8f05b;display:grid;place-items:center;opacity:0;transition:.15s}
 .product-tile:hover .product-tile-camera,.product-tile.selected .product-tile-camera{opacity:1}
@@ -85,7 +86,8 @@
 .catalog-photo-progress > div{height:100%;background:linear-gradient(90deg,#9dc936,var(--lime));transition:width .25s ease}
 .catalog-photo-stage{display:grid;grid-template-columns:minmax(220px,.85fr) minmax(0,1.15fr);gap:14px}
 .catalog-photo-current{padding:14px;border:1px solid var(--line);border-radius:14px;background:#f8faf7;display:grid;grid-template-columns:72px minmax(0,1fr);gap:12px;align-items:center}
-.catalog-photo-thumb{width:72px;height:72px;border-radius:12px;background:#eef2ed center/contain no-repeat;display:grid;place-items:center}
+.catalog-photo-thumb{width:72px;height:72px;border-radius:12px;background-color:#eef2ed;display:grid;place-items:center;overflow:hidden}
+.catalog-photo-thumb img{width:100%;height:100%;object-fit:contain;background:#fff;display:block}
 .catalog-photo-thumb span{color:#8a948e;font-size:9px;font-weight:700;text-align:center;padding:4px}
 .catalog-photo-current strong,.catalog-photo-current code,.catalog-photo-current em{display:block}
 .catalog-photo-current strong{font:700 13px/1.35 Sora,sans-serif}

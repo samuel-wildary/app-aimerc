@@ -277,19 +277,31 @@ private fun SectionHeading(title: String, subtitle: String?, openAll: (() -> Uni
 
 @Composable
 private fun ProductCard(product: Product, quantity: Int, add: () -> Unit, remove: () -> Unit, open: () -> Unit) {
-    Card(Modifier.width(164.dp).clickable(onClick = open), shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = Color.White), elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)) {
-        Column(Modifier.padding(11.dp)) {
+    Card(Modifier.width(164.dp).height(278.dp).clickable(onClick = open), shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = Color.White), elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)) {
+        Column(Modifier.fillMaxSize().padding(11.dp)) {
             Box(Modifier.fillMaxWidth().height(116.dp).clip(RoundedCornerShape(13.dp)).background(Color.White)) {
                 if (product.image.isNotBlank()) {
                     AsyncImage(model = product.image, contentDescription = product.name, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize().padding(8.dp))
                 }
                 if (product.promo) Text("OFERTA", Modifier.padding(7.dp).clip(RoundedCornerShape(999.dp)).background(Orange).padding(horizontal = 8.dp, vertical = 4.dp), color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Black)
             }
-            Spacer(Modifier.height(10.dp)); Text(product.name, minLines = 2, maxLines = 2, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Bold, color = Ink, fontSize = 13.sp, lineHeight = 16.sp)
-            Text(product.category, color = Muted, fontSize = 10.sp, modifier = Modifier.padding(top = 3.dp))
-            Spacer(Modifier.height(8.dp)); product.oldPrice?.let { Text(currency.format(it), color = Muted, fontSize = 10.sp, textDecoration = TextDecoration.LineThrough) }
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                Column { Text(currency.format(product.price), fontWeight = FontWeight.Black, fontSize = 15.sp, color = Ink); Text("por ${product.unit.lowercase()}", color = Muted, fontSize = 9.sp) }
+            Spacer(Modifier.height(10.dp))
+            Text(product.name, minLines = 2, maxLines = 2, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Bold, color = Ink, fontSize = 13.sp, lineHeight = 16.sp)
+            Text(product.category, color = Muted, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 3.dp))
+            Spacer(Modifier.weight(1f))
+            // Altura reservada do preco antigo: cards com e sem oferta ficam do mesmo tamanho.
+            Text(
+                text = product.oldPrice?.let(currency::format) ?: " ",
+                color = if (product.oldPrice != null) Muted else Color.Transparent,
+                fontSize = 10.sp,
+                maxLines = 1,
+                textDecoration = if (product.oldPrice != null) TextDecoration.LineThrough else null
+            )
+            Row(Modifier.fillMaxWidth().padding(top = 2.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                Column {
+                    Text(currency.format(product.price), fontWeight = FontWeight.Black, fontSize = 15.sp, color = Ink)
+                    Text("por ${product.unit.lowercase()}", color = Muted, fontSize = 9.sp)
+                }
                 QuantityControl(quantity, add, remove)
             }
         }
