@@ -4,6 +4,7 @@ import { initializePostgres, query, transaction } from './postgres.js';
 import { normalizeCategory } from './categories.js';
 import { beautifyProductName } from './product-names.js';
 import { resolveProductSaleRule } from './product-sale-rules.js';
+import { calculateDeliveryFee, normalizeDeliveryArea } from './delivery-fees.js';
 
 function isoNow() {
   return new Date().toISOString();
@@ -49,6 +50,18 @@ function mapStore(row) {
     disabledCategories: row.disabled_categories || '',
     disablePromotions: Boolean(row.disable_promotions),
     createdAt: row.created_at
+  };
+}
+
+function mapDeliveryZone(row) {
+  return {
+    id: row.id,
+    neighborhood: row.neighborhood,
+    city: row.city || '',
+    state: row.state || '',
+    fee: Number(row.fee),
+    active: Boolean(row.active),
+    updatedAt: row.updated_at
   };
 }
 
@@ -234,6 +247,41 @@ export async function updateStoreSettings(id, input) {
     id
   ]);
   return getStore(id);
+}
+
+export async function listDeliveryZones(storeId, executor = { query }) {
+  const result = await executor.query(`SELECT * FROM delivery_zones WHERE store_id=$1
+    ORDER BY city, neighborhood, state`, [storeId]);
+  return result.rows.map(mapDeliveryZone);
+}
+
+export async function replaceDeliveryZones(storeId, zones) {
+  const now = isoNow();
+  return transaction(async client => {
+    await client.query('DELETE FROM delivery_zones WHERE store_id=$1', [storeId]);
+    for (const zone of zones) {
+      await client.query(`INSERT INTO delivery_zones
+        (id,store_id,neighborhood,neighborhood_normalized,city,city_normalized,state,fee,active,created_at,updated_at)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$10)`, [
+        `zone_${crypto.randomUUID().slice(0, 12)}`,
+        storeId,
+        zone.neighborhood,
+        normalizeDeliveryArea(zone.neighborhood),
+        zone.city || '',
+        normalizeDeliveryArea(zone.city),
+        zone.state || '',
+        zone.fee,
+        zone.active === false ? 0 : 1,
+        now
+      ]);
+    }
+    return listDeliveryZones(storeId, client);
+  });
+}
+
+export async function quoteDeliveryFee(store, address, subtotal, executor = { query }) {
+  const zones = await listDeliveryZones(store.id, executor);
+  return calculateDeliveryFee({ store, zones, address, subtotal });
 }
 
 export async function listStores() {
@@ -879,7 +927,10 @@ export async function createOrder(store, input) {
     });
     const subtotal = Number(items.reduce((sum, item) => sum + item.total, 0).toFixed(2));
     if (subtotal < store.minimumOrder) throw Object.assign(new Error(`Pedido minimo de R$ ${store.minimumOrder.toFixed(2)}`), { status: 400 });
-    const deliveryFee = input.fulfillmentType === 'DELIVERY' && !(store.freeDeliveryAbove > 0 && subtotal >= store.freeDeliveryAbove) ? store.deliveryFee : 0;
+    const deliveryQuote = input.fulfillmentType === 'DELIVERY'
+      ? await quoteDeliveryFee(store, input.customer, subtotal, client)
+      : { fee: 0 };
+    const deliveryFee = deliveryQuote.fee;
     const id = `AM${Date.now().toString().slice(-8)}${crypto.randomInt(10, 100)}`;
     const now = isoNow();
     const result = await client.query(`INSERT INTO orders

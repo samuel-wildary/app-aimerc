@@ -255,6 +255,21 @@ code { color: #53625b; background: #f0f3f1; padding: 5px 7px; border-radius: 7px
 .money-input { display: grid; grid-template-columns: 42px minmax(0,1fr); align-items: center; border: 1px solid var(--line); border-radius: 11px; overflow: hidden; background: #f9fbf8; }
 .money-input b { height: 100%; display: grid; place-items: center; color: #0c805a; background: var(--mint-soft); font-size: 11px; }
 .money-input input { border: 0; border-radius: 0; }
+.delivery-zone-editor { padding: 15px; border: 1px solid #cfe2d8; border-radius: 14px; background: #f5faf7; display: grid; gap: 12px; }
+.delivery-zone-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
+.delivery-zone-heading strong, .delivery-zone-heading span { display: block; }
+.delivery-zone-heading strong { color: #163f31; font-size: 13px; }
+.delivery-zone-heading span { max-width: 520px; margin-top: 4px; color: var(--muted); font-size: 10px; line-height: 1.5; }
+.delivery-zone-heading button { min-height: 36px; padding: 0 11px; border: 1px solid #b8d8ca; border-radius: 9px; background: #fff; color: #087e58; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; font-size: 10px; font-weight: 900; }
+.delivery-zone-columns, .delivery-zone-row { display: grid; grid-template-columns: minmax(140px,1.35fr) minmax(120px,1fr) 58px minmax(115px,.8fr) 38px; gap: 8px; align-items: center; }
+.delivery-zone-columns { padding: 0 4px; color: #7b8881; font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; }
+.delivery-zone-list { display: grid; gap: 8px; }
+.delivery-zone-row input { min-height: 40px; background: #fff; }
+.delivery-zone-money { min-width: 0; display: grid; grid-template-columns: 35px minmax(0,1fr); align-items: center; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: #fff; }
+.delivery-zone-money b { height: 100%; display: grid; place-items: center; color: #0c805a; background: var(--mint-soft); font-size: 9px; }
+.delivery-zone-money input { min-width: 0; border: 0; border-radius: 0; }
+.delivery-zone-delete { width: 38px; height: 38px; border: 1px solid #efcece; border-radius: 9px; display: grid; place-items: center; background: #fff8f8; color: #b33c3c; }
+.delivery-zone-empty { padding: 16px; border: 1px dashed #bed6ca; border-radius: 10px; color: var(--muted); text-align: center; font-size: 10px; }
 .open-toggle { display: flex !important; justify-content: space-between; align-items: center; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: #f8faf7; }
 .open-toggle strong, .open-toggle small { display: block; }.open-toggle small { margin-top: 3px; color: var(--muted); font-weight: 500; }
 .open-toggle input, .active-checkbox input { accent-color: var(--mint); width: 19px; height: 19px; }
@@ -352,6 +367,7 @@ code { color: #53625b; background: #f0f3f1; padding: 5px 7px; border-radius: 7px
   .order-drawer { padding: 20px; }.drawer-footer { margin-inline: -20px; padding-inline: 20px; }
   .banner-list { grid-template-columns: 1fr; }
   .banner-form-row { grid-template-columns: 1fr; }
+  .delivery-zone-heading { align-items: stretch; flex-direction: column; }.delivery-zone-heading button { justify-content: center; }.delivery-zone-columns { display: none; }.delivery-zone-row { grid-template-columns: 1fr 58px 38px; }.delivery-zone-row > input:nth-child(1), .delivery-zone-row > input:nth-child(2), .delivery-zone-money { grid-column: 1/-1; }.delivery-zone-row > input:nth-child(3) { grid-column: 1/2; }.delivery-zone-row .delivery-zone-money { grid-row: 3; }.delivery-zone-row .delivery-zone-delete { grid-column: 3; grid-row: 2; }
   .push-row { align-items: flex-start; flex-direction: column; }.push-actions { width: 100%; }.push-actions button { flex: 1; justify-content: center; }
   .template-picker, .automation-list, .automation-fields { grid-template-columns: 1fr; }.automation-actions { grid-template-columns: 1fr 1fr auto; }
   .report-hero { display: block; padding: 23px; }.report-hero-value { margin-top: 20px; }.report-metrics { grid-template-columns: 1fr; }.bar-chart { gap: 6px; }.bar-column > strong { font-size: 8px; }.report-customer-row { grid-template-columns: 28px minmax(0,1fr) auto; }.report-customer-row > span:not(.ranking) { display: none; }

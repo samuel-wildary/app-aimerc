@@ -737,11 +737,17 @@ private fun CheckoutScreenV2(viewModel: AiMercViewModel, back: () -> Unit, succe
         city = address.city
         state = address.state
     }
-    val store = viewModel.catalog?.store; val deliveryFee = if (fulfillment == "DELIVERY" && !(store?.freeDeliveryAbove ?: 0.0 > 0 && viewModel.subtotal >= (store?.freeDeliveryAbove ?: 0.0))) store?.deliveryFee ?: 0.0 else 0.0
+    LaunchedEffect(fulfillment, neighborhood, city, state, viewModel.subtotal) {
+        if (fulfillment == "DELIVERY") viewModel.quoteDelivery(neighborhood, city, state, viewModel.subtotal)
+        else viewModel.clearDeliveryQuote()
+    }
+    val store = viewModel.catalog?.store
+    val deliveryFee = if (fulfillment == "DELIVERY") viewModel.deliveryQuote?.fee ?: 0.0 else 0.0
     val pickupSlotsList = (store?.pickupSlots ?: "08:00 - 10:00, 10:00 - 12:00, 12:00 - 14:00, 14:00 - 16:00, 16:00 - 18:00, 18:00 - 20:00").split(",").map { it.trim() }.filter { it.isNotBlank() }
     var selectedPickupSlot by rememberSaveable { mutableStateOf(pickupSlotsList.firstOrNull() ?: "08:00 - 10:00") }
     val validAddress = fulfillment == "PICKUP" || (cep.length == 8 && street.isNotBlank() && number.isNotBlank() && neighborhood.isNotBlank() && city.isNotBlank() && state.length == 2)
-    val valid = name.isNotBlank() && phone.isNotBlank() && validAddress
+    val deliveryReady = fulfillment == "PICKUP" || (!viewModel.deliveryQuoteLoading && viewModel.deliveryQuote != null && viewModel.deliveryQuoteError == null)
+    val valid = name.isNotBlank() && phone.isNotBlank() && validAddress && deliveryReady
     Scaffold(containerColor = Canvas, topBar = { SimpleTopBar("Finalizar compra", back) }, bottomBar = { Column(Modifier.background(Color.White).navigationBarsPadding().padding(16.dp)) { Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("Total", color = Muted); Text(currency.format(viewModel.subtotal + deliveryFee), fontWeight = FontWeight.Black, fontSize = 21.sp) }; Button(onClick = {
         val finalNotes = if (fulfillment == "PICKUP" && store?.enablePickupScheduling == true) (if (notes.isBlank()) "Horario de retirada: $selectedPickupSlot" else "$notes | Horario de retirada: $selectedPickupSlot") else notes
         viewModel.submit(CheckoutData(name, phone, cep, street, number, complement, neighborhood, city, state, reference, fulfillment, payment, null, finalNotes), success)
@@ -770,7 +776,15 @@ private fun CheckoutScreenV2(viewModel: AiMercViewModel, back: () -> Unit, succe
             if (fulfillment == "DELIVERY") item { CheckoutSection("Endereco de entrega") { AppField(cep, { cep = it.filter(Char::isDigit).take(8) }, "CEP (preenchimento automatico)", KeyboardType.Number); CepLookupStatus(viewModel); Spacer(Modifier.height(9.dp)); AppField(street, { street = it }, "Rua ou avenida"); Spacer(Modifier.height(9.dp)); AppField(number, { number = it }, "Numero da casa"); Spacer(Modifier.height(9.dp)); AppField(complement, { complement = it }, "Complemento (opcional)"); Spacer(Modifier.height(9.dp)); AppField(neighborhood, { neighborhood = it }, "Bairro"); Spacer(Modifier.height(9.dp)); AppField(city, { city = it }, "Cidade"); Spacer(Modifier.height(9.dp)); AppField(state, { state = it.uppercase().take(2) }, "UF"); Spacer(Modifier.height(9.dp)); AppField(reference, { reference = it }, "Ponto de referencia (opcional)") } }
             item { CheckoutSection("Pagamento na ${if (fulfillment == "DELIVERY") "entrega" else "retirada"}") { Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { ChoiceChip("Cartao", payment == "CARD_ON_DELIVERY") { payment = "CARD_ON_DELIVERY" }; ChoiceChip("Dinheiro", payment == "CASH") { payment = "CASH" }; ChoiceChip("Pix", payment == "PIX") { payment = "PIX" } } } }
             item { CheckoutSection("Observacoes") { AppField(notes, { notes = it }, "Ex.: substituir somente por marca similar") } }
-            item { CheckoutSection("Resumo") { SummaryRow("Produtos", viewModel.subtotal); SummaryRow("Taxa de entrega", deliveryFee); if (deliveryFee == 0.0 && fulfillment == "DELIVERY" && (store?.freeDeliveryAbove ?: 0.0) > 0) Text("Frete gratis aplicado", color = Color(0xFF07845C), fontWeight = FontWeight.Bold, fontSize = 11.sp) } }
+            item { CheckoutSection("Resumo") {
+                SummaryRow("Produtos", viewModel.subtotal)
+                if (fulfillment == "DELIVERY" && viewModel.deliveryQuoteLoading) Text("Calculando a taxa do bairro...", color = Muted, fontSize = 11.sp)
+                else SummaryRow("Taxa de entrega", deliveryFee)
+                viewModel.deliveryQuoteError?.let { Text(it, color = Color(0xFFB33C3C), fontWeight = FontWeight.Bold, fontSize = 11.sp) }
+                if (viewModel.deliveryQuote?.source == "FREE_DELIVERY") Text("Frete gratis aplicado", color = Color(0xFF07845C), fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                if (viewModel.deliveryQuote?.source == "NEIGHBORHOOD") Text("Taxa calculada para ${viewModel.deliveryQuote?.matchedNeighborhood ?: neighborhood}", color = Color(0xFF07845C), fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                if (viewModel.deliveryQuote?.source == "DEFAULT") Text("Taxa padrao aplicada: bairro ainda sem regra propria", color = Orange, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+            } }
         }
     }
 }

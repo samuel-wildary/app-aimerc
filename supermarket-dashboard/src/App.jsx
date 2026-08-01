@@ -900,7 +900,7 @@ function PushAutomations({ automations, onCreate, onToggle, onRun, onDelete }) {
   </section>;
 }
 
-function Storefront({ store, categories = [], banners, campaigns, automations, onSaveSettings, onCreateBanner, onUpdateBanner, onDeleteBanner, onCreateCampaign, onSendCampaign, onDeleteCampaign, onCreateAutomation, onToggleAutomation, onRunAutomation, onDeleteAutomation }) {
+function Storefront({ store, categories = [], deliveryZones = [], banners, campaigns, automations, onSaveSettings, onCreateBanner, onUpdateBanner, onDeleteBanner, onCreateCampaign, onSendCampaign, onDeleteCampaign, onCreateAutomation, onToggleAutomation, onRunAutomation, onDeleteAutomation }) {
   const [settings, setSettings] = useState({
     minimumOrder: store?.minimumOrder ?? 0,
     deliveryFee: store?.deliveryFee ?? 0,
@@ -920,6 +920,7 @@ function Storefront({ store, categories = [], banners, campaigns, automations, o
   const [bannerFile, setBannerFile] = useState(null);
   const [bannerPreview, setBannerPreview] = useState('');
   const [bannerFileError, setBannerFileError] = useState('');
+  const [zones, setZones] = useState(deliveryZones);
 
   useEffect(() => {
     setSettings({
@@ -935,6 +936,29 @@ function Storefront({ store, categories = [], banners, campaigns, automations, o
       disablePromotions: store?.disablePromotions ?? false
     });
   }, [store?.minimumOrder, store?.deliveryFee, store?.freeDeliveryAbove, store?.supportPhone, store?.cancellationWindowMinutes, store?.open, store?.enablePickupScheduling, store?.pickupSlots, store?.disabledCategories, store?.disablePromotions]);
+
+  useEffect(() => {
+    setZones(deliveryZones);
+  }, [deliveryZones]);
+
+  function addDeliveryZone() {
+    setZones(current => [...current, {
+      id: `new-${Date.now()}`,
+      neighborhood: '',
+      city: store?.city || '',
+      state: store?.state || '',
+      fee: '',
+      active: true
+    }]);
+  }
+
+  function updateDeliveryZone(index, field, value) {
+    setZones(current => current.map((zone, zoneIndex) => zoneIndex === index ? { ...zone, [field]: value } : zone));
+  }
+
+  function removeDeliveryZone(index) {
+    setZones(current => current.filter((_, zoneIndex) => zoneIndex !== index));
+  }
 
   function editBanner(banner) {
     setEditingId(banner.id);
@@ -991,7 +1015,12 @@ function Storefront({ store, categories = [], banners, campaigns, automations, o
   async function submitSettings(event) {
     event.preventDefault();
     setSavingSettings(true);
-    try { await onSaveSettings({ ...settings, minimumOrder: Number(settings.minimumOrder), deliveryFee: Number(settings.deliveryFee), freeDeliveryAbove: Number(settings.freeDeliveryAbove), cancellationWindowMinutes: Number(settings.cancellationWindowMinutes) }); }
+    try {
+      await onSaveSettings(
+        { ...settings, minimumOrder: Number(settings.minimumOrder), deliveryFee: Number(settings.deliveryFee), freeDeliveryAbove: Number(settings.freeDeliveryAbove), cancellationWindowMinutes: Number(settings.cancellationWindowMinutes) },
+        zones.map(zone => ({ neighborhood: zone.neighborhood.trim(), city: zone.city.trim(), state: zone.state.trim().toUpperCase(), fee: Number(zone.fee), active: zone.active !== false }))
+      );
+    }
     finally { setSavingSettings(false); }
   }
 
@@ -1017,8 +1046,25 @@ function Storefront({ store, categories = [], banners, campaigns, automations, o
         <div className="panel-heading"><div><p className="overline">Operacao comercial</p><h2>Taxas e funcionamento</h2></div><span className={`store-state ${settings.open ? 'open' : 'closed'}`}>{settings.open ? 'Loja aberta' : 'Loja fechada'}</span></div>
         <form className="settings-form" onSubmit={submitSettings}>
           <label>Pedido minimo<span>Valor mínimo que o cliente precisa comprar.</span><div className="money-input"><b>R$</b><input type="number" min="0" step="0.01" value={settings.minimumOrder} onChange={event => setSettings({ ...settings, minimumOrder: event.target.value })} /></div></label>
-          <label>Taxa de entrega<span>Valor somado somente aos pedidos de entrega.</span><div className="money-input"><b>R$</b><input type="number" min="0" step="0.01" value={settings.deliveryFee} onChange={event => setSettings({ ...settings, deliveryFee: event.target.value })} /></div></label>
+          <label>Taxa padrao de entrega<span>Usada apenas quando o bairro ainda nao tiver uma regra propria.</span><div className="money-input"><b>R$</b><input type="number" min="0" step="0.01" value={settings.deliveryFee} onChange={event => setSettings({ ...settings, deliveryFee: event.target.value })} /></div></label>
           <label>Frete gratis acima de<span>Use R$ 0 para manter taxa fixa em todos os pedidos.</span><div className="money-input"><b>R$</b><input type="number" min="0" step="0.01" value={settings.freeDeliveryAbove} onChange={event => setSettings({ ...settings, freeDeliveryAbove: event.target.value })} /></div></label>
+          <div className="delivery-zone-editor">
+            <div className="delivery-zone-heading">
+              <div><strong>Taxas por bairro</strong><span>O CEP preenche o bairro no aplicativo e a taxa exata e aplicada automaticamente.</span></div>
+              <button type="button" onClick={addDeliveryZone}><Plus size={15} /> Adicionar bairro</button>
+            </div>
+            <div className="delivery-zone-columns" aria-hidden="true"><span>Bairro</span><span>Cidade</span><span>UF</span><span>Taxa</span><span /></div>
+            <div className="delivery-zone-list">
+              {zones.map((zone, index) => <div className="delivery-zone-row" key={zone.id || index}>
+                <input required maxLength="100" value={zone.neighborhood} onChange={event => updateDeliveryZone(index, 'neighborhood', event.target.value)} placeholder="Ex.: Centro" aria-label="Bairro" />
+                <input required maxLength="100" value={zone.city} onChange={event => updateDeliveryZone(index, 'city', event.target.value)} placeholder="Cidade" aria-label="Cidade" />
+                <input required maxLength="2" value={zone.state} onChange={event => updateDeliveryZone(index, 'state', event.target.value.toUpperCase().slice(0, 2))} placeholder="UF" aria-label="UF" />
+                <div className="delivery-zone-money"><b>R$</b><input required type="number" min="0" step="0.01" value={zone.fee} onChange={event => updateDeliveryZone(index, 'fee', event.target.value)} aria-label="Taxa do bairro" /></div>
+                <button className="delivery-zone-delete" type="button" onClick={() => removeDeliveryZone(index)} aria-label={`Excluir ${zone.neighborhood || 'bairro'}`}><Trash2 size={16} /></button>
+              </div>)}
+              {!zones.length && <div className="delivery-zone-empty">Nenhum bairro cadastrado. Enquanto isso, a taxa padrao sera usada.</div>}
+            </div>
+          </div>
           <label>Central de atendimento<span>Telefone exibido quando o cancelamento precisar ser resolvido pela loja.</span><input type="tel" value={settings.supportPhone} onChange={event => setSettings({ ...settings, supportPhone: event.target.value })} placeholder="(85) 99999-0000" required /></label>
           <label>Cancelamento pelo app<span>Minutos em que o cliente pode cancelar antes da separacao.</span><input type="number" min="1" max="60" value={settings.cancellationWindowMinutes} onChange={event => setSettings({ ...settings, cancellationWindowMinutes: event.target.value })} /></label>
           <label className="open-toggle"><span><strong>Agendamento de horário na retirada</strong><small>Permitir que o cliente escolha a faixa de horário para buscar o pedido na loja.</small></span><input type="checkbox" checked={settings.enablePickupScheduling} onChange={event => setSettings({ ...settings, enablePickupScheduling: event.target.checked })} /></label>
@@ -1113,6 +1159,7 @@ export default function App() {
   const [customers, setCustomers] = useState([]);
   const [report, setReport] = useState(null);
   const [banners, setBanners] = useState([]);
+  const [deliveryZones, setDeliveryZones] = useState([]);
   const [campaigns, setCampaigns] = useState([]);
   const [automations, setAutomations] = useState([]);
   const [query, setQuery] = useState('');
@@ -1131,7 +1178,7 @@ export default function App() {
     if (!api.token) return;
     setRefreshing(true);
     try {
-      const [summaryData, ordersData, categoriesData, bannersData, customersData, reportData, campaignsData, automationsData] = await Promise.all([api.summary(), api.orders(), api.productCategories(), api.banners(), api.customers(customerQuery), api.reports(), api.pushCampaigns(), api.pushAutomations()]);
+      const [summaryData, ordersData, categoriesData, bannersData, customersData, reportData, campaignsData, automationsData, deliveryZonesData] = await Promise.all([api.summary(), api.orders(), api.productCategories(), api.banners(), api.customers(customerQuery), api.reports(), api.pushCampaigns(), api.pushAutomations(), api.deliveryZones()]);
       setSummary(summaryData);
       setSession(current => current || { user: summaryData.user, store: summaryData.store });
       setOrders(ordersData);
@@ -1141,6 +1188,7 @@ export default function App() {
       setReport(reportData);
       setCampaigns(campaignsData);
       setAutomations(automationsData);
+      setDeliveryZones(deliveryZonesData);
       setSelected(current => current ? ordersData.find(order => order.id === current.id) || null : null);
       setError('');
     } catch (requestError) {
@@ -1266,8 +1314,8 @@ export default function App() {
     }
   }
 
-  async function saveSettings(settings) {
-    try { await api.updateSettings(settings); await load(); }
+  async function saveSettings(settings, zones) {
+    try { await Promise.all([api.updateSettings(settings), api.updateDeliveryZones(zones)]); await load(); }
     catch (requestError) { setError(requestError.message); throw requestError; }
   }
 
@@ -1347,7 +1395,7 @@ export default function App() {
           {active === 'delivery' && <Delivery orders={orders} selected={selected} setSelected={setSelected} />}
           {active === 'customers' && <Customers customers={customers} query={customerQuery} setQuery={setCustomerQuery} />}
           {active === 'reports' && <Reports report={report} />}
-          {active === 'storefront' && <Storefront store={summary?.store} categories={categories} banners={banners} campaigns={campaigns} automations={automations} onSaveSettings={saveSettings} onCreateBanner={createBanner} onUpdateBanner={updateBanner} onDeleteBanner={deleteBanner} onCreateCampaign={createCampaign} onSendCampaign={sendCampaign} onDeleteCampaign={deleteCampaign} onCreateAutomation={createAutomation} onToggleAutomation={toggleAutomation} onRunAutomation={runAutomation} onDeleteAutomation={deleteAutomation} />}
+          {active === 'storefront' && <Storefront store={summary?.store} categories={categories} deliveryZones={deliveryZones} banners={banners} campaigns={campaigns} automations={automations} onSaveSettings={saveSettings} onCreateBanner={createBanner} onUpdateBanner={updateBanner} onDeleteBanner={deleteBanner} onCreateCampaign={createCampaign} onSendCampaign={sendCampaign} onDeleteCampaign={deleteCampaign} onCreateAutomation={createAutomation} onToggleAutomation={toggleAutomation} onRunAutomation={runAutomation} onDeleteAutomation={deleteAutomation} />}
         </div>
       </main>
       <OrderDetail order={selected} onClose={() => setSelected(null)} onAdvance={advance} onPrint={order => printOrderSlip(order, summary?.store || session.store)} busy={busy} />

@@ -84,6 +84,8 @@ export class ApiClient {
     return data;
   }
   updateSettings(settings) { return this.request('/store/settings', { method: 'PATCH', body: JSON.stringify(settings) }); }
+  deliveryZones() { return this.request('/store/delivery-zones'); }
+  updateDeliveryZones(zones) { return this.request('/store/delivery-zones', { method: 'PUT', body: JSON.stringify({ zones }) }); }
   createBanner(banner) { return this.request('/banners', { method: 'POST', body: JSON.stringify(banner) }); }
   updateBanner(id, banner) { return this.request(`/banners/${id}`, { method: 'PATCH', body: JSON.stringify(banner) }); }
   deleteBanner(id) { return this.request(`/banners/${id}`, { method: 'DELETE' }); }

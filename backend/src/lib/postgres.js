@@ -88,6 +88,21 @@ CREATE TABLE IF NOT EXISTS subscriptions (
   created_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS delivery_zones (
+  id TEXT PRIMARY KEY,
+  store_id TEXT NOT NULL REFERENCES stores(id) ON DELETE CASCADE,
+  neighborhood TEXT NOT NULL,
+  neighborhood_normalized TEXT NOT NULL,
+  city TEXT NOT NULL DEFAULT '',
+  city_normalized TEXT NOT NULL DEFAULT '',
+  state TEXT NOT NULL DEFAULT '',
+  fee DOUBLE PRECISION NOT NULL CHECK (fee >= 0),
+  active INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE (store_id, neighborhood_normalized, city_normalized, state)
+);
+
 CREATE TABLE IF NOT EXISTS products (
   store_id TEXT NOT NULL REFERENCES stores(id) ON DELETE CASCADE,
   id TEXT NOT NULL,
@@ -380,6 +395,7 @@ ALTER TABLE order_items ALTER COLUMN id SET DEFAULT nextval('order_items_id_seq'
 SELECT setval('order_items_id_seq', GREATEST(COALESCE((SELECT MAX(id) FROM order_items), 0) + 1, 1), false);
 
 CREATE INDEX IF NOT EXISTS products_store_active_category_idx ON products(store_id, active, category);
+CREATE INDEX IF NOT EXISTS delivery_zones_store_match_idx ON delivery_zones(store_id, neighborhood_normalized, city_normalized, state);
 CREATE INDEX IF NOT EXISTS products_store_catalog_category_idx ON products(store_id, catalog_category);
 CREATE INDEX IF NOT EXISTS products_store_barcode_idx ON products(store_id, barcode);
 CREATE INDEX IF NOT EXISTS orders_store_created_idx ON orders(store_id, created_at DESC);

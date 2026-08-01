@@ -46,10 +46,12 @@ import {
   listStores,
   listSubscriptions,
   listIntegrationOverview,
+  listDeliveryZones,
   storeReports,
   runDuePushAutomations,
   runPushAutomationNow,
   registerPushDevice,
+  replaceDeliveryZones,
   markPushCampaignResult,
   recordLoginResult,
   recordIntegrationRun,
@@ -64,6 +66,7 @@ import {
   updateUserPassword,
   writeAuditLog,
   saveStoreIntegration,
+  quoteDeliveryFee,
   upsertProducts
 } from './lib/database.js';
 import { firebaseStatus, sendFirebaseNotification } from './lib/firebase.js';
@@ -88,6 +91,7 @@ import { assimilateStoreCatalogImages, linkCatalogImageToProduct, searchCatalogI
 import { runCatalogImageAudit, deleteCatalogMismatches } from './lib/catalog-audit.js';
 import { resolveAiCredentials } from './lib/ai-image-match.js';
 import { getAiSearchAgent, saveAiSearchAgent } from './lib/platform-settings.js';
+import { normalizeDeliveryArea } from './lib/delivery-fees.js';
 import crypto from 'node:crypto';
 
 const assimilateJobs = new Map();
@@ -292,6 +296,28 @@ function normalizeCustomer(input, fulfillmentType) {
   return { name, phone, address, cep, street, number, complement, neighborhood, city, state, reference };
 }
 
+function normalizeDeliveryZones(input) {
+  if (!Array.isArray(input)) throw new ApiError(400, 'A lista de bairros e invalida');
+  if (input.length > 300) throw new ApiError(400, 'Cadastre no maximo 300 bairros');
+  const keys = new Set();
+  return input.map((item, index) => {
+    const neighborhood = requiredText(item?.neighborhood, `Bairro ${index + 1}`, 100);
+    const city = optionalText(item?.city, 100);
+    const state = optionalText(item?.state, 2).toUpperCase();
+    if (state && !/^[A-Z]{2}$/.test(state)) throw new ApiError(400, `UF do bairro ${neighborhood} precisa ter 2 letras`);
+    const key = `${normalizeDeliveryArea(neighborhood)}|${normalizeDeliveryArea(city)}|${state}`;
+    if (keys.has(key)) throw new ApiError(400, `O bairro ${neighborhood} esta repetido`);
+    keys.add(key);
+    return {
+      neighborhood,
+      city,
+      state,
+      fee: positiveNumber(item?.fee, `Taxa de ${neighborhood}`, { min: 0, max: 10_000 }),
+      active: item?.active !== false
+    };
+  });
+}
+
 app.get('/api/health', asyncRoute(async (req, res) => {
   await databaseHealth();
   res.json({
@@ -399,6 +425,19 @@ app.get('/api/public/cep/:cep', asyncRoute(async (req, res) => {
     city: address.localidade || '',
     state: address.uf || ''
   });
+}));
+
+app.get('/api/public/stores/:slug/delivery/quote', asyncRoute(async (req, res) => {
+  const store = await publicStore(req);
+  const state = requiredText(req.query.state, 'UF', 2).toUpperCase();
+  if (!/^[A-Z]{2}$/.test(state)) throw new ApiError(400, 'UF precisa ter 2 letras');
+  const address = {
+    neighborhood: requiredText(req.query.neighborhood, 'Bairro', 100),
+    city: requiredText(req.query.city, 'Cidade', 100),
+    state
+  };
+  const subtotal = positiveNumber(req.query.subtotal ?? 0, 'Subtotal', { min: 0, max: 10_000_000 });
+  res.json(await quoteDeliveryFee(store, address, subtotal));
 }));
 
 
@@ -556,6 +595,18 @@ app.patch('/api/store/settings', requireAuth('STORE_MANAGER'), asyncRoute(async 
   await writeAuditLog({ storeId: req.user.storeId, actorId: req.user.sub, action: 'STORE_SETTINGS_UPDATED', entityType: 'STORE', entityId: req.user.storeId });
   notifyCatalogUpdated(req.user.storeId);
   res.json(store);
+}));
+
+app.get('/api/store/delivery-zones', requireAuth('STORE_MANAGER'), asyncRoute(async (req, res) => {
+  await managerStore(req);
+  res.json(await listDeliveryZones(req.user.storeId));
+}));
+
+app.put('/api/store/delivery-zones', requireAuth('STORE_MANAGER'), asyncRoute(async (req, res) => {
+  await managerStore(req);
+  const zones = await replaceDeliveryZones(req.user.storeId, normalizeDeliveryZones(req.body?.zones));
+  await writeAuditLog({ storeId: req.user.storeId, actorId: req.user.sub, action: 'DELIVERY_ZONES_UPDATED', entityType: 'DELIVERY_ZONE', metadata: { count: zones.length } });
+  res.json(zones);
 }));
 
 app.get('/api/banners', requireAuth('STORE_MANAGER'), asyncRoute(async (req, res) => {

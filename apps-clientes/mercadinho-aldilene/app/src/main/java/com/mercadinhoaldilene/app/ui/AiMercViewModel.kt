@@ -16,6 +16,7 @@ import com.mercadinhoaldilene.app.model.CepAddress
 import com.mercadinhoaldilene.app.model.Catalog
 import com.mercadinhoaldilene.app.model.CheckoutData
 import com.mercadinhoaldilene.app.model.CustomerOrder
+import com.mercadinhoaldilene.app.model.DeliveryQuote
 import com.mercadinhoaldilene.app.model.OrderReceipt
 import com.mercadinhoaldilene.app.model.Product
 import kotlinx.coroutines.Job
@@ -72,10 +73,18 @@ class AiMercViewModel(application: Application) : AndroidViewModel(application) 
         private set
     var cepError by mutableStateOf<String?>(null)
         private set
+    var deliveryQuote by mutableStateOf<DeliveryQuote?>(null)
+        private set
+    var deliveryQuoteLoading by mutableStateOf(false)
+        private set
+    var deliveryQuoteError by mutableStateOf<String?>(null)
+        private set
     var profileActive by mutableStateOf(storedProfileActive)
         private set
     private var refreshingOrders = false
     private var fullProducts by mutableStateOf<List<Product>>(emptyList())
+    private var deliveryQuoteJob: Job? = null
+    private var deliveryQuoteRequestId = 0L
 
     var customerName by mutableStateOf(if (storedProfileActive) preferences.getString("profile_name", "").orEmpty() else "")
         private set
@@ -140,6 +149,7 @@ class AiMercViewModel(application: Application) : AndroidViewModel(application) 
 
     override fun onCleared() {
         catalogRealtimeJob?.cancel()
+        deliveryQuoteJob?.cancel()
         realtime.stop()
         super.onCleared()
     }
@@ -267,6 +277,40 @@ class AiMercViewModel(application: Application) : AndroidViewModel(application) 
             catch (exception: Exception) { cepError = exception.message ?: "CEP nao encontrado" }
             finally { cepLoading = false }
         }
+    }
+
+    fun quoteDelivery(neighborhood: String, city: String, state: String, subtotal: Double) {
+        deliveryQuoteJob?.cancel()
+        val requestId = ++deliveryQuoteRequestId
+        if (neighborhood.isBlank() || city.isBlank() || state.length != 2) {
+            clearDeliveryQuote()
+            return
+        }
+        deliveryQuote = null
+        deliveryQuoteLoading = true
+        deliveryQuoteError = null
+        deliveryQuoteJob = viewModelScope.launch {
+            delay(300)
+            try {
+                val quote = AiMercApi.deliveryQuote(neighborhood.trim(), city.trim(), state.trim().uppercase(), subtotal)
+                if (requestId == deliveryQuoteRequestId) deliveryQuote = quote
+            } catch (exception: Exception) {
+                if (requestId == deliveryQuoteRequestId) {
+                    deliveryQuote = null
+                    deliveryQuoteError = exception.message ?: "Nao foi possivel calcular a taxa deste bairro"
+                }
+            } finally {
+                if (requestId == deliveryQuoteRequestId) deliveryQuoteLoading = false
+            }
+        }
+    }
+
+    fun clearDeliveryQuote() {
+        deliveryQuoteJob?.cancel()
+        deliveryQuoteRequestId += 1
+        deliveryQuote = null
+        deliveryQuoteLoading = false
+        deliveryQuoteError = null
     }
 
     @Suppress("unused")

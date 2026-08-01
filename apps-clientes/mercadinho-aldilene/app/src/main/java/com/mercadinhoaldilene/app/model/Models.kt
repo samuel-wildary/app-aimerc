@@ -47,6 +47,12 @@ data class CepAddress(
     val state: String
 )
 
+data class DeliveryQuote(
+    val fee: Double,
+    val source: String,
+    val matchedNeighborhood: String?
+)
+
 data class Catalog(
     val store: StoreInfo,
     val categories: List<String>,

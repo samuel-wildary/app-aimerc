@@ -7,6 +7,7 @@ import com.mercadinhoaldilene.app.model.CepAddress
 import com.mercadinhoaldilene.app.model.Catalog
 import com.mercadinhoaldilene.app.model.CheckoutData
 import com.mercadinhoaldilene.app.model.CustomerOrder
+import com.mercadinhoaldilene.app.model.DeliveryQuote
 import com.mercadinhoaldilene.app.model.OrderItem
 import com.mercadinhoaldilene.app.model.OrderReceipt
 import com.mercadinhoaldilene.app.model.Product
@@ -17,6 +18,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
+import java.net.URLEncoder
 
 class ApiException(message: String) : Exception(message)
 
@@ -73,6 +75,19 @@ object AiMercApi {
             neighborhood = result.optString("neighborhood"),
             city = result.optString("city"),
             state = result.optString("state")
+        )
+    }
+
+    suspend fun deliveryQuote(neighborhood: String, city: String, state: String, subtotal: Double): DeliveryQuote = withContext(Dispatchers.IO) {
+        fun encode(value: String) = URLEncoder.encode(value, "UTF-8")
+        val result = request(
+            "/public/stores/$STORE_SLUG/delivery/quote" +
+                "?neighborhood=${encode(neighborhood)}&city=${encode(city)}&state=${encode(state)}&subtotal=$subtotal"
+        )
+        DeliveryQuote(
+            fee = result.optDouble("fee", 0.0),
+            source = result.optString("source", "DEFAULT"),
+            matchedNeighborhood = result.optString("matchedNeighborhood").takeIf { it.isNotBlank() }
         )
     }
 
