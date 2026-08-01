@@ -23,6 +23,8 @@ data class Product(
     val oldPrice: Double?,
     val stock: Double,
     val unit: String,
+    val soldByWeight: Boolean = false,
+    val quantityStep: Double = 1.0,
     val image: String,
     val promo: Boolean
 )
@@ -52,7 +54,7 @@ data class Catalog(
     val products: List<Product>
 )
 
-data class CartLine(val product: Product, val quantity: Int) {
+data class CartLine(val product: Product, val quantity: Double) {
     val total: Double get() = product.price * quantity
 }
 

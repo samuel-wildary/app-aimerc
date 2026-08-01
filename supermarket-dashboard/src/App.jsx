@@ -287,11 +287,15 @@ function Overview({ summary, orders, products, selected, setSelected, createDemo
 }
 
 function ProductEditor({ product, categories, onClose, onSaved }) {
+  const sourceIsKg = String(product.sourceUnit || product.unit || '').toUpperCase() === 'KG';
   const [form, setForm] = useState({
     catalogName: product.catalogName || product.name,
     catalogCategory: product.catalogCategory || product.category,
     description: product.description || '',
-    catalogVisible: product.catalogVisible
+    catalogVisible: product.catalogVisible,
+    saleMode: sourceIsKg ? (product.saleMode || 'AUTO') : (product.saleMode === 'UNIT' ? 'UNIT' : 'AUTO'),
+    quantityStepGrams: Math.round((product.quantityStep || 0.1) * 1000),
+    stockOverride: product.stockOverride ?? ''
   });
   const [imageFile, setImageFile] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -307,7 +311,11 @@ function ProductEditor({ product, categories, onClose, onSaved }) {
     setSaving(true);
     setError('');
     try {
-      await api.updateProductCatalog(product.id, form);
+      await api.updateProductCatalog(product.id, {
+        ...form,
+        quantityStep: Number(form.quantityStepGrams) / 1000,
+        stockOverride: form.stockOverride === '' ? null : Number(form.stockOverride)
+      });
       if (imageFile) await api.uploadProductImage(product.id, await prepareCatalogImage(imageFile));
       await onSaved();
       onClose();
@@ -320,7 +328,7 @@ function ProductEditor({ product, categories, onClose, onSaved }) {
 
   return <div className="catalog-editor-backdrop" onMouseDown={event => event.target === event.currentTarget && onClose()}>
     <form className="catalog-editor" onSubmit={submit}>
-      <header><div><p className="overline">Edicao da vitrine</p><h2>Personalizar produto</h2><span>Preco e estoque continuam vindo da integracao.</span></div><button type="button" className="icon-button" onClick={onClose} aria-label="Fechar"><X size={18} /></button></header>
+      <header><div><p className="overline">Edicao da vitrine</p><h2>Personalizar produto</h2><span>{sourceIsKg ? 'Preco por kg vem da integracao; fracao e estoque podem ser definidos para este produto.' : 'Preco e estoque continuam vindo da integracao.'}</span></div><button type="button" className="icon-button" onClick={onClose} aria-label="Fechar"><X size={18} /></button></header>
       <div className="catalog-editor-body">
         <section className="product-image-editor">
           <div className="product-image-preview" style={{ backgroundImage: preview ? `url(${preview})` : 'none' }}><ImagePlus size={30} /></div>
@@ -332,8 +340,14 @@ function ProductEditor({ product, categories, onClose, onSaved }) {
           <label>Categoria<input list="catalog-category-options" value={form.catalogCategory} onChange={event => setForm(current => ({ ...current, catalogCategory: event.target.value }))} maxLength="100" placeholder="Ex.: Carnes, Frutas ou Padaria" required /></label>
           <datalist id="catalog-category-options">{categories.map(category => <option value={category.name} key={category.name} />)}</datalist>
           <label>Descricao do produto<textarea value={form.description} onChange={event => setForm(current => ({ ...current, description: event.target.value }))} maxLength="1000" placeholder="Detalhes, corte, origem, peso ou observacoes para o cliente." /></label>
-          <div className="source-reference"><span>Informacao recebida da integracao</span><strong>{product.sourceName}</strong><small>{product.sourceCategory} · EAN {product.barcode || 'nao informado'}</small></div>
-          <div className="commercial-lock"><div><span>Preco atual</span><strong>{money(product.price)}</strong></div><div><span>Estoque</span><strong>{product.stock} {product.unit}</strong></div></div>
+          <div className="sale-rule-grid">
+            <label>Forma de venda<select value={form.saleMode} onChange={event => setForm(current => ({ ...current, saleMode: event.target.value }))}><option value="AUTO">Automatica pela unidade do ERP</option><option value="UNIT">Forcar venda por unidade</option>{sourceIsKg && <option value="WEIGHT">Por peso (kg)</option>}</select></label>
+            <label>Fracao de cada adicao (gramas)<input type="number" min="1" max="100000" step="1" value={form.quantityStepGrams} disabled={!sourceIsKg || form.saleMode === 'UNIT'} onChange={event => setForm(current => ({ ...current, quantityStepGrams: event.target.value }))} required={sourceIsKg && form.saleMode !== 'UNIT'} /></label>
+            {sourceIsKg && form.saleMode !== 'UNIT' && <label>Estoque manual disponivel (kg)<input type="number" min="0" step="0.001" value={form.stockOverride} onChange={event => setForm(current => ({ ...current, stockOverride: event.target.value }))} placeholder={`Integracao: ${product.sourceStock ?? product.stock} kg`} /><small>Deixe vazio para voltar a usar o estoque da integracao.</small></label>}
+          </div>
+          <div className="weight-rule-note"><strong>Como funciona</strong><span>{sourceIsKg && form.saleMode !== 'UNIT' ? `Este produto sera vendido de ${Number(form.quantityStepGrams || 0).toLocaleString('pt-BR')} g em ${Number(form.quantityStepGrams || 0).toLocaleString('pt-BR')} g. O aplicativo exibira ${money(product.price * (Number(form.quantityStepGrams || 0) / 1000))} por essa fracao.` : 'Produto recebido como unidade. Mesmo que o nome mencione 1 kg, ele continua sendo vendido como uma unidade fechada.'}</span></div>
+          <div className="source-reference"><span>Informacao recebida da integracao</span><strong>{product.sourceName}</strong><small>{product.sourceCategory} · Unidade original {product.sourceUnit || product.unit} · EAN {product.barcode || 'nao informado'}</small></div>
+          <div className="commercial-lock"><div><span>Preco recebido</span><strong>{money(product.price)} / {product.sourceUnit || product.unit}</strong></div><div><span>Estoque disponivel</span><strong>{product.stock} {product.unit}</strong></div></div>
           <label className="visibility-toggle"><input type="checkbox" checked={form.catalogVisible} onChange={event => setForm(current => ({ ...current, catalogVisible: event.target.checked }))} />{form.catalogVisible ? <Eye size={18} /> : <EyeOff size={18} />}<span><strong>{form.catalogVisible ? 'Visivel no aplicativo' : 'Oculto no aplicativo'}</strong><small>Voce pode ocultar sem excluir o item da integracao.</small></span></label>
         </section>
       </div>

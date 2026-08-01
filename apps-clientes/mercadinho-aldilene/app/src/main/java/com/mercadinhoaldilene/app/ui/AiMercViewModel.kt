@@ -21,6 +21,7 @@ import com.mercadinhoaldilene.app.model.Product
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.math.round
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -97,7 +98,7 @@ class AiMercViewModel(application: Application) : AndroidViewModel(application) 
     var customerReference by mutableStateOf(if (storedProfileActive) preferences.getString("profile_reference", "").orEmpty() else "")
         private set
 
-    private val quantities = mutableStateMapOf<String, Int>()
+    private val quantities = mutableStateMapOf<String, Double>()
 
     private var catalogRealtimeJob: Job? = null
 
@@ -156,14 +157,14 @@ class AiMercViewModel(application: Application) : AndroidViewModel(application) 
 
     val cartLines: List<CartLine>
         get() = productSource().mapNotNull { product -> quantities[product.id]?.takeIf { it > 0 }?.let { CartLine(product, it) } }
-    val cartCount: Int get() = quantities.values.sum()
+    val cartCount: Int get() = quantities.count { it.value > 0.0 }
     val subtotal: Double get() = cartLines.sumOf { it.total }
     val customerAddressLabel: String
         get() = if (customerStreet.isBlank()) "Informe seu endereco de entrega" else "$customerStreet, $customerNumber"
     val customerAddress: String
         get() = customerAddressLabel
 
-    fun quantity(productId: String) = quantities[productId] ?: 0
+    fun quantity(productId: String) = quantities[productId] ?: 0.0
     fun product(productId: String): Product? = productSource().firstOrNull { it.id == productId }
     fun relatedProducts(product: Product): List<Product> {
         val available = productSource().filter { it.id != product.id && it.stock > 0 }
@@ -174,10 +175,15 @@ class AiMercViewModel(application: Application) : AndroidViewModel(application) 
             .sortedWith(compareByDescending<Product> { it.promo }.thenByDescending { it.image.isNotBlank() }.thenBy { it.name })
         return (sameCategory + complements).distinctBy { it.id }.take(12)
     }
-    fun add(product: Product) { quantities[product.id] = quantity(product.id) + 1 }
+    private fun normalizedQuantity(value: Double) = round(value * 1000.0) / 1000.0
+    fun add(product: Product) {
+        val step = if (product.soldByWeight) product.quantityStep.coerceAtLeast(0.01) else 1.0
+        quantities[product.id] = normalizedQuantity(quantity(product.id) + step)
+    }
     fun remove(product: Product) {
-        val next = quantity(product.id) - 1
-        if (next <= 0) quantities.remove(product.id) else quantities[product.id] = next
+        val step = if (product.soldByWeight) product.quantityStep.coerceAtLeast(0.01) else 1.0
+        val next = normalizedQuantity(quantity(product.id) - step)
+        if (next <= 0.0) quantities.remove(product.id) else quantities[product.id] = next
     }
     fun clearError() { error = null }
     fun resetOrder() { confirmedOrderId = null }

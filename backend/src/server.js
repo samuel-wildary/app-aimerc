@@ -494,11 +494,22 @@ app.get('/api/products/categories', requireAuth('STORE_MANAGER'), asyncRoute(asy
 
 app.patch('/api/products/:productId/catalog', requireAuth('STORE_MANAGER'), asyncRoute(async (req, res) => {
   await managerStore(req);
+  const saleMode = String(req.body.saleMode || 'AUTO').toUpperCase();
+  if (!['AUTO', 'UNIT', 'WEIGHT'].includes(saleMode)) throw new ApiError(400, 'Forma de venda invalida');
+  const quantityStep = Number(req.body.quantityStep ?? 0.1);
+  if (!Number.isFinite(quantityStep) || quantityStep < 0.001 || quantityStep > 100) throw new ApiError(400, 'Fracao de peso invalida');
+  const stockOverride = req.body.stockOverride === '' || req.body.stockOverride == null
+    ? null
+    : Number(req.body.stockOverride);
+  if (stockOverride != null && (!Number.isFinite(stockOverride) || stockOverride < 0)) throw new ApiError(400, 'Estoque manual invalido');
   const product = await updateProductCatalog(req.user.storeId, req.params.productId, {
     catalogName: optionalText(req.body.catalogName, 160),
     catalogCategory: req.body.catalogCategory ? normalizeCategory(optionalText(req.body.catalogCategory, 100)) : '',
     description: optionalText(req.body.description, 1_000),
-    catalogVisible: req.body.catalogVisible !== false
+    catalogVisible: req.body.catalogVisible !== false,
+    saleMode,
+    quantityStep,
+    stockOverride
   });
   if (!product) throw new ApiError(404, 'Produto nao encontrado');
   notifyCatalogUpdated(req.user.storeId);

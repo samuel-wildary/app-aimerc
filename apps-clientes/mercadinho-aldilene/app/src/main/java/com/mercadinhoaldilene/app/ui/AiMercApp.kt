@@ -67,8 +67,6 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -105,6 +103,7 @@ import com.mercadinhoaldilene.app.model.Product
 import kotlinx.coroutines.delay
 import java.text.NumberFormat
 import java.util.Locale
+import kotlin.math.roundToInt
 
 private val Forest = Color(0xFF0B1440)
 private val ForestLight = Color(0xFF1A2A6A)
@@ -126,10 +125,6 @@ fun AiMercApp(viewModel: AiMercViewModel = viewModel()) {
     var selectedProductId by rememberSaveable { mutableStateOf<String?>(null) }
     var browseCategory by rememberSaveable { mutableStateOf("") }
     var productBackTarget by remember { mutableStateOf(Screen.HOME) }
-    val snackbar = remember { SnackbarHostState() }
-    LaunchedEffect(viewModel.error) {
-        viewModel.error?.let { snackbar.showSnackbar(it); viewModel.clearError() }
-    }
     LaunchedEffect(screen) {
         if (screen == Screen.ORDERS) viewModel.refreshOrders()
     }
@@ -145,14 +140,17 @@ fun AiMercApp(viewModel: AiMercViewModel = viewModel()) {
         Scaffold(
             containerColor = Canvas,
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
-            snackbarHost = { SnackbarHost(snackbar) },
             bottomBar = {
                 if (screen in listOf(Screen.HOME, Screen.SEARCH, Screen.CATEGORY, Screen.ORDERS, Screen.PROFILE)) {
                     Column {
                         AnimatedVisibility(viewModel.cartCount > 0) {
                             CartDock(viewModel.cartCount, viewModel.subtotal) { screen = Screen.CART }
                         }
-                        MainNavigation(if (screen == Screen.CATEGORY) Screen.HOME else screen) { screen = it }
+                        MainNavigation(
+                            screen = if (screen == Screen.CATEGORY) Screen.HOME else screen,
+                            hasActiveOrder = viewModel.orders.any { it.status !in setOf("DONE", "CANCELLED") },
+                            onChange = { screen = it }
+                        )
                     }
                 }
             }
@@ -275,7 +273,7 @@ private fun SectionHeading(title: String, subtitle: String?, openAll: (() -> Uni
 }
 
 @Composable
-private fun ProductCard(product: Product, quantity: Int, add: () -> Unit, remove: () -> Unit, open: () -> Unit) {
+private fun ProductCard(product: Product, quantity: Double, add: () -> Unit, remove: () -> Unit, open: () -> Unit) {
     Card(Modifier.width(164.dp).height(278.dp).clickable(onClick = open), shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = Color.White), elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)) {
         Column(Modifier.fillMaxSize().padding(11.dp)) {
             Box(Modifier.fillMaxWidth().height(116.dp).clip(RoundedCornerShape(13.dp)).background(Color.White)) {
@@ -290,7 +288,7 @@ private fun ProductCard(product: Product, quantity: Int, add: () -> Unit, remove
             Spacer(Modifier.weight(1f))
             // Altura reservada do preco antigo: cards com e sem oferta ficam do mesmo tamanho.
             Text(
-                text = product.oldPrice?.let(currency::format) ?: " ",
+                text = product.oldPrice?.let { currency.format(it * if (product.soldByWeight) product.quantityStep else 1.0) } ?: " ",
                 color = if (product.oldPrice != null) Muted else Color.Transparent,
                 fontSize = 10.sp,
                 maxLines = 1,
@@ -298,19 +296,19 @@ private fun ProductCard(product: Product, quantity: Int, add: () -> Unit, remove
             )
             Row(Modifier.fillMaxWidth().padding(top = 2.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                 Column {
-                    Text(currency.format(product.price), fontWeight = FontWeight.Black, fontSize = 15.sp, color = Ink)
-                    Text("por ${product.unit.lowercase()}", color = Muted, fontSize = 9.sp)
+                    Text(currency.format(saleDisplayPrice(product)), fontWeight = FontWeight.Black, fontSize = 15.sp, color = Ink)
+                    Text("por ${saleDisplayMeasure(product)}", color = Muted, fontSize = 9.sp)
                 }
-                QuantityControl(quantity, add, remove)
+                QuantityControl(quantity, product.soldByWeight, add, remove)
             }
         }
     }
 }
 
 @Composable
-private fun QuantityControl(quantity: Int, add: () -> Unit, remove: () -> Unit) {
-    if (quantity == 0) IconButton(onClick = add, modifier = Modifier.size(42.dp).clip(CircleShape).background(Mint)) { Icon(Icons.Default.Add, "Adicionar", tint = Forest, modifier = Modifier.size(22.dp)) }
-    else Row(Modifier.clip(RoundedCornerShape(999.dp)).background(Forest), verticalAlignment = Alignment.CenterVertically) { IconButton(onClick = remove, modifier = Modifier.size(38.dp)) { Icon(Icons.Default.Remove, "Remover", tint = Color.White, modifier = Modifier.size(18.dp)) }; Text(quantity.toString(), color = Color.White, fontWeight = FontWeight.Black, fontSize = 14.sp); IconButton(onClick = add, modifier = Modifier.size(38.dp)) { Icon(Icons.Default.Add, "Adicionar", tint = Mint, modifier = Modifier.size(18.dp)) } }
+private fun QuantityControl(quantity: Double, soldByWeight: Boolean, add: () -> Unit, remove: () -> Unit) {
+    if (quantity <= 0.0) IconButton(onClick = add, modifier = Modifier.size(42.dp).clip(CircleShape).background(Mint)) { Icon(Icons.Default.Add, "Adicionar", tint = Forest, modifier = Modifier.size(22.dp)) }
+    else Row(Modifier.clip(RoundedCornerShape(999.dp)).background(Forest), verticalAlignment = Alignment.CenterVertically) { IconButton(onClick = remove, modifier = Modifier.size(38.dp)) { Icon(Icons.Default.Remove, "Remover", tint = Color.White, modifier = Modifier.size(18.dp)) }; Text(formatCartQuantity(quantity, soldByWeight), color = Color.White, fontWeight = FontWeight.Black, fontSize = if (soldByWeight) 11.sp else 14.sp); IconButton(onClick = add, modifier = Modifier.size(38.dp)) { Icon(Icons.Default.Add, "Adicionar", tint = Mint, modifier = Modifier.size(18.dp)) } }
 }
 
 @Composable
@@ -369,8 +367,8 @@ private fun SearchScreen(viewModel: AiMercViewModel, modifier: Modifier, openPro
 }
 
 @Composable
-private fun SearchProductRow(product: Product, quantity: Int, add: () -> Unit, remove: () -> Unit, open: () -> Unit) {
-    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color.White).clickable(onClick = open).padding(10.dp), verticalAlignment = Alignment.CenterVertically) { Box(Modifier.size(78.dp).clip(RoundedCornerShape(12.dp)).background(Color.White).padding(6.dp)) { if (product.image.isNotBlank()) { AsyncImage(product.image, product.name, Modifier.fillMaxSize(), contentScale = ContentScale.Fit) } }; Spacer(Modifier.width(12.dp)); Column(Modifier.weight(1f)) { Text(product.name, fontWeight = FontWeight.ExtraBold, color = Ink, maxLines = 2); Text(product.category, color = Muted, fontSize = 10.sp); Text(currency.format(product.price), fontWeight = FontWeight.Black, color = Forest, modifier = Modifier.padding(top = 8.dp)) }; QuantityControl(quantity, add, remove) }
+private fun SearchProductRow(product: Product, quantity: Double, add: () -> Unit, remove: () -> Unit, open: () -> Unit) {
+    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color.White).clickable(onClick = open).padding(10.dp), verticalAlignment = Alignment.CenterVertically) { Box(Modifier.size(78.dp).clip(RoundedCornerShape(12.dp)).background(Color.White).padding(6.dp)) { if (product.image.isNotBlank()) { AsyncImage(product.image, product.name, Modifier.fillMaxSize(), contentScale = ContentScale.Fit) } }; Spacer(Modifier.width(12.dp)); Column(Modifier.weight(1f)) { Text(product.name, fontWeight = FontWeight.ExtraBold, color = Ink, maxLines = 2); Text(product.category, color = Muted, fontSize = 10.sp); Text("${currency.format(saleDisplayPrice(product))} por ${saleDisplayMeasure(product)}", fontWeight = FontWeight.Black, color = Forest, modifier = Modifier.padding(top = 8.dp)) }; QuantityControl(quantity, product.soldByWeight, add, remove) }
 }
 
 @Composable
@@ -386,16 +384,16 @@ private fun ProductDetailScreen(product: Product, viewModel: AiMercViewModel, ba
             ) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                     Column(Modifier.weight(1f)) {
-                        Text("Total do item", color = Muted, fontSize = 11.sp)
-                        Text(currency.format(product.price * quantity.coerceAtLeast(1)), color = Ink, fontSize = 21.sp, fontWeight = FontWeight.Black)
+                        Text(if (product.soldByWeight) "Valor estimado" else "Total do item", color = Muted, fontSize = 11.sp)
+                        Text(currency.format(product.price * quantity.coerceAtLeast(if (product.soldByWeight) product.quantityStep else 1.0)), color = Ink, fontSize = 21.sp, fontWeight = FontWeight.Black)
                     }
-                    if (quantity == 0) {
+                    if (quantity <= 0.0) {
                         Button(onClick = { viewModel.add(product) }, modifier = Modifier.height(50.dp), shape = RoundedCornerShape(14.dp), colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Forest)) {
                             Icon(Icons.Default.Add, null)
                             Spacer(Modifier.width(6.dp))
                             Text("Adicionar", fontWeight = FontWeight.Black)
                         }
-                    } else QuantityControl(quantity, { viewModel.add(product) }, { viewModel.remove(product) })
+                    } else QuantityControl(quantity, product.soldByWeight, { viewModel.add(product) }, { viewModel.remove(product) })
                 }
                 if (viewModel.cartCount > 0) {
                     Spacer(Modifier.height(12.dp))
@@ -428,9 +426,10 @@ private fun ProductDetailScreen(product: Product, viewModel: AiMercViewModel, ba
                     Spacer(Modifier.height(8.dp))
                     Text(product.name, color = Ink, fontSize = 25.sp, lineHeight = 30.sp, fontWeight = FontWeight.Black)
                     Spacer(Modifier.height(12.dp))
-                    product.oldPrice?.let { Text(currency.format(it), color = Muted, fontSize = 13.sp, textDecoration = TextDecoration.LineThrough) }
-                    Text(currency.format(product.price), color = Forest, fontSize = 28.sp, fontWeight = FontWeight.Black)
-                    Text("Valor por ${product.unit.lowercase()} Â· produto disponivel", color = Muted, fontSize = 12.sp, modifier = Modifier.padding(top = 3.dp))
+                    product.oldPrice?.let { Text(currency.format(it * if (product.soldByWeight) product.quantityStep else 1.0), color = Muted, fontSize = 13.sp, textDecoration = TextDecoration.LineThrough) }
+                    Text(currency.format(saleDisplayPrice(product)), color = Forest, fontSize = 28.sp, fontWeight = FontWeight.Black)
+                    Text("Valor por ${saleDisplayMeasure(product)} Â· produto disponivel", color = Muted, fontSize = 12.sp, modifier = Modifier.padding(top = 3.dp))
+                    if (product.soldByWeight) Text("Escolha o peso desejado. O peso e o valor podem variar apos a separacao.", color = Muted, fontSize = 11.sp, lineHeight = 15.sp, modifier = Modifier.padding(top = 8.dp))
                 }
             }
             if (related.isNotEmpty()) item { ProductShelf("Voce tambem pode gostar", "Itens relacionados para completar sua compra", related, viewModel, null, openProduct) }
@@ -444,9 +443,32 @@ private fun CartDock(count: Int, subtotal: Double, open: () -> Unit) {
 }
 
 @Composable
-private fun MainNavigation(screen: Screen, onChange: (Screen) -> Unit) {
+private fun MainNavigation(screen: Screen, hasActiveOrder: Boolean, onChange: (Screen) -> Unit) {
     val items = listOf(Screen.HOME to (Icons.Default.Home to "Inicio"), Screen.SEARCH to (Icons.Default.Search to "Buscar"), Screen.ORDERS to (Icons.AutoMirrored.Filled.ReceiptLong to "Pedidos"), Screen.PROFILE to (Icons.Default.Person to "Conta"))
-    NavigationBar(containerColor = Color.White, modifier = Modifier.navigationBarsPadding()) { items.forEach { (target, data) -> NavigationBarItem(selected = screen == target, onClick = { onChange(target) }, icon = { Icon(data.first, data.second) }, label = { Text(data.second, fontSize = 10.sp) }, colors = NavigationBarItemDefaults.colors(selectedIconColor = Forest, selectedTextColor = Forest, indicatorColor = MintSoft, unselectedIconColor = Muted, unselectedTextColor = Muted)) } }
+    NavigationBar(containerColor = Color.White, modifier = Modifier.navigationBarsPadding()) {
+        items.forEach { (target, data) ->
+            NavigationBarItem(
+                selected = screen == target,
+                onClick = { onChange(target) },
+                icon = {
+                    Box(Modifier.size(32.dp), contentAlignment = Alignment.Center) {
+                        Icon(data.first, data.second)
+                        if (target == Screen.ORDERS && hasActiveOrder) {
+                            Box(
+                                Modifier
+                                    .align(Alignment.TopEnd)
+                                    .size(10.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFFC62828))
+                            )
+                        }
+                    }
+                },
+                label = { Text(data.second, fontSize = 10.sp) },
+                colors = NavigationBarItemDefaults.colors(selectedIconColor = Forest, selectedTextColor = Forest, indicatorColor = MintSoft, unselectedIconColor = Muted, unselectedTextColor = Muted)
+            )
+        }
+    }
 }
 
 private val orderStatusLabels = mapOf(
@@ -625,6 +647,16 @@ private fun ProfileScreenV2(viewModel: AiMercViewModel, modifier: Modifier) {
 }
 
 private fun formatQuantity(value: Double) = if (value % 1.0 == 0.0) value.toInt().toString() else String.format(Locale.forLanguageTag("pt-BR"), "%.2f", value)
+private fun formatCartQuantity(value: Double, soldByWeight: Boolean): String {
+    if (!soldByWeight) return value.toInt().toString()
+    return if (value < 1.0) "${(value * 1000).roundToInt()} g" else "${formatQuantity(value)} kg"
+}
+
+private fun saleDisplayPrice(product: Product): Double =
+    product.price * if (product.soldByWeight) product.quantityStep else 1.0
+
+private fun saleDisplayMeasure(product: Product): String =
+    if (product.soldByWeight) formatCartQuantity(product.quantityStep, true) else product.unit.lowercase()
 private fun formatOrderDate(value: String): String {
     if (value.length < 16) return value
     val date = value.substring(0, 10).split('-')
@@ -634,7 +666,7 @@ private fun formatOrderDate(value: String): String {
 @Composable
 private fun CartScreen(viewModel: AiMercViewModel, back: () -> Unit, checkout: () -> Unit) {
     val store = viewModel.catalog?.store
-    Scaffold(containerColor = Canvas, topBar = { SimpleTopBar("Seu carrinho", back) }, bottomBar = { Column(Modifier.background(Color.White).navigationBarsPadding().padding(horizontal = 16.dp, vertical = 18.dp)) { Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) { Text("Subtotal", color = Muted, fontSize = 14.sp); Text(currency.format(viewModel.subtotal), fontWeight = FontWeight.Black, fontSize = 22.sp, color = Ink) }; val remaining = (store?.minimumOrder ?: 0.0) - viewModel.subtotal; if (remaining > 0) Text("Faltam ${currency.format(remaining)} para o pedido minimo", color = Orange, fontSize = 11.sp, modifier = Modifier.padding(top = 7.dp)); Spacer(Modifier.height(16.dp)); Button(onClick = checkout, enabled = viewModel.cartLines.isNotEmpty() && remaining <= 0, modifier = Modifier.fillMaxWidth().height(54.dp), shape = RoundedCornerShape(14.dp), colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Forest)) { Text("Continuar", fontWeight = FontWeight.Black); Spacer(Modifier.width(5.dp)); Icon(Icons.Default.ChevronRight, null) } } }) { padding ->
+    Scaffold(containerColor = Canvas, topBar = { SimpleTopBar("Seu carrinho", back) }, bottomBar = { Column(Modifier.background(Color.White).navigationBarsPadding().padding(horizontal = 16.dp, vertical = 18.dp)) { Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) { Text(if (viewModel.cartLines.any { it.product.soldByWeight }) "Subtotal estimado" else "Subtotal", color = Muted, fontSize = 14.sp); Text(currency.format(viewModel.subtotal), fontWeight = FontWeight.Black, fontSize = 22.sp, color = Ink) }; if (viewModel.cartLines.any { it.product.soldByWeight }) Text("Itens por peso podem variar apos a separacao.", color = Muted, fontSize = 10.sp, modifier = Modifier.padding(top = 5.dp)); val remaining = (store?.minimumOrder ?: 0.0) - viewModel.subtotal; if (remaining > 0) Text("Faltam ${currency.format(remaining)} para o pedido minimo", color = Orange, fontSize = 11.sp, modifier = Modifier.padding(top = 7.dp)); Spacer(Modifier.height(16.dp)); Button(onClick = checkout, enabled = viewModel.cartLines.isNotEmpty() && remaining <= 0, modifier = Modifier.fillMaxWidth().height(54.dp), shape = RoundedCornerShape(14.dp), colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Forest)) { Text("Continuar", fontWeight = FontWeight.Black); Spacer(Modifier.width(5.dp)); Icon(Icons.Default.ChevronRight, null) } } }) { padding ->
         if (viewModel.cartLines.isEmpty()) PlaceholderScreen("Carrinho vazio", "Adicione produtos para continuar sua compra.", Icons.Default.ShoppingBag, Modifier.padding(padding))
         else LazyColumn(Modifier.padding(padding), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) { items(viewModel.cartLines, key = { it.product.id }) { line -> CartLineCard(line, { viewModel.add(line.product) }, { viewModel.remove(line.product) }) } }
     }
@@ -656,10 +688,10 @@ private fun CartLineCard(line: CartLine, add: () -> Unit, remove: () -> Unit) {
         Spacer(Modifier.height(13.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Column {
-                Text("Total do item", color = Muted, fontSize = 10.sp)
+                Text(if (line.product.soldByWeight) "Valor estimado" else "Total do item", color = Muted, fontSize = 10.sp)
                 Text(currency.format(line.total), color = Forest, fontWeight = FontWeight.Black, fontSize = 19.sp, modifier = Modifier.padding(top = 2.dp))
             }
-            QuantityControl(line.quantity, add, remove)
+            QuantityControl(line.quantity, line.product.soldByWeight, add, remove)
         }
     }
 }

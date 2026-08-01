@@ -171,6 +171,8 @@ private fun JSONObject.toProduct() = Product(
     oldPrice = if (isNull("oldPrice")) null else optDouble("oldPrice"),
     stock = optDouble("stock"),
     unit = optString("unit", "UN"),
+    soldByWeight = optBoolean("soldByWeight", optString("unit", "UN").equals("KG", ignoreCase = true)),
+    quantityStep = optDouble("quantityStep", if (optString("unit", "UN").equals("KG", ignoreCase = true)) 0.1 else 1.0),
     image = normalizeImageUrl(optString("image")),
     promo = optBoolean("promo")
 )

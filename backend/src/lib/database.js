@@ -3,6 +3,7 @@ import { hashPassword } from './auth.js';
 import { initializePostgres, query, transaction } from './postgres.js';
 import { normalizeCategory } from './categories.js';
 import { beautifyProductName } from './product-names.js';
+import { resolveProductSaleRule } from './product-sale-rules.js';
 
 function isoNow() {
   return new Date().toISOString();
@@ -55,6 +56,9 @@ export function mapProduct(row) {
   const sourceName = row.source_name || row.name;
   const sourceCategory = normalizeCategory(row.source_category || row.category);
   const displayName = row.catalog_name || beautifyProductName(sourceName) || sourceName;
+  const { sourceUnit, saleMode, soldByWeight, quantityStep, unit } = resolveProductSaleRule(row);
+  const sourceStock = Math.max(0, Number(row.stock) || 0);
+  const stockOverride = row.catalog_stock == null ? null : Math.max(0, Number(row.catalog_stock) || 0);
   return {
     id: row.id,
     sku: row.sku,
@@ -68,8 +72,14 @@ export function mapProduct(row) {
     description: row.description || '',
     price: Number(row.price),
     oldPrice: row.old_price == null ? null : Number(row.old_price),
-    stock: Number(row.stock),
-    unit: row.unit,
+    stock: soldByWeight && stockOverride != null ? stockOverride : sourceStock,
+    sourceStock,
+    stockOverride: soldByWeight ? stockOverride : null,
+    unit,
+    sourceUnit,
+    saleMode,
+    soldByWeight,
+    quantityStep,
     image: row.image,
     promo: Boolean(row.promo),
     active: Boolean(row.active),
@@ -448,7 +458,10 @@ export async function listProducts(storeId, filters = {}) {
   if (!filters.includeHidden) clauses.push('p.catalog_visible=1');
   if (filters.sellable) {
     clauses.push('p.price>=0.001');
-    clauses.push('p.stock<>0');
+    clauses.push(`COALESCE(
+      CASE WHEN upper(p.unit)='KG' AND p.sale_mode<>'UNIT' THEN p.catalog_stock END,
+      p.stock
+    )>0`);
   }
   if (filters.q) {
     values.push(`%${String(filters.q).toLowerCase()}%`);
@@ -586,9 +599,12 @@ export async function upsertProducts(storeId, items) {
 
 export async function updateProductCatalog(storeId, productId, input) {
   const result = await query(`UPDATE products SET catalog_name=$3,catalog_category=$4,description=$5,
-    catalog_visible=$6,updated_at=$7 WHERE store_id=$1 AND id=$2 RETURNING *`, [
+    catalog_visible=$6,sale_mode=$7,quantity_step=$8,
+    catalog_stock=CASE WHEN upper(unit)='KG' AND $7<>'UNIT' THEN $9 ELSE NULL END,
+    updated_at=$10 WHERE store_id=$1 AND id=$2 RETURNING *`, [
     storeId, productId, input.catalogName || null, input.catalogCategory || null, input.description || '',
-    input.catalogVisible ? 1 : 0, isoNow()
+    input.catalogVisible ? 1 : 0, input.saleMode || 'AUTO', input.quantityStep || 0.1,
+    input.stockOverride, isoNow()
   ]);
   return result.rowCount ? getProduct(storeId, productId) : null;
 }
@@ -845,10 +861,18 @@ export async function createOrder(store, input) {
       [store.id, productIds]);
     const products = new Map(productsResult.rows.map(row => [row.id, row]));
     const items = normalizedItems.map(item => {
-      const product = products.get(item.productId);
-      if (!product) throw Object.assign(new Error(`Produto nao encontrado: ${item.productId}`), { status: 400 });
-      if (item.quantity > Number(product.stock)) throw Object.assign(new Error(`Estoque insuficiente para ${product.name}`), { status: 409 });
-      return { product, quantity: item.quantity, total: Number((item.quantity * Number(product.price)).toFixed(2)) };
+      const sourceProduct = products.get(item.productId);
+      if (!sourceProduct) throw Object.assign(new Error(`Produto nao encontrado: ${item.productId}`), { status: 400 });
+      const product = mapProduct(sourceProduct);
+      const quantity = Number(item.quantity);
+      const step = product.quantityStep;
+      const stepUnits = quantity / step;
+      if (!Number.isFinite(quantity) || quantity <= 0 || Math.abs(stepUnits - Math.round(stepUnits)) > 0.000001) {
+        const rule = product.soldByWeight ? `${Math.round(step * 1000)} g` : 'unidades inteiras';
+        throw Object.assign(new Error(`${product.name} deve ser comprado em passos de ${rule}`), { status: 400 });
+      }
+      if (quantity > product.stock) throw Object.assign(new Error(`Estoque insuficiente para ${product.name}`), { status: 409 });
+      return { product, quantity, total: Number((quantity * Number(product.price)).toFixed(2)) };
     });
     const subtotal = Number(items.reduce((sum, item) => sum + item.total, 0).toFixed(2));
     if (subtotal < store.minimumOrder) throw Object.assign(new Error(`Pedido minimo de R$ ${store.minimumOrder.toFixed(2)}`), { status: 400 });
@@ -868,7 +892,10 @@ export async function createOrder(store, input) {
       await client.query(`INSERT INTO order_items (store_id,order_id,product_id,name,unit,quantity,price,total)
         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
       [store.id, id, item.product.id, item.product.name, item.product.unit, item.quantity, item.product.price, item.total]);
-      await client.query('UPDATE products SET stock=stock-$3,updated_at=$4 WHERE store_id=$1 AND id=$2',
+      await client.query(`UPDATE products SET
+        stock=CASE WHEN catalog_stock IS NULL THEN stock-$3 ELSE stock END,
+        catalog_stock=CASE WHEN catalog_stock IS NULL THEN NULL ELSE catalog_stock-$3 END,
+        updated_at=$4 WHERE store_id=$1 AND id=$2`,
         [store.id, item.product.id, item.quantity, now]);
     }
     const insertedItems = (await client.query('SELECT * FROM order_items WHERE store_id=$1 AND order_id=$2 ORDER BY id', [store.id, id])).rows;
@@ -896,7 +923,10 @@ export async function cancelOrderByCustomer(storeId, orderId, trackingToken) {
       cancel_reason='Cancelado pelo cliente no aplicativo',updated_at=$3,tracking_token_hash=$4,tracking_token=NULL
       WHERE store_id=$1 AND id=$2`, [storeId, orderId, now, tokenHash(trackingToken)]);
     const items = (await client.query('SELECT * FROM order_items WHERE store_id=$1 AND order_id=$2', [storeId, orderId])).rows;
-    for (const item of items) await client.query('UPDATE products SET stock=stock+$3,updated_at=$4 WHERE store_id=$1 AND id=$2', [storeId, item.product_id, item.quantity, now]);
+    for (const item of items) await client.query(`UPDATE products SET
+      stock=CASE WHEN catalog_stock IS NULL THEN stock+$3 ELSE stock END,
+      catalog_stock=CASE WHEN catalog_stock IS NULL THEN NULL ELSE catalog_stock+$3 END,
+      updated_at=$4 WHERE store_id=$1 AND id=$2`, [storeId, item.product_id, item.quantity, now]);
     return customerOrderView(store, (await client.query('SELECT * FROM orders WHERE store_id=$1 AND id=$2', [storeId, orderId])).rows[0], items);
   });
 }
@@ -917,7 +947,10 @@ export async function updateOrderStatus(storeId, orderId, status) {
       await client.query(`UPDATE orders SET status=$3,cancelled_by='STORE_MANAGER',cancelled_at=$4,
         cancel_reason='Cancelado pela loja',updated_at=$4 WHERE store_id=$1 AND id=$2`, [storeId, orderId, status, now]);
       const items = (await client.query('SELECT * FROM order_items WHERE store_id=$1 AND order_id=$2', [storeId, orderId])).rows;
-      for (const item of items) await client.query('UPDATE products SET stock=stock+$3,updated_at=$4 WHERE store_id=$1 AND id=$2', [storeId, item.product_id, item.quantity, now]);
+      for (const item of items) await client.query(`UPDATE products SET
+        stock=CASE WHEN catalog_stock IS NULL THEN stock+$3 ELSE stock END,
+        catalog_stock=CASE WHEN catalog_stock IS NULL THEN NULL ELSE catalog_stock+$3 END,
+        updated_at=$4 WHERE store_id=$1 AND id=$2`, [storeId, item.product_id, item.quantity, now]);
     } else {
       await client.query('UPDATE orders SET status=$3,updated_at=$4 WHERE store_id=$1 AND id=$2', [storeId, orderId, status, now]);
     }
@@ -934,7 +967,10 @@ export async function dashboardSummary(storeId) {
     query('SELECT status,COUNT(*)::int AS total FROM orders WHERE store_id=$1 GROUP BY status', [storeId]),
     query(`SELECT COALESCE(SUM(total),0)::float8 AS total,COUNT(*)::int AS orders FROM orders
       WHERE store_id=$1 AND status!='CANCELLED' AND created_at::timestamptz::date=CURRENT_DATE`, [storeId]),
-    query('SELECT COUNT(*)::int AS total FROM products WHERE store_id=$1 AND active=1 AND stock<=5', [storeId]),
+    query(`SELECT COUNT(*)::int AS total FROM products WHERE store_id=$1 AND active=1 AND COALESCE(
+      CASE WHEN upper(unit)='KG' AND sale_mode<>'UNIT' THEN catalog_stock END,
+      stock
+    )<=5`, [storeId]),
     query('SELECT COUNT(*)::int AS total FROM products WHERE store_id=$1 AND active=1', [storeId])
   ]);
   return {
