@@ -48,9 +48,11 @@ data class CepAddress(
 )
 
 data class DeliveryQuote(
+    val available: Boolean,
     val fee: Double,
     val source: String,
-    val matchedNeighborhood: String?
+    val matchedNeighborhood: String?,
+    val message: String?
 )
 
 data class Catalog(

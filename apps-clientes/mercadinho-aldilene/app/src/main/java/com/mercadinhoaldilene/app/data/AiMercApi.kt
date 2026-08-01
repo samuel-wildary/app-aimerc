@@ -85,9 +85,11 @@ object AiMercApi {
                 "?neighborhood=${encode(neighborhood)}&city=${encode(city)}&state=${encode(state)}&subtotal=$subtotal"
         )
         DeliveryQuote(
+            available = result.optBoolean("available", true),
             fee = result.optDouble("fee", 0.0),
             source = result.optString("source", "DEFAULT"),
-            matchedNeighborhood = result.optString("matchedNeighborhood").takeIf { it.isNotBlank() }
+            matchedNeighborhood = result.optString("matchedNeighborhood").takeIf { it.isNotBlank() },
+            message = result.optString("message").takeIf { it.isNotBlank() }
         )
     }
 

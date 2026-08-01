@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "410020319404",
+    "project_id": "aimerc-push",
+    "storage_bucket": "aimerc-push.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:410020319404:android:f1a6dd5fa9b07eeff1cf09",
+        "android_client_info": {
+          "package_name": "com.mercadinhoaldilene.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDgdjvl7wKO-GlWGaTv43NiidgQTGA7qe4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

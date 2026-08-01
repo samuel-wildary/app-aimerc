@@ -1089,11 +1089,11 @@ function Storefront({ store, categories = [], deliveryZones = [], banners, campa
         <div className="panel-heading"><div><p className="overline">Operacao comercial</p><h2>Taxas e funcionamento</h2></div><span className={`store-state ${settings.open ? 'open' : 'closed'}`}>{settings.open ? 'Loja aberta' : 'Loja fechada'}</span></div>
         <form className="settings-form" onSubmit={submitSettings}>
           <label>Pedido minimo<span>Valor mínimo que o cliente precisa comprar.</span><div className="money-input"><b>R$</b><input type="number" min="0" step="0.01" value={settings.minimumOrder} onChange={event => setSettings({ ...settings, minimumOrder: event.target.value })} /></div></label>
-          <label>Taxa padrao de entrega<span>Usada apenas quando o bairro ainda nao tiver uma regra propria.</span><div className="money-input"><b>R$</b><input type="number" min="0" step="0.01" value={settings.deliveryFee} onChange={event => setSettings({ ...settings, deliveryFee: event.target.value })} /></div></label>
+          <label>Taxa padrao de entrega<span>Usada somente enquanto nenhum bairro estiver cadastrado.</span><div className="money-input"><b>R$</b><input type="number" min="0" step="0.01" value={settings.deliveryFee} onChange={event => setSettings({ ...settings, deliveryFee: event.target.value })} /></div></label>
           <label>Frete gratis acima de<span>Use R$ 0 para manter taxa fixa em todos os pedidos.</span><div className="money-input"><b>R$</b><input type="number" min="0" step="0.01" value={settings.freeDeliveryAbove} onChange={event => setSettings({ ...settings, freeDeliveryAbove: event.target.value })} /></div></label>
           <div className="delivery-zone-editor">
             <div className="delivery-zone-heading">
-              <div><strong>Taxas por bairro</strong><span>O CEP preenche o bairro no aplicativo e a taxa exata e aplicada automaticamente.</span></div>
+              <div><strong>Taxas por bairro</strong><span>Esta lista define a area atendida. Um CEP de bairro nao cadastrado sera bloqueado no aplicativo.</span></div>
               <button type="button" onClick={addDeliveryZone}><Plus size={15} /> Adicionar bairro</button>
             </div>
             <div className="delivery-zone-columns" aria-hidden="true"><span>Bairro</span><span>Cidade</span><span>UF</span><span>Taxa</span><span /></div>
@@ -1105,7 +1105,7 @@ function Storefront({ store, categories = [], deliveryZones = [], banners, campa
                 <div className="delivery-zone-money"><b>R$</b><input required type="number" min="0" step="0.01" value={zone.fee} onChange={event => updateDeliveryZone(index, 'fee', event.target.value)} aria-label="Taxa do bairro" /></div>
                 <button className="delivery-zone-delete" type="button" onClick={() => removeDeliveryZone(index)} aria-label={`Excluir ${zone.neighborhood || 'bairro'}`}><Trash2 size={16} /></button>
               </div>)}
-              {!zones.length && <div className="delivery-zone-empty">Nenhum bairro cadastrado. Enquanto isso, a taxa padrao sera usada.</div>}
+              {!zones.length && <div className="delivery-zone-empty">Nenhum bairro cadastrado. A taxa padrao sera usada para todas as entregas.</div>}
             </div>
           </div>
           <label>Central de atendimento<span>Telefone exibido quando o cancelamento precisar ser resolvido pela loja.</span><input type="tel" value={settings.supportPhone} onChange={event => setSettings({ ...settings, supportPhone: event.target.value })} placeholder="(85) 99999-0000" required /></label>

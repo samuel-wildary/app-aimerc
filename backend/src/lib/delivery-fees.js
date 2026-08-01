@@ -24,14 +24,27 @@ export function findDeliveryZone(zones, address) {
 }
 
 export function calculateDeliveryFee({ store, zones, address, subtotal }) {
-  const amount = Math.max(0, Number(subtotal) || 0);
-  if (Number(store?.freeDeliveryAbove || 0) > 0 && amount >= Number(store.freeDeliveryAbove)) {
-    return { fee: 0, source: 'FREE_DELIVERY', matchedNeighborhood: null };
+  const activeZones = (zones || []).filter(zone => zone.active !== false);
+  const zone = findDeliveryZone(activeZones, address);
+
+  if (activeZones.length > 0 && !zone) {
+    return {
+      available: false,
+      fee: 0,
+      source: 'OUTSIDE_DELIVERY_AREA',
+      matchedNeighborhood: null,
+      message: 'Infelizmente, não atendemos à sua localização.'
+    };
   }
 
-  const zone = findDeliveryZone(zones, address);
+  const amount = Math.max(0, Number(subtotal) || 0);
+  if (Number(store?.freeDeliveryAbove || 0) > 0 && amount >= Number(store.freeDeliveryAbove)) {
+    return { available: true, fee: 0, source: 'FREE_DELIVERY', matchedNeighborhood: zone?.neighborhood || null };
+  }
+
   if (zone) {
     return {
+      available: true,
       fee: Number(Number(zone.fee || 0).toFixed(2)),
       source: 'NEIGHBORHOOD',
       matchedNeighborhood: zone.neighborhood
@@ -39,6 +52,7 @@ export function calculateDeliveryFee({ store, zones, address, subtotal }) {
   }
 
   return {
+    available: true,
     fee: Number(Number(store?.deliveryFee || 0).toFixed(2)),
     source: 'DEFAULT',
     matchedNeighborhood: null

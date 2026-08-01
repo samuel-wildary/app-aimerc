@@ -10,6 +10,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKeys
 import com.mercadinhoaldilene.app.data.AiMercApi
+import com.mercadinhoaldilene.app.push.PushNotifications
 import com.mercadinhoaldilene.app.data.AiMercRealtime
 import com.mercadinhoaldilene.app.model.CartLine
 import com.mercadinhoaldilene.app.model.CepAddress
@@ -367,6 +368,7 @@ class AiMercViewModel(application: Application) : AndroidViewModel(application) 
                 saveTrackingReference(receipt)
                 syncRealtimeSubscriptions()
                 saveProfile(checkout.name, checkout.phone, checkout.cep, checkout.street, checkout.number, checkout.complement, checkout.neighborhood, checkout.city, checkout.state, checkout.reference)
+                PushNotifications.associateCustomer(getApplication(), checkout.phone)
                 orders = (listOf(receipt.order) + orders.filterNot { it.id == receipt.id }).sortedByDescending { it.createdAt }
                 quantities.clear()
                 refreshOrders()

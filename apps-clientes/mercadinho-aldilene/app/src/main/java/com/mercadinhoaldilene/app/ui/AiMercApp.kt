@@ -746,7 +746,7 @@ private fun CheckoutScreenV2(viewModel: AiMercViewModel, back: () -> Unit, succe
     val pickupSlotsList = (store?.pickupSlots ?: "08:00 - 10:00, 10:00 - 12:00, 12:00 - 14:00, 14:00 - 16:00, 16:00 - 18:00, 18:00 - 20:00").split(",").map { it.trim() }.filter { it.isNotBlank() }
     var selectedPickupSlot by rememberSaveable { mutableStateOf(pickupSlotsList.firstOrNull() ?: "08:00 - 10:00") }
     val validAddress = fulfillment == "PICKUP" || (cep.length == 8 && street.isNotBlank() && number.isNotBlank() && neighborhood.isNotBlank() && city.isNotBlank() && state.length == 2)
-    val deliveryReady = fulfillment == "PICKUP" || (!viewModel.deliveryQuoteLoading && viewModel.deliveryQuote != null && viewModel.deliveryQuoteError == null)
+    val deliveryReady = fulfillment == "PICKUP" || (!viewModel.deliveryQuoteLoading && viewModel.deliveryQuote?.available == true && viewModel.deliveryQuoteError == null)
     val valid = name.isNotBlank() && phone.isNotBlank() && validAddress && deliveryReady
     Scaffold(containerColor = Canvas, topBar = { SimpleTopBar("Finalizar compra", back) }, bottomBar = { Column(Modifier.background(Color.White).navigationBarsPadding().padding(16.dp)) { Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("Total", color = Muted); Text(currency.format(viewModel.subtotal + deliveryFee), fontWeight = FontWeight.Black, fontSize = 21.sp) }; Button(onClick = {
         val finalNotes = if (fulfillment == "PICKUP" && store?.enablePickupScheduling == true) (if (notes.isBlank()) "Horario de retirada: $selectedPickupSlot" else "$notes | Horario de retirada: $selectedPickupSlot") else notes
@@ -779,11 +779,12 @@ private fun CheckoutScreenV2(viewModel: AiMercViewModel, back: () -> Unit, succe
             item { CheckoutSection("Resumo") {
                 SummaryRow("Produtos", viewModel.subtotal)
                 if (fulfillment == "DELIVERY" && viewModel.deliveryQuoteLoading) Text("Calculando a taxa do bairro...", color = Muted, fontSize = 11.sp)
-                else SummaryRow("Taxa de entrega", deliveryFee)
+                else if (viewModel.deliveryQuote?.available != false) SummaryRow("Taxa de entrega", deliveryFee)
                 viewModel.deliveryQuoteError?.let { Text(it, color = Color(0xFFB33C3C), fontWeight = FontWeight.Bold, fontSize = 11.sp) }
+                if (viewModel.deliveryQuote?.available == false) Text(viewModel.deliveryQuote?.message ?: "Infelizmente, não atendemos à sua localização.", color = Color(0xFFB33C3C), fontWeight = FontWeight.Bold, fontSize = 13.sp)
                 if (viewModel.deliveryQuote?.source == "FREE_DELIVERY") Text("Frete gratis aplicado", color = Color(0xFF07845C), fontWeight = FontWeight.Bold, fontSize = 11.sp)
                 if (viewModel.deliveryQuote?.source == "NEIGHBORHOOD") Text("Taxa calculada para ${viewModel.deliveryQuote?.matchedNeighborhood ?: neighborhood}", color = Color(0xFF07845C), fontWeight = FontWeight.Bold, fontSize = 11.sp)
-                if (viewModel.deliveryQuote?.source == "DEFAULT") Text("Taxa padrao aplicada: bairro ainda sem regra propria", color = Orange, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                if (viewModel.deliveryQuote?.source == "DEFAULT") Text("Taxa padrão aplicada: nenhum bairro foi configurado pela loja", color = Orange, fontWeight = FontWeight.Bold, fontSize = 11.sp)
             } }
         }
     }

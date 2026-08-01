@@ -986,6 +986,12 @@ export async function createOrder(store, input) {
     const deliveryQuote = input.fulfillmentType === 'DELIVERY'
       ? await quoteDeliveryFee(store, input.customer, subtotal, client)
       : { fee: 0 };
+    if (deliveryQuote.available === false) {
+      throw Object.assign(new Error(deliveryQuote.message || 'Infelizmente, não atendemos à sua localização.'), {
+        status: 422,
+        details: { code: 'OUTSIDE_DELIVERY_AREA' }
+      });
+    }
     const deliveryFee = deliveryQuote.fee;
     const id = `AM${Date.now().toString().slice(-8)}${crypto.randomInt(10, 100)}`;
     const now = isoNow();
