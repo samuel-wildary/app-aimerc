@@ -600,7 +600,10 @@ export async function upsertProducts(storeId, items) {
 export async function updateProductCatalog(storeId, productId, input) {
   const result = await query(`UPDATE products SET catalog_name=$3,catalog_category=$4,description=$5,
     catalog_visible=$6,sale_mode=$7,quantity_step=$8,
-    catalog_stock=CASE WHEN upper(unit)='KG' AND $7<>'UNIT' THEN $9 ELSE NULL END,
+    catalog_stock=CASE
+      WHEN upper(unit)='KG' AND $7::text<>'UNIT' THEN $9::double precision
+      ELSE NULL::double precision
+    END,
     updated_at=$10 WHERE store_id=$1 AND id=$2 RETURNING *`, [
     storeId, productId, input.catalogName || null, input.catalogCategory || null, input.description || '',
     input.catalogVisible ? 1 : 0, input.saleMode || 'AUTO', input.quantityStep || 0.1,
