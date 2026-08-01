@@ -60,6 +60,10 @@ CREATE TABLE IF NOT EXISTS stores (
   brand_accent TEXT NOT NULL DEFAULT '#12C98A',
   brand_background TEXT NOT NULL DEFAULT '#F2F5EF',
   is_open INTEGER NOT NULL DEFAULT 1,
+  business_hours_start TEXT NOT NULL DEFAULT '08:00',
+  business_hours_end TEXT NOT NULL DEFAULT '20:00',
+  business_days TEXT NOT NULL DEFAULT '1,2,3,4,5,6',
+  accept_after_hours INTEGER NOT NULL DEFAULT 1,
   enable_pickup_scheduling INTEGER NOT NULL DEFAULT 1,
   pickup_slots TEXT NOT NULL DEFAULT '08:00 - 10:00, 10:00 - 12:00, 12:00 - 14:00, 14:00 - 16:00, 16:00 - 18:00, 18:00 - 20:00',
   created_at TEXT NOT NULL
@@ -781,6 +785,10 @@ export function initializePostgres() {
       try {
         await pool.query(`ALTER TABLE stores ADD COLUMN IF NOT EXISTS disabled_categories TEXT NOT NULL DEFAULT ''`);
         await pool.query(`ALTER TABLE stores ADD COLUMN IF NOT EXISTS disable_promotions INTEGER NOT NULL DEFAULT 0`);
+        await pool.query(`ALTER TABLE stores ADD COLUMN IF NOT EXISTS business_hours_start TEXT NOT NULL DEFAULT '08:00'`);
+        await pool.query(`ALTER TABLE stores ADD COLUMN IF NOT EXISTS business_hours_end TEXT NOT NULL DEFAULT '20:00'`);
+        await pool.query(`ALTER TABLE stores ADD COLUMN IF NOT EXISTS business_days TEXT NOT NULL DEFAULT '1,2,3,4,5,6'`);
+        await pool.query(`ALTER TABLE stores ADD COLUMN IF NOT EXISTS accept_after_hours INTEGER NOT NULL DEFAULT 1`);
         await pool.query(`ALTER TABLE catalog_assets ALTER COLUMN ean TYPE VARCHAR(64)`);
         await pool.query(`CREATE TABLE IF NOT EXISTS platform_settings (
           key TEXT PRIMARY KEY,

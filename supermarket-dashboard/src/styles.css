@@ -377,3 +377,45 @@ code { color: #53625b; background: #f0f3f1; padding: 5px 7px; border-radius: 7px
 
 @media (max-width: 1100px) { .reports-grid { grid-template-columns: 1fr; }.report-hero, .report-metrics { grid-column: auto; } }
 @media (max-width: 560px) { .report-hero { display: block; padding: 23px; }.report-hero-value { margin-top: 20px; }.report-metrics { grid-template-columns: 1fr; }.bar-chart { gap: 6px; }.bar-column > strong { font-size: 8px; }.report-customer-row { grid-template-columns: 28px minmax(0,1fr) auto; }.report-customer-row > span:not(.ranking) { display: none; } }
+
+.scheduled-order { display: inline-flex; margin-top: 6px; padding: 4px 8px; border-radius: 999px; color: #865f13; background: #fff3cc; font-size: 10px; font-weight: 800; }
+.scheduled-notice { margin: 14px 0; padding: 13px 15px; border-radius: 12px; border: 1px solid #f1d47c; background: #fff8df; color: #75520e; display: flex; align-items: center; gap: 9px; font-size: 12px; font-weight: 700; }
+.period-grid { grid-column: 1/-1; display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 14px; }
+.period-card { padding: 19px; border: 1px solid var(--line); border-radius: 17px; background: white; box-shadow: 0 8px 25px rgba(13,45,34,.04); }
+.period-card > span { color: var(--muted); font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; }
+.period-card > strong { display: block; margin: 7px 0 13px; font: 800 25px Manrope,sans-serif; letter-spacing: -.04em; }
+.period-card > div { display: grid; gap: 5px; color: var(--muted); }
+.report-device-grid { grid-column: 1/-1; display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 14px; }
+.top-products, .annual-chart { min-height: 360px; }
+.product-ranking-row { display: grid; grid-template-columns: 32px minmax(0,1fr) auto; align-items: center; gap: 11px; padding: 13px 0; border-bottom: 1px solid #edf1ee; }
+.product-ranking-row:last-child { border: 0; }
+.product-ranking-row > div { min-width: 0; }
+.product-ranking-row > div strong, .product-ranking-row > div small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.product-ranking-row > div small { margin-top: 4px; color: var(--muted); font-size: 10px; }
+.product-ranking-row > strong { white-space: nowrap; font-size: 12px; }
+.month-chart { display: grid; gap: 10px; }
+.month-row { display: grid; grid-template-columns: 68px minmax(80px,1fr) 90px; align-items: center; gap: 10px; font-size: 10px; }
+.month-row > span { color: var(--muted); text-transform: capitalize; }
+.month-row > div { height: 9px; overflow: hidden; border-radius: 999px; background: #edf3ef; }
+.month-row i { display: block; height: 100%; border-radius: inherit; background: var(--mint); }
+.month-row strong { text-align: right; font-size: 10px; }
+.business-hours-editor { display: grid; gap: 15px; padding: 18px; border: 1px solid #dce8e1; border-radius: 15px; background: #f7fbf8; }
+.business-hours-editor > div:first-child strong, .business-hours-editor > div:first-child span { display: block; }
+.business-hours-editor > div:first-child span { margin-top: 4px; color: var(--muted); font-size: 11px; }
+.business-hours-fields { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
+.business-hours-fields label { margin: 0; }
+.business-days { display: grid; grid-template-columns: repeat(7,minmax(0,1fr)); gap: 7px; }
+.business-days button { min-height: 38px; border: 1px solid #ccd9d1; border-radius: 10px; background: white; color: var(--muted); font-weight: 800; }
+.business-days button.selected { border-color: #0f9f70; color: #087b57; background: var(--mint-soft); }
+.business-hours-editor .open-toggle { margin: 0; background: white; }
+
+@media (max-width: 1100px) {
+  .period-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .report-device-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 560px) {
+  .period-grid { grid-template-columns: 1fr; }
+  .business-hours-fields { grid-template-columns: 1fr; }
+  .business-days { grid-template-columns: repeat(4,minmax(0,1fr)); }
+  .month-row { grid-template-columns: 55px minmax(60px,1fr) 75px; }
+}

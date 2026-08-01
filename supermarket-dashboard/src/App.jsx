@@ -31,6 +31,7 @@ import {
   Search,
   ShoppingBasket,
   Sparkles,
+  Smartphone,
   Square,
   Store,
   Tags,
@@ -210,9 +211,10 @@ function StatusBadge({ status }) {
 }
 
 function OrderCard({ order, selected, onSelect }) {
+  const scheduled = order.scheduledTo && new Date(order.scheduledTo).getTime() > Date.now();
   return (
     <button className={`order-card ${selected ? 'selected' : ''}`} onClick={() => onSelect(order)}>
-      <div className="order-main"><span className="order-id">#{order.id}</span><strong>{order.customer.name}</strong><small>{order.items.length} itens · {order.fulfillmentType === 'DELIVERY' ? 'Entrega' : 'Retirada'}</small></div>
+      <div className="order-main"><span className="order-id">#{order.id}</span><strong>{order.customer.name}</strong><small>{order.items.length} itens · {order.fulfillmentType === 'DELIVERY' ? 'Entrega' : 'Retirada'}</small>{scheduled && <span className="scheduled-order">Separar em {new Date(order.scheduledTo).toLocaleString('pt-BR', { weekday: 'short', hour: '2-digit', minute: '2-digit' })}</span>}</div>
       <div className="order-meta"><StatusBadge status={order.status} /><strong>{money(order.total)}</strong><small>{shortTime(order.createdAt)}</small></div>
       <ChevronRight size={18} />
     </button>
@@ -227,6 +229,7 @@ function OrderDetail({ order, onClose, onAdvance, onPrint, busy }) {
       <aside className="order-drawer">
         <div className="drawer-head"><div><span>Pedido</span><h2>#{order.id}</h2></div><button className="icon-button" onClick={onClose} aria-label="Fechar detalhe"><X /></button></div>
         <div className="drawer-status"><StatusBadge status={order.status} /><span>Recebido as {shortTime(order.createdAt)}</span></div>
+        {order.scheduledTo && new Date(order.scheduledTo).getTime() > Date.now() && <section className="scheduled-notice"><CalendarClock size={19} /><div><strong>Pedido recebido fora do horario</strong><span>Separar a partir de {new Date(order.scheduledTo).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}</span></div></section>}
         <section className="customer-block"><div className="avatar">{order.customer.name.slice(0, 1)}</div><div><strong>{order.customer.name}</strong><span>{order.customer.phone}</span></div></section>
         {order.fulfillmentType === 'DELIVERY' && <section className="address-block"><MapPin size={19} /><div><span>Entregar em</span><strong>{order.customer.address}</strong><small>CEP {order.customer.cep || 'nao informado'}{order.customer.reference ? ` · Ref.: ${order.customer.reference}` : ''}</small></div></section>}
         <section className="items-block"><div className="section-label"><span>Itens do pedido</span><strong>{order.items.length}</strong></div>{order.items.map(item => <div className="detail-item" key={item.productId}><b>{item.quantity} {item.unit}</b><span>{item.name}</span><strong>{money(item.total)}</strong></div>)}</section>
@@ -785,15 +788,32 @@ function Customers({ customers, query, setQuery }) {
   </section>;
 }
 
-function Reports({ report }) {
+function Reports({ report, devices }) {
   const today = report?.today || { orders: 0, revenue: 0, averageTicket: 0, cancellations: 0 };
+  const periods = report?.periods || { today, week: {}, month: {}, year: {} };
   const days = report?.days || [];
+  const months = report?.months || [];
   const maxRevenue = Math.max(...days.map(day => Number(day.revenue)), 1);
+  const maxMonthRevenue = Math.max(...months.map(month => Number(month.revenue)), 1);
+  const periodCards = [
+    ['Hoje', periods.today],
+    ['Esta semana', periods.week],
+    ['Este mes', periods.month],
+    ['Este ano', periods.year]
+  ];
+  const quantity = value => new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 3 }).format(Number(value || 0));
   return <div className="reports-grid">
-    <section className="report-hero"><div><p className="overline">Indicadores da loja</p><h2>Decisoes melhores a cada pedido.</h2><p>Vendas, ticket medio, cancelamentos e clientes recorrentes atualizados com a operacao.</p></div><div className="report-hero-value"><span>Faturamento hoje</span><strong>{money(today.revenue)}</strong><small>{today.orders} pedidos criados</small></div></section>
-    <section className="report-metrics"><StatCard icon={ShoppingBasket} label="Pedidos hoje" value={today.orders} detail="inclui entregas e retiradas" tone="blue" /><StatCard icon={CircleDollarSign} label="Ticket medio" value={money(today.averageTicket)} detail="pedidos nao cancelados" tone="green" /><StatCard icon={X} label="Cancelamentos" value={today.cancellations} detail="pedidos cancelados hoje" tone="red" /></section>
-    <section className="panel sales-chart"><div className="panel-heading"><div><p className="overline">Ultimos 7 dias</p><h2>Faturamento diario</h2></div><span className="sync-time">Valores liquidos de pedidos ativos</span></div><div className="bar-chart">{days.map(day => <div className="bar-column" key={day.date}><strong>{day.revenue ? money(day.revenue) : '-'}</strong><div className="bar-track"><i style={{ height: `${Math.max(5, (Number(day.revenue) / maxRevenue) * 100)}%` }} /></div><span>{day.label}</span></div>)}</div></section>
-    <section className="panel top-customers"><div className="panel-heading"><div><p className="overline">Recorrencia</p><h2>Melhores clientes</h2></div></div>{(report?.topCustomers || []).map((customer, index) => <div className="report-customer-row" key={customer.phone}><span className="ranking">0{index + 1}</span><div className="customer-cell"><div>{customer.name.slice(0, 1)}</div><strong>{customer.name}</strong></div><span>{customer.orders} compras</span><strong>{money(customer.totalSpent)}</strong></div>)}{!report?.topCustomers?.length && <EmptyState title="Ainda sem dados" text="O relatorio sera preenchido conforme os pedidos chegarem." />}</section>
+    <section className="report-hero"><div><p className="overline">Inteligencia da loja</p><h2>O que vende, quanto rende e quando acontece.</h2><p>Acompanhe faturamento, ticket medio, produtos mais vendidos e uso do aplicativo em um unico painel.</p></div><div className="report-hero-value"><span>Faturamento hoje</span><strong>{money(periods.today?.revenue)}</strong><small>{periods.today?.orders || 0} pedidos validos</small></div></section>
+    <section className="period-grid">{periodCards.map(([label, value]) => <article className="period-card" key={label}><span>{label}</span><strong>{money(value?.revenue)}</strong><div><small>{value?.orders || 0} pedidos</small><small>Ticket {money(value?.averageTicket)}</small><small>Media/dia {money(value?.averagePerDay)}</small></div></article>)}</section>
+    <section className="report-device-grid">
+      <StatCard icon={Smartphone} label="Aparelhos instalados" value={devices?.installedDevices || 0} detail={`${devices?.seenToday || 0} vistos nas ultimas 24h`} tone="blue" />
+      <StatCard icon={Zap} label="Aparelhos online" value={devices?.onlineDevices || 0} detail={`ativos nos ultimos ${devices?.onlineWindowMinutes || 15} min`} tone="green" />
+      <StatCard icon={X} label="Cancelamentos hoje" value={today.cancellations || 0} detail="pedidos cancelados no dia" tone="red" />
+    </section>
+    <section className="panel sales-chart"><div className="panel-heading"><div><p className="overline">Ultimos 7 dias</p><h2>Faturamento diario</h2></div><span className="sync-time">Pedidos nao cancelados</span></div><div className="bar-chart">{days.map(day => <div className="bar-column" key={day.date}><strong>{day.revenue ? money(day.revenue) : '-'}</strong><div className="bar-track"><i style={{ height: `${Math.max(5, (Number(day.revenue) / maxRevenue) * 100)}%` }} /></div><span>{day.label}</span></div>)}</div></section>
+    <section className="panel top-products"><div className="panel-heading"><div><p className="overline">Ultimos 30 dias</p><h2>Produtos que mais vendem</h2></div></div><div className="product-ranking">{(report?.topProducts || []).map((product, index) => <div className="product-ranking-row" key={product.productId}><span className="ranking">{String(index + 1).padStart(2, '0')}</span><div><strong>{product.name}</strong><small>{quantity(product.quantity)} {product.unit} · {product.orders} pedidos</small></div><strong>{money(product.revenue)}</strong></div>)}</div>{!report?.topProducts?.length && <EmptyState title="Ainda sem vendas" text="Os produtos mais vendidos aparecerao aqui." />}</section>
+    <section className="panel annual-chart"><div className="panel-heading"><div><p className="overline">Ultimos 12 meses</p><h2>Evolucao mensal</h2></div></div><div className="month-chart">{months.map(item => <div className="month-row" key={item.month}><span>{new Date(`${item.month}T12:00:00Z`).toLocaleDateString('pt-BR', { month: 'short', year: '2-digit', timeZone: 'UTC' })}</span><div><i style={{ width: `${Math.max(item.revenue ? 4 : 0, (Number(item.revenue) / maxMonthRevenue) * 100)}%` }} /></div><strong>{money(item.revenue)}</strong></div>)}</div></section>
+    <section className="panel top-customers"><div className="panel-heading"><div><p className="overline">Recorrencia</p><h2>Melhores clientes</h2></div></div>{(report?.topCustomers || []).map((customer, index) => <div className="report-customer-row" key={customer.phone}><span className="ranking">{String(index + 1).padStart(2, '0')}</span><div className="customer-cell"><div>{customer.name.slice(0, 1)}</div><strong>{customer.name}</strong></div><span>{customer.orders} compras</span><strong>{money(customer.totalSpent)}</strong></div>)}{!report?.topCustomers?.length && <EmptyState title="Ainda sem dados" text="O relatorio sera preenchido conforme os pedidos chegarem." />}</section>
   </div>;
 }
 
@@ -907,6 +927,10 @@ function Storefront({ store, categories = [], deliveryZones = [], banners, campa
     freeDeliveryAbove: store?.freeDeliveryAbove ?? 0,
     supportPhone: store?.supportPhone ?? '',
     cancellationWindowMinutes: store?.cancellationWindowMinutes ?? 5,
+    businessHoursStart: store?.businessHoursStart ?? '08:00',
+    businessHoursEnd: store?.businessHoursEnd ?? '20:00',
+    businessDays: store?.businessDays ?? '1,2,3,4,5,6',
+    acceptAfterHours: store?.acceptAfterHours ?? true,
     open: store?.open ?? true,
     enablePickupScheduling: store?.enablePickupScheduling ?? true,
     pickupSlots: store?.pickupSlots ?? '08:00 - 10:00, 10:00 - 12:00, 12:00 - 14:00, 14:00 - 16:00, 16:00 - 18:00, 18:00 - 20:00',
@@ -929,13 +953,17 @@ function Storefront({ store, categories = [], deliveryZones = [], banners, campa
       freeDeliveryAbove: store?.freeDeliveryAbove ?? 0,
       supportPhone: store?.supportPhone ?? '',
       cancellationWindowMinutes: store?.cancellationWindowMinutes ?? 5,
+      businessHoursStart: store?.businessHoursStart ?? '08:00',
+      businessHoursEnd: store?.businessHoursEnd ?? '20:00',
+      businessDays: store?.businessDays ?? '1,2,3,4,5,6',
+      acceptAfterHours: store?.acceptAfterHours ?? true,
       open: store?.open ?? true,
       enablePickupScheduling: store?.enablePickupScheduling ?? true,
       pickupSlots: store?.pickupSlots ?? '08:00 - 10:00, 10:00 - 12:00, 12:00 - 14:00, 14:00 - 16:00, 16:00 - 18:00, 18:00 - 20:00',
       disabledCategories: store?.disabledCategories ?? '',
       disablePromotions: store?.disablePromotions ?? false
     });
-  }, [store?.minimumOrder, store?.deliveryFee, store?.freeDeliveryAbove, store?.supportPhone, store?.cancellationWindowMinutes, store?.open, store?.enablePickupScheduling, store?.pickupSlots, store?.disabledCategories, store?.disablePromotions]);
+  }, [store?.minimumOrder, store?.deliveryFee, store?.freeDeliveryAbove, store?.supportPhone, store?.cancellationWindowMinutes, store?.businessHoursStart, store?.businessHoursEnd, store?.businessDays, store?.acceptAfterHours, store?.open, store?.enablePickupScheduling, store?.pickupSlots, store?.disabledCategories, store?.disablePromotions]);
 
   useEffect(() => {
     setZones(deliveryZones);
@@ -1012,6 +1040,21 @@ function Storefront({ store, categories = [], deliveryZones = [], banners, campa
     setSettings({ ...settings, disabledCategories: list.join(', ') });
   };
 
+  const businessDayOptions = [
+    { value: 0, label: 'Dom' }, { value: 1, label: 'Seg' }, { value: 2, label: 'Ter' },
+    { value: 3, label: 'Qua' }, { value: 4, label: 'Qui' }, { value: 5, label: 'Sex' },
+    { value: 6, label: 'Sab' }
+  ];
+  const selectedBusinessDays = new Set(String(settings.businessDays || '').split(',').map(Number));
+  function toggleBusinessDay(day) {
+    const next = new Set(selectedBusinessDays);
+    if (next.has(day)) {
+      if (next.size === 1) return;
+      next.delete(day);
+    } else next.add(day);
+    setSettings({ ...settings, businessDays: [...next].sort((a, b) => a - b).join(',') });
+  }
+
   async function submitSettings(event) {
     event.preventDefault();
     setSavingSettings(true);
@@ -1067,6 +1110,17 @@ function Storefront({ store, categories = [], deliveryZones = [], banners, campa
           </div>
           <label>Central de atendimento<span>Telefone exibido quando o cancelamento precisar ser resolvido pela loja.</span><input type="tel" value={settings.supportPhone} onChange={event => setSettings({ ...settings, supportPhone: event.target.value })} placeholder="(85) 99999-0000" required /></label>
           <label>Cancelamento pelo app<span>Minutos em que o cliente pode cancelar antes da separacao.</span><input type="number" min="1" max="60" value={settings.cancellationWindowMinutes} onChange={event => setSettings({ ...settings, cancellationWindowMinutes: event.target.value })} /></label>
+          <div className="business-hours-editor">
+            <div><strong>Horario de funcionamento</strong><span>Pedidos feitos fora desse periodo podem entrar na fila para a proxima abertura.</span></div>
+            <div className="business-hours-fields">
+              <label>Abre as<input type="time" required value={settings.businessHoursStart} onChange={event => setSettings({ ...settings, businessHoursStart: event.target.value })} /></label>
+              <label>Fecha as<input type="time" required value={settings.businessHoursEnd} onChange={event => setSettings({ ...settings, businessHoursEnd: event.target.value })} /></label>
+            </div>
+            <div className="business-days" aria-label="Dias de funcionamento">
+              {businessDayOptions.map(day => <button type="button" className={selectedBusinessDays.has(day.value) ? 'selected' : ''} onClick={() => toggleBusinessDay(day.value)} key={day.value}>{day.label}</button>)}
+            </div>
+            <label className="open-toggle"><span><strong>Receber pedidos fora do horario</strong><small>O cliente pode comprar normalmente e o pedido fica agendado para a proxima abertura.</small></span><input type="checkbox" checked={settings.acceptAfterHours} onChange={event => setSettings({ ...settings, acceptAfterHours: event.target.checked })} /></label>
+          </div>
           <label className="open-toggle"><span><strong>Agendamento de horário na retirada</strong><small>Permitir que o cliente escolha a faixa de horário para buscar o pedido na loja.</small></span><input type="checkbox" checked={settings.enablePickupScheduling} onChange={event => setSettings({ ...settings, enablePickupScheduling: event.target.checked })} /></label>
           {settings.enablePickupScheduling && (
             <label>Faixas de horário para retirada<span>Separe as opções por vírgula.</span><input value={settings.pickupSlots} onChange={event => setSettings({ ...settings, pickupSlots: event.target.value })} placeholder="08:00 - 10:00, 10:00 - 12:00, 12:00 - 14:00, 14:00 - 16:00, 16:00 - 18:00, 18:00 - 20:00" required={settings.enablePickupScheduling} /></label>
@@ -1158,6 +1212,7 @@ export default function App() {
   const [categories, setCategories] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [report, setReport] = useState(null);
+  const [deviceSummary, setDeviceSummary] = useState(null);
   const [banners, setBanners] = useState([]);
   const [deliveryZones, setDeliveryZones] = useState([]);
   const [campaigns, setCampaigns] = useState([]);
@@ -1178,7 +1233,7 @@ export default function App() {
     if (!api.token) return;
     setRefreshing(true);
     try {
-      const [summaryData, ordersData, categoriesData, bannersData, customersData, reportData, campaignsData, automationsData, deliveryZonesData] = await Promise.all([api.summary(), api.orders(), api.productCategories(), api.banners(), api.customers(customerQuery), api.reports(), api.pushCampaigns(), api.pushAutomations(), api.deliveryZones()]);
+      const [summaryData, ordersData, categoriesData, bannersData, customersData, reportData, campaignsData, automationsData, deliveryZonesData, deviceSummaryData] = await Promise.all([api.summary(), api.orders(), api.productCategories(), api.banners(), api.customers(customerQuery), api.reports(), api.pushCampaigns(), api.pushAutomations(), api.deliveryZones(), api.pushDeviceSummary()]);
       setSummary(summaryData);
       setSession(current => current || { user: summaryData.user, store: summaryData.store });
       setOrders(ordersData);
@@ -1189,6 +1244,7 @@ export default function App() {
       setCampaigns(campaignsData);
       setAutomations(automationsData);
       setDeliveryZones(deliveryZonesData);
+      setDeviceSummary(deviceSummaryData);
       setSelected(current => current ? ordersData.find(order => order.id === current.id) || null : null);
       setError('');
     } catch (requestError) {
@@ -1394,7 +1450,7 @@ export default function App() {
           {active === 'catalog' && <Catalog products={products} categories={categories} query={query} setQuery={setQuery} category={category} setCategory={setCategory} onChanged={load} />}
           {active === 'delivery' && <Delivery orders={orders} selected={selected} setSelected={setSelected} />}
           {active === 'customers' && <Customers customers={customers} query={customerQuery} setQuery={setCustomerQuery} />}
-          {active === 'reports' && <Reports report={report} />}
+          {active === 'reports' && <Reports report={report} devices={deviceSummary} />}
           {active === 'storefront' && <Storefront store={summary?.store} categories={categories} deliveryZones={deliveryZones} banners={banners} campaigns={campaigns} automations={automations} onSaveSettings={saveSettings} onCreateBanner={createBanner} onUpdateBanner={updateBanner} onDeleteBanner={deleteBanner} onCreateCampaign={createCampaign} onSendCampaign={sendCampaign} onDeleteCampaign={deleteCampaign} onCreateAutomation={createAutomation} onToggleAutomation={toggleAutomation} onRunAutomation={runAutomation} onDeleteAutomation={deleteAutomation} />}
         </div>
       </main>

@@ -45,11 +45,48 @@ function mapStore(row) {
       background: row.brand_background || '#F2F5EF'
     },
     open: Boolean(row.is_open),
+    businessHoursStart: row.business_hours_start || '08:00',
+    businessHoursEnd: row.business_hours_end || '20:00',
+    businessDays: row.business_days || '1,2,3,4,5,6',
+    acceptAfterHours: row.accept_after_hours != null ? Boolean(row.accept_after_hours) : true,
     enablePickupScheduling: row.enable_pickup_scheduling != null ? Boolean(row.enable_pickup_scheduling) : true,
     pickupSlots: row.pickup_slots || '08:00 - 10:00, 10:00 - 12:00, 12:00 - 14:00, 14:00 - 16:00, 16:00 - 18:00, 18:00 - 20:00',
     disabledCategories: row.disabled_categories || '',
     disablePromotions: Boolean(row.disable_promotions),
     createdAt: row.created_at
+  };
+}
+
+export function storeOperatingStatus(store, now = new Date()) {
+  const offsetMs = 3 * 60 * 60 * 1000;
+  const local = new Date(now.getTime() - offsetMs);
+  const days = String(store.businessDays || '1,2,3,4,5,6').split(',').map(Number).filter(day => day >= 0 && day <= 6);
+  const toMinutes = value => {
+    const [hours, minutes] = String(value || '00:00').split(':').map(Number);
+    return hours * 60 + minutes;
+  };
+  const start = toMinutes(store.businessHoursStart || '08:00');
+  const end = toMinutes(store.businessHoursEnd || '20:00');
+  const current = local.getUTCHours() * 60 + local.getUTCMinutes();
+  const scheduledDay = days.includes(local.getUTCDay());
+  const withinHours = start <= end ? current >= start && current < end : current >= start || current < end;
+  const openNow = Boolean(store.open) && scheduledDay && withinHours;
+  let nextOpening = null;
+  if (!openNow) {
+    const [openingHour, openingMinute] = String(store.businessHoursStart || '08:00').split(':').map(Number);
+    for (let addDays = 0; addDays <= 7; addDays += 1) {
+      const localCandidate = new Date(Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate() + addDays, openingHour, openingMinute));
+      if (!days.includes(localCandidate.getUTCDay())) continue;
+      const candidate = new Date(localCandidate.getTime() + offsetMs);
+      if (candidate > now) { nextOpening = candidate.toISOString(); break; }
+    }
+  }
+  return {
+    openNow,
+    manuallyOpen: Boolean(store.open),
+    outsideBusinessHours: Boolean(store.open) && !openNow,
+    acceptsAfterHours: Boolean(store.acceptAfterHours),
+    nextOpening
   };
 }
 
@@ -232,7 +269,8 @@ export async function getStoreBySlug(slug) {
 export async function updateStoreSettings(id, input) {
   await query(`UPDATE stores SET minimum_order=$1, delivery_fee=$2, free_delivery_above=$3,
     support_phone=$4, cancellation_window_minutes=$5, is_open=$6, enable_pickup_scheduling=$7, pickup_slots=$8,
-    disabled_categories=$9, disable_promotions=$10 WHERE id=$11`,
+    disabled_categories=$9, disable_promotions=$10, business_hours_start=$11, business_hours_end=$12,
+    business_days=$13, accept_after_hours=$14 WHERE id=$15`,
   [
     input.minimumOrder,
     input.deliveryFee,
@@ -244,6 +282,10 @@ export async function updateStoreSettings(id, input) {
     String(input.pickupSlots || '').trim() || '08:00 - 10:00, 10:00 - 12:00, 12:00 - 14:00, 14:00 - 16:00, 16:00 - 18:00, 18:00 - 20:00',
     String(input.disabledCategories || '').trim(),
     input.disablePromotions ? 1 : 0,
+    input.businessHoursStart || '08:00',
+    input.businessHoursEnd || '20:00',
+    input.businessDays || '1,2,3,4,5,6',
+    input.acceptAfterHours !== false ? 1 : 0,
     id
   ]);
   return getStore(id);
@@ -438,6 +480,20 @@ export async function registerPushDevice(storeId, input) {
 export async function listActivePushDevices(storeId) {
   const rows = (await query('SELECT token,customer_phone FROM push_devices WHERE store_id=$1 AND active=1 ORDER BY last_seen_at DESC', [storeId])).rows;
   return rows.map(row => ({ token: row.token, customerPhone: row.customer_phone }));
+}
+
+export async function pushDeviceSummary(storeId) {
+  const row = (await query(`SELECT
+    COUNT(*) FILTER (WHERE active=1)::int AS installed_devices,
+    COUNT(*) FILTER (WHERE active=1 AND last_seen_at::timestamptz >= NOW()-INTERVAL '15 minutes')::int AS online_devices,
+    COUNT(*) FILTER (WHERE active=1 AND last_seen_at::timestamptz >= NOW()-INTERVAL '24 hours')::int AS seen_today
+    FROM push_devices WHERE store_id=$1`, [storeId])).rows[0];
+  return {
+    installedDevices: Number(row.installed_devices || 0),
+    onlineDevices: Number(row.online_devices || 0),
+    seenToday: Number(row.seen_today || 0),
+    onlineWindowMinutes: 15
+  };
 }
 
 export async function listPushAutomations(storeId) {
@@ -1058,22 +1114,51 @@ export async function listCustomers(storeId, search = '') {
 }
 
 export async function storeReports(storeId) {
-  const [today, daily, statuses, hours, customers] = await Promise.all([
+  const [today, daily, statuses, hours, customers, periods, topProducts, monthly] = await Promise.all([
     query(`SELECT COUNT(*)::int AS orders,
       COALESCE(SUM(CASE WHEN status!='CANCELLED' THEN total ELSE 0 END),0)::float8 AS revenue,
       COALESCE(AVG(CASE WHEN status!='CANCELLED' THEN total END),0)::float8 AS average_ticket,
       COUNT(*) FILTER (WHERE status='CANCELLED')::int AS cancellations
-      FROM orders WHERE store_id=$1 AND created_at::timestamptz::date=CURRENT_DATE`, [storeId]),
+      FROM orders WHERE store_id=$1
+      AND (created_at::timestamptz AT TIME ZONE 'America/Fortaleza')::date=(NOW() AT TIME ZONE 'America/Fortaleza')::date`, [storeId]),
     query(`SELECT day::date::text AS date,COUNT(orders.id)::int AS orders,
       COALESCE(SUM(CASE WHEN orders.status!='CANCELLED' THEN orders.total ELSE 0 END),0)::float8 AS revenue
-      FROM generate_series(CURRENT_DATE-INTERVAL '6 days',CURRENT_DATE,INTERVAL '1 day') day
-      LEFT JOIN orders ON orders.store_id=$1 AND orders.created_at::timestamptz::date=day::date GROUP BY day ORDER BY day`, [storeId]),
+      FROM generate_series((NOW() AT TIME ZONE 'America/Fortaleza')::date-INTERVAL '6 days',(NOW() AT TIME ZONE 'America/Fortaleza')::date,INTERVAL '1 day') day
+      LEFT JOIN orders ON orders.store_id=$1 AND (orders.created_at::timestamptz AT TIME ZONE 'America/Fortaleza')::date=day::date GROUP BY day ORDER BY day`, [storeId]),
     query('SELECT status,COUNT(*)::int AS total FROM orders WHERE store_id=$1 GROUP BY status', [storeId]),
-    query(`SELECT to_char(created_at::timestamptz,'HH24') AS hour,COUNT(*)::int AS total
+    query(`SELECT to_char(created_at::timestamptz AT TIME ZONE 'America/Fortaleza','HH24') AS hour,COUNT(*)::int AS total
       FROM orders WHERE store_id=$1 GROUP BY hour ORDER BY hour`, [storeId]),
-    listCustomers(storeId)
+    listCustomers(storeId),
+    query(`SELECT
+      COUNT(*) FILTER (WHERE status!='CANCELLED' AND (created_at::timestamptz AT TIME ZONE 'America/Fortaleza')::date=(NOW() AT TIME ZONE 'America/Fortaleza')::date)::int AS today_orders,
+      COALESCE(SUM(total) FILTER (WHERE status!='CANCELLED' AND (created_at::timestamptz AT TIME ZONE 'America/Fortaleza')::date=(NOW() AT TIME ZONE 'America/Fortaleza')::date),0)::float8 AS today_revenue,
+      COUNT(*) FILTER (WHERE status!='CANCELLED' AND date_trunc('week',created_at::timestamptz AT TIME ZONE 'America/Fortaleza')=date_trunc('week',NOW() AT TIME ZONE 'America/Fortaleza'))::int AS week_orders,
+      COALESCE(SUM(total) FILTER (WHERE status!='CANCELLED' AND date_trunc('week',created_at::timestamptz AT TIME ZONE 'America/Fortaleza')=date_trunc('week',NOW() AT TIME ZONE 'America/Fortaleza')),0)::float8 AS week_revenue,
+      COUNT(*) FILTER (WHERE status!='CANCELLED' AND date_trunc('month',created_at::timestamptz AT TIME ZONE 'America/Fortaleza')=date_trunc('month',NOW() AT TIME ZONE 'America/Fortaleza'))::int AS month_orders,
+      COALESCE(SUM(total) FILTER (WHERE status!='CANCELLED' AND date_trunc('month',created_at::timestamptz AT TIME ZONE 'America/Fortaleza')=date_trunc('month',NOW() AT TIME ZONE 'America/Fortaleza')),0)::float8 AS month_revenue,
+      COUNT(*) FILTER (WHERE status!='CANCELLED' AND date_trunc('year',created_at::timestamptz AT TIME ZONE 'America/Fortaleza')=date_trunc('year',NOW() AT TIME ZONE 'America/Fortaleza'))::int AS year_orders,
+      COALESCE(SUM(total) FILTER (WHERE status!='CANCELLED' AND date_trunc('year',created_at::timestamptz AT TIME ZONE 'America/Fortaleza')=date_trunc('year',NOW() AT TIME ZONE 'America/Fortaleza')),0)::float8 AS year_revenue
+      FROM orders WHERE store_id=$1`, [storeId]),
+    query(`SELECT oi.product_id,oi.name,oi.unit,SUM(oi.quantity)::float8 AS quantity,
+      SUM(oi.total)::float8 AS revenue,COUNT(DISTINCT oi.order_id)::int AS orders
+      FROM order_items oi JOIN orders o ON o.store_id=oi.store_id AND o.id=oi.order_id
+      WHERE oi.store_id=$1 AND o.status!='CANCELLED' AND o.created_at::timestamptz>=NOW()-INTERVAL '30 days'
+      GROUP BY oi.product_id,oi.name,oi.unit ORDER BY revenue DESC,quantity DESC LIMIT 10`, [storeId]),
+    query(`SELECT month::date::text AS month,COUNT(o.id)::int AS orders,
+      COALESCE(SUM(CASE WHEN o.status!='CANCELLED' THEN o.total ELSE 0 END),0)::float8 AS revenue
+      FROM generate_series(date_trunc('month',CURRENT_DATE)-INTERVAL '11 months',date_trunc('month',CURRENT_DATE),INTERVAL '1 month') month
+      LEFT JOIN orders o ON o.store_id=$1 AND date_trunc('month',o.created_at::timestamptz AT TIME ZONE 'America/Fortaleza')=month
+      GROUP BY month ORDER BY month`, [storeId])
   ]);
   const labels = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sab'];
+  const current = periods.rows[0];
+  const localNow = new Date(Date.now() - 3 * 60 * 60 * 1000);
+  const elapsed = { today: 1, week: Math.max(1, (localNow.getUTCDay() || 7)), month: localNow.getUTCDate(), year: Math.max(1, Math.floor((localNow - Date.UTC(localNow.getUTCFullYear(), 0, 0)) / 86400000)) };
+  const period = key => {
+    const orders = Number(current[`${key}_orders`] || 0);
+    const revenue = Number(current[`${key}_revenue`] || 0);
+    return { orders, revenue, averageTicket: orders ? revenue / orders : 0, averagePerDay: revenue / elapsed[key] };
+  };
   return {
     today: {
       orders: Number(today.rows[0].orders), revenue: Number(today.rows[0].revenue),
@@ -1082,7 +1167,10 @@ export async function storeReports(storeId) {
     days: daily.rows.map(row => ({ ...row, orders: Number(row.orders), revenue: Number(row.revenue), label: labels[new Date(`${row.date}T12:00:00Z`).getUTCDay()] })),
     statuses: Object.fromEntries(statuses.rows.map(row => [row.status, Number(row.total)])),
     busyHours: hours.rows.map(row => ({ hour: row.hour, total: Number(row.total) })),
-    topCustomers: customers.slice(0, 5)
+    topCustomers: customers.slice(0, 5),
+    periods: { today: period('today'), week: period('week'), month: period('month'), year: period('year') },
+    topProducts: topProducts.rows.map(row => ({ productId: row.product_id, name: row.name, unit: row.unit, quantity: Number(row.quantity), revenue: Number(row.revenue), orders: Number(row.orders) })),
+    months: monthly.rows.map(row => ({ month: row.month, orders: Number(row.orders), revenue: Number(row.revenue) }))
   };
 }
 

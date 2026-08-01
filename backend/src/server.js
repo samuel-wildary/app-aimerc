@@ -40,6 +40,7 @@ import {
   listProducts,
   countProducts,
   listActivePushDevices,
+  pushDeviceSummary,
   listPendingPushCampaigns,
   listPushCampaigns,
   listPushAutomations,
@@ -48,6 +49,7 @@ import {
   listIntegrationOverview,
   listDeliveryZones,
   storeReports,
+  storeOperatingStatus,
   runDuePushAutomations,
   runPushAutomationNow,
   registerPushDevice,
@@ -358,7 +360,7 @@ app.get('/api/public/stores/:slug/catalog', asyncRoute(async (req, res) => {
     return (leftIndex < 0 ? 999 : leftIndex) - (rightIndex < 0 ? 999 : rightIndex) || left.localeCompare(right, 'pt-BR');
   });
   res.json({
-    store,
+    store: { ...store, operatingStatus: storeOperatingStatus(store) },
     categories,
     banners: await listBanners(store.id),
     promotions: products.filter(product => product.promo),
@@ -453,6 +455,10 @@ app.post('/api/public/stores/:slug/orders', asyncRoute(async (req, res) => {
   const store = await publicStore(req);
   await consumeOrderCreationQuota(req.ip);
   if (!store.open) throw new ApiError(409, 'Supermercado fechado no momento');
+  const operatingStatus = storeOperatingStatus(store);
+  if (!operatingStatus.openNow && !store.acceptAfterHours) {
+    throw new ApiError(409, 'Estamos fora do horario de funcionamento. Tente novamente no proximo horario de abertura.');
+  }
   const fulfillmentType = oneOf(req.body.fulfillmentType, ['DELIVERY', 'PICKUP'], 'Tipo de recebimento');
   const customer = normalizeCustomer(req.body.customer, fulfillmentType);
   if (!Array.isArray(req.body.items) || req.body.items.length === 0 || req.body.items.length > 100) throw new ApiError(400, 'Carrinho vazio ou invalido');
@@ -466,7 +472,7 @@ app.post('/api/public/stores/:slug/orders', asyncRoute(async (req, res) => {
     paymentMethod: oneOf(req.body.paymentMethod, ['CASH', 'CARD_ON_DELIVERY', 'PIX'], 'Pagamento'),
     changeFor: req.body.changeFor ? positiveNumber(req.body.changeFor, 'Troco') : null,
     notes: optionalText(req.body.notes, 500),
-    scheduledTo: req.body.scheduledTo || null,
+    scheduledTo: operatingStatus.openNow ? (req.body.scheduledTo || null) : operatingStatus.nextOpening,
     items
   });
   const { trackingToken, ...publicOrder } = order;
@@ -575,7 +581,7 @@ app.get('/api/reports/overview', requireAuth('STORE_MANAGER'), asyncRoute(async 
 
 app.get('/api/push-devices/summary', requireAuth('STORE_MANAGER'), asyncRoute(async (req, res) => {
   await managerStore(req);
-  res.json({ activeDevices: (await listActivePushDevices(req.user.storeId)).length, firebase: firebaseStatus() });
+  res.json({ ...(await pushDeviceSummary(req.user.storeId)), firebase: firebaseStatus() });
 }));
 
 app.patch('/api/store/settings', requireAuth('STORE_MANAGER'), asyncRoute(async (req, res) => {
@@ -590,7 +596,11 @@ app.patch('/api/store/settings', requireAuth('STORE_MANAGER'), asyncRoute(async 
     enablePickupScheduling: req.body.enablePickupScheduling !== false,
     pickupSlots: req.body.pickupSlots,
     disabledCategories: req.body.disabledCategories || '',
-    disablePromotions: Boolean(req.body.disablePromotions)
+    disablePromotions: Boolean(req.body.disablePromotions),
+    businessHoursStart: /^([01]\d|2[0-3]):[0-5]\d$/.test(req.body.businessHoursStart || '') ? req.body.businessHoursStart : '08:00',
+    businessHoursEnd: /^([01]\d|2[0-3]):[0-5]\d$/.test(req.body.businessHoursEnd || '') ? req.body.businessHoursEnd : '20:00',
+    businessDays: String(req.body.businessDays || '1,2,3,4,5,6').split(',').map(Number).filter(day => day >= 0 && day <= 6).join(','),
+    acceptAfterHours: req.body.acceptAfterHours !== false
   });
   await writeAuditLog({ storeId: req.user.storeId, actorId: req.user.sub, action: 'STORE_SETTINGS_UPDATED', entityType: 'STORE', entityId: req.user.storeId });
   notifyCatalogUpdated(req.user.storeId);

@@ -69,6 +69,7 @@ export class ApiClient {
   }
   customers(query = '') { return this.request(`/customers${query ? `?q=${encodeURIComponent(query)}` : ''}`); }
   reports() { return this.request('/reports/overview'); }
+  pushDeviceSummary() { return this.request('/push-devices/summary'); }
   banners() { return this.request('/banners'); }
   async uploadBannerImage(file) {
     const response = await fetch(`${API_URL}/banners/images`, {
