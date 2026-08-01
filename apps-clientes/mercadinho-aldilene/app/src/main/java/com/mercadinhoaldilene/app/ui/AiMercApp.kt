@@ -41,6 +41,8 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.HeadsetMic
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.LocalShipping
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Person
@@ -428,7 +430,7 @@ private fun ProductDetailScreen(product: Product, viewModel: AiMercViewModel, ba
                     Spacer(Modifier.height(12.dp))
                     product.oldPrice?.let { Text(currency.format(it * if (product.soldByWeight) product.quantityStep else 1.0), color = Muted, fontSize = 13.sp, textDecoration = TextDecoration.LineThrough) }
                     Text(currency.format(saleDisplayPrice(product)), color = Forest, fontSize = 28.sp, fontWeight = FontWeight.Black)
-                    Text("Valor por ${saleDisplayMeasure(product)} Â· produto disponivel", color = Muted, fontSize = 12.sp, modifier = Modifier.padding(top = 3.dp))
+                    Text("Valor por ${saleDisplayMeasure(product)} · produto disponivel", color = Muted, fontSize = 12.sp, modifier = Modifier.padding(top = 3.dp))
                     if (product.soldByWeight) Text("Escolha o peso desejado. O peso e o valor podem variar apos a separacao.", color = Muted, fontSize = 11.sp, lineHeight = 15.sp, modifier = Modifier.padding(top = 8.dp))
                 }
             }
@@ -472,7 +474,7 @@ private fun MainNavigation(screen: Screen, hasActiveOrder: Boolean, onChange: (S
 }
 
 private val orderStatusLabels = mapOf(
-    "RECEIVED" to "Pedido recebido",
+    "RECEIVED" to "Aguardando separação",
     "PICKING" to "Separando produtos",
     "READY" to "Pedido pronto",
     "OUT_FOR_DELIVERY" to "Saiu para entrega",
@@ -491,50 +493,78 @@ private fun OrdersScreen(viewModel: AiMercViewModel, modifier: Modifier) {
             viewModel.ordersLoading && viewModel.orders.isEmpty() -> LoadingScreen()
             viewModel.orders.isEmpty() -> PlaceholderScreen("Nenhum pedido neste aparelho", "Depois de confirmar uma compra, o acompanhamento aparece automaticamente aqui.", Icons.AutoMirrored.Filled.ReceiptLong, Modifier.fillMaxSize())
             else -> LazyColumn(contentPadding = PaddingValues(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                items(viewModel.orders, key = { it.id }) { order -> CustomerOrderCard(order) { viewModel.cancelOrder(order) } }
+                val currentOrderId = viewModel.orders.firstOrNull { it.status !in setOf("DONE", "CANCELLED") }?.id
+                items(viewModel.orders, key = { it.id }) { order ->
+                    CustomerOrderCard(
+                        order = order,
+                        initiallyExpanded = order.id == currentOrderId,
+                        onCancel = { viewModel.cancelOrder(order) }
+                    )
+                }
             }
         }
     }
 }
 
 @Composable
-private fun CustomerOrderCard(order: CustomerOrder, onCancel: () -> Unit) {
+private fun CustomerOrderCard(order: CustomerOrder, initiallyExpanded: Boolean, onCancel: () -> Unit) {
     val context = LocalContext.current
     var confirmCancel by rememberSaveable(order.id) { mutableStateOf(false) }
+    var expanded by rememberSaveable(order.id, initiallyExpanded) { mutableStateOf(initiallyExpanded) }
     val cancelled = order.status == "CANCELLED"
     Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = Color.White), elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)) {
         Column(Modifier.padding(16.dp)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
-                Column { Text("#${order.id}", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold); Text(orderStatusLabels[order.status] ?: order.status, color = if (cancelled) Color(0xFFC64A4A) else Forest, fontWeight = FontWeight.Black, fontSize = 18.sp, modifier = Modifier.padding(top = 3.dp)) }
-                Column(horizontalAlignment = Alignment.End) { Text(currency.format(order.total), fontWeight = FontWeight.Black, color = Ink); Text(formatOrderDate(order.createdAt), color = Muted, fontSize = 10.sp) }
+            Row(
+                Modifier.fillMaxWidth().clickable { expanded = !expanded },
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("#${order.id}", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    Text(orderStatusLabels[order.status] ?: order.status, color = if (cancelled) Color(0xFFC64A4A) else Forest, fontWeight = FontWeight.Black, fontSize = 18.sp, modifier = Modifier.padding(top = 3.dp))
+                }
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(currency.format(order.total), fontWeight = FontWeight.Black, color = Ink)
+                    Text(formatOrderDate(order.createdAt), color = Muted, fontSize = 10.sp)
+                }
+                Spacer(Modifier.width(8.dp))
+                Icon(
+                    if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                    contentDescription = if (expanded) "Recolher pedido" else "Mostrar pedido",
+                    tint = Muted
+                )
             }
-            if (!cancelled) { Spacer(Modifier.height(17.dp)); OrderProgress(order.status) }
-            Spacer(Modifier.height(16.dp)); order.items.take(3).forEach { item -> Row(Modifier.fillMaxWidth().padding(vertical = 3.dp)) { Text("${formatQuantity(item.quantity)} ${item.unit}", color = Color(0xFF0A9066), fontSize = 11.sp, fontWeight = FontWeight.Black, modifier = Modifier.width(58.dp)); Text(item.name, color = Ink, fontSize = 12.sp, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis) } }
-            if (order.items.size > 3) Text("+ ${order.items.size - 3} itens", color = Muted, fontSize = 10.sp, modifier = Modifier.padding(top = 4.dp))
-            if (!cancelled && order.cancellation != null) {
-                Spacer(Modifier.height(12.dp))
-                if (order.cancellation.eligible) {
-                    if (confirmCancel) {
-                        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Color(0xFFFFF0F0)).padding(12.dp)) {
-                            Text("Cancelar este pedido?", color = Color(0xFF9A3535), fontWeight = FontWeight.Black)
-                            Text("Os itens voltarao ao estoque da loja.", color = Color(0xFF8B5A5A), fontSize = 11.sp, modifier = Modifier.padding(top = 3.dp))
-                            Row(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                TextButton(onClick = { confirmCancel = false }, modifier = Modifier.weight(1f)) { Text("Manter pedido") }
-                                Button(onClick = onCancel, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD94B4B), contentColor = Color.White)) { Text("Confirmar") }
+            AnimatedVisibility(visible = expanded) {
+                Column {
+                    if (!cancelled) { Spacer(Modifier.height(17.dp)); OrderProgress(order.status) }
+                    Spacer(Modifier.height(16.dp)); order.items.take(3).forEach { item -> Row(Modifier.fillMaxWidth().padding(vertical = 3.dp)) { Text("${formatQuantity(item.quantity)} ${item.unit}", color = Color(0xFF0A9066), fontSize = 11.sp, fontWeight = FontWeight.Black, modifier = Modifier.width(58.dp)); Text(item.name, color = Ink, fontSize = 12.sp, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis) } }
+                    if (order.items.size > 3) Text("+ ${order.items.size - 3} itens", color = Muted, fontSize = 10.sp, modifier = Modifier.padding(top = 4.dp))
+                    if (!cancelled && order.cancellation != null) {
+                        Spacer(Modifier.height(12.dp))
+                        if (order.cancellation.eligible) {
+                            if (confirmCancel) {
+                                Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Color(0xFFFFF0F0)).padding(12.dp)) {
+                                    Text("Cancelar este pedido?", color = Color(0xFF9A3535), fontWeight = FontWeight.Black)
+                                    Text("Os itens voltarao ao estoque da loja.", color = Color(0xFF8B5A5A), fontSize = 11.sp, modifier = Modifier.padding(top = 3.dp))
+                                    Row(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        TextButton(onClick = { confirmCancel = false }, modifier = Modifier.weight(1f)) { Text("Manter pedido") }
+                                        Button(onClick = onCancel, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD94B4B), contentColor = Color.White)) { Text("Confirmar") }
+                                    }
+                                }
+                            } else {
+                                TextButton(onClick = { confirmCancel = true }, modifier = Modifier.fillMaxWidth()) { Text("Cancelar pedido", color = Color(0xFFC24242), fontWeight = FontWeight.Bold) }
                             }
+                        } else {
+                            TextButton(onClick = {
+                                val number = order.cancellation.supportPhone.filter { it.isDigit() }
+                                if (number.isNotBlank()) context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$number")))
+                            }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.Phone, null, tint = Forest, modifier = Modifier.size(16.dp)); Spacer(Modifier.width(6.dp)); Text("Precisa cancelar? Ligar para a central", color = Forest, fontWeight = FontWeight.Bold) }
+                            Text(order.cancellation.message, color = Muted, fontSize = 10.sp, lineHeight = 13.sp)
                         }
-                    } else {
-                        TextButton(onClick = { confirmCancel = true }, modifier = Modifier.fillMaxWidth()) { Text("Cancelar pedido", color = Color(0xFFC24242), fontWeight = FontWeight.Bold) }
                     }
-                } else {
-                    TextButton(onClick = {
-                        val number = order.cancellation.supportPhone.filter { it.isDigit() }
-                        if (number.isNotBlank()) context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$number")))
-                    }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.Phone, null, tint = Forest, modifier = Modifier.size(16.dp)); Spacer(Modifier.width(6.dp)); Text("Precisa cancelar? Ligar para a central", color = Forest, fontWeight = FontWeight.Bold) }
-                    Text(order.cancellation.message, color = Muted, fontSize = 10.sp, lineHeight = 13.sp)
+                    Spacer(Modifier.height(12.dp)); Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(11.dp)).background(Color(0xFFF3F7F4)).padding(11.dp), verticalAlignment = Alignment.CenterVertically) { Icon(if (order.fulfillmentType == "DELIVERY") Icons.Default.LocalShipping else Icons.Default.Storefront, null, tint = Forest, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(if (order.fulfillmentType == "DELIVERY") "Entrega · taxa ${currency.format(order.deliveryFee)}" else "Retirada no supermercado", color = Color(0xFF52615A), fontSize = 11.sp, fontWeight = FontWeight.Bold) }
                 }
             }
-            Spacer(Modifier.height(12.dp)); Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(11.dp)).background(Color(0xFFF3F7F4)).padding(11.dp), verticalAlignment = Alignment.CenterVertically) { Icon(if (order.fulfillmentType == "DELIVERY") Icons.Default.LocalShipping else Icons.Default.Storefront, null, tint = Forest, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(if (order.fulfillmentType == "DELIVERY") "Entrega Â· taxa ${currency.format(order.deliveryFee)}" else "Retirada no supermercado", color = Color(0xFF52615A), fontSize = 11.sp, fontWeight = FontWeight.Bold) }
         }
     }
 }
@@ -561,7 +591,7 @@ private fun ProfileScreen(viewModel: AiMercViewModel, modifier: Modifier) {
         item { Column(Modifier.fillMaxWidth().background(Forest).statusBarsPadding().padding(20.dp)) { Box(Modifier.size(58.dp).clip(CircleShape).background(Mint), contentAlignment = Alignment.Center) { Icon(Icons.Default.Person, null, tint = Forest, modifier = Modifier.size(30.dp)) }; Spacer(Modifier.height(13.dp)); Text(if (name.isBlank()) "Sua conta" else name, color = Color.White, fontSize = 25.sp, fontWeight = FontWeight.Black); Text("Dados usados para agilizar suas compras", color = Color(0xFFACCCC0), fontSize = 11.sp) } }
         item { Column(Modifier.padding(16.dp).fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Color.White).padding(16.dp)) { Text("Dados pessoais", fontSize = 18.sp, fontWeight = FontWeight.Black); Text("Voce pode alterar quando quiser.", color = Muted, fontSize = 11.sp, modifier = Modifier.padding(bottom = 14.dp)); AppField(name, { name = it; saved = false }, "Nome completo"); Spacer(Modifier.height(9.dp)); AppField(phone, { phone = it; saved = false }, "WhatsApp", KeyboardType.Phone); Spacer(Modifier.height(9.dp)); AppField(address, { address = it; saved = false }, "Endereco principal"); Button(onClick = { viewModel.saveProfile(name, phone, address); saved = true }, enabled = name.isNotBlank() && phone.isNotBlank(), modifier = Modifier.fillMaxWidth().height(50.dp).padding(top = 8.dp), shape = RoundedCornerShape(13.dp), colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Forest)) { Icon(Icons.Default.Check, null); Spacer(Modifier.width(6.dp)); Text(if (saved) "Dados salvos" else "Salvar meus dados", fontWeight = FontWeight.Black) } } }
         item { Row(Modifier.padding(horizontal = 16.dp).fillMaxWidth().clip(RoundedCornerShape(17.dp)).background(MintSoft).padding(16.dp), verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Default.HeadsetMic, null, tint = Forest, modifier = Modifier.size(26.dp)); Spacer(Modifier.width(12.dp)); Column(Modifier.weight(1f)) { Text("Precisa de ajuda?", fontWeight = FontWeight.Black, color = Forest); Text("Fale diretamente com o supermercado.", color = Color(0xFF587268), fontSize = 11.sp) }; Icon(Icons.Default.ChevronRight, null, tint = Forest) } }
-        item { Row(Modifier.padding(16.dp).fillMaxWidth(), horizontalArrangement = Arrangement.Center) { Text("Mercadinho Aldilene Â· praticidade & qualidade", color = Muted, fontSize = 10.sp) } }
+        item { Row(Modifier.padding(16.dp).fillMaxWidth(), horizontalArrangement = Arrangement.Center) { Text("Mercadinho Aldilene · praticidade & qualidade", color = Muted, fontSize = 10.sp) } }
     }
 }
 
@@ -660,7 +690,7 @@ private fun saleDisplayMeasure(product: Product): String =
 private fun formatOrderDate(value: String): String {
     if (value.length < 16) return value
     val date = value.substring(0, 10).split('-')
-    return "${date.getOrElse(2) { "" }}/${date.getOrElse(1) { "" }} Â· ${value.substring(11, 16)}"
+    return "${date.getOrElse(2) { "" }}/${date.getOrElse(1) { "" }} às ${value.substring(11, 16)}"
 }
 
 @Composable
