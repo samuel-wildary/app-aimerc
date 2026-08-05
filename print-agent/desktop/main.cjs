@@ -128,6 +128,9 @@ function buildLaunchAgentPlist() {
 }
 
 async function isAutoStartInstalled() {
+  if (process.platform === 'win32') {
+    return Boolean(app.getLoginItemSettings({ path: executablePath(), args: ['--background'] }).openAtLogin);
+  }
   if (process.platform !== 'darwin') return false;
   try {
     await fs.promises.access(launchAgentPath());
@@ -138,8 +141,17 @@ async function isAutoStartInstalled() {
 }
 
 async function installAutoStart() {
+  if (process.platform === 'win32') {
+    app.setLoginItemSettings({
+      openAtLogin: true,
+      path: executablePath(),
+      args: ['--background']
+    });
+    saveConfig({ ...loadConfig(), autoStart: true });
+    return true;
+  }
   if (process.platform !== 'darwin') {
-    throw new Error('Inicio automatico disponivel no macOS neste momento.');
+    throw new Error('Inicio automatico disponivel no Windows e macOS.');
   }
   const plist = buildLaunchAgentPlist();
   const target = launchAgentPath();
@@ -154,6 +166,15 @@ async function installAutoStart() {
 }
 
 async function uninstallAutoStart() {
+  if (process.platform === 'win32') {
+    app.setLoginItemSettings({
+      openAtLogin: false,
+      path: executablePath(),
+      args: ['--background']
+    });
+    saveConfig({ ...loadConfig(), autoStart: false });
+    return false;
+  }
   if (process.platform !== 'darwin') return false;
   const target = launchAgentPath();
   try {
@@ -163,7 +184,7 @@ async function uninstallAutoStart() {
     await fs.promises.unlink(target);
   } catch {}
   saveConfig({ ...loadConfig(), autoStart: false });
-  return true;
+  return false;
 }
 
 function createWindow() {

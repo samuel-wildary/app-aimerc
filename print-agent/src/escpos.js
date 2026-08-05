@@ -2,7 +2,12 @@ const ESC = '\x1b';
 const GS = '\x1d';
 
 function money(value) {
-  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(value || 0));
+  // Thermal printers use ASCII only. Intl BRL inserts a non-breaking space (R$\u00a09,90)
+  // which sanitize() would turn into "R$?9,90" on the slip.
+  const amount = Number(value || 0);
+  const [reais, cents] = amount.toFixed(2).split('.');
+  const grouped = reais.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  return `R$ ${grouped},${cents}`;
 }
 
 function paymentLabel(method) {

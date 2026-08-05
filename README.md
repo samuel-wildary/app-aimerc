@@ -89,3 +89,8 @@ npm run migrate:legacy-sqlite
 ```
 
 A senha real nunca deve ser salva no GitHub. PostgreSQL e a fonte oficial de lojas, usuarios, produtos, imagens, pedidos, banners e campanhas. O volume `/app/data` e necessario apenas na primeira implantacao que importa os arquivos SQLite legados; depois da validacao, novas replicas dependem somente do PostgreSQL.
+
+## Pedidos Agent (Windows)
+
+O painel da loja em **Integracao** baixa `AiMerc-Pedidos-Agent-Windows.zip`. O backend pode servir o arquivo localmente ou redirecionar para o release no GitHub (`AIMERC_PRINT_AGENT_DOWNLOAD_URL`).
+

@@ -663,6 +663,20 @@ app.patch('/api/store/settings', requireAuth('STORE_MANAGER'), asyncRoute(async 
   res.json(store);
 }));
 
+
+app.get('/api/store/print-agent/download', requireAuth('STORE_MANAGER'), asyncRoute(async (req, res) => {
+  const installerPath = path.resolve(
+    process.env.AIMERC_PRINT_AGENT_INSTALLER_PATH
+      || path.join(process.cwd(), 'data', 'downloads', 'AiMerc-Pedidos-Agent-Windows.zip')
+  );
+  const installerAvailable = await fs.access(installerPath).then(() => true).catch(() => false);
+  if (installerAvailable) return res.download(installerPath, 'AiMerc-Pedidos-Agent-Windows.zip');
+
+  const remoteUrl = String(process.env.AIMERC_PRINT_AGENT_DOWNLOAD_URL || '').trim();
+  if (remoteUrl) return res.redirect(302, remoteUrl);
+  throw new ApiError(404, 'Pacote do Pedidos Agent ainda nao foi armazenado na VPS');
+}));
+
 app.get('/api/store/delivery-zones', requireAuth('STORE_MANAGER'), asyncRoute(async (req, res) => {
   await managerStore(req);
   res.json(await listDeliveryZones(req.user.storeId));

@@ -9,6 +9,7 @@ import {
   Check,
   CheckSquare,
   ChevronRight,
+  Download,
   CircleDollarSign,
   Clock3,
   Eye,
@@ -17,6 +18,7 @@ import {
   ImageOff,
   LayoutDashboard,
   Images,
+  Plug,
   LogOut,
   MapPin,
   Menu,
@@ -66,6 +68,7 @@ const navItems = [
   { id: 'overview', label: 'Visao geral', icon: LayoutDashboard },
   { id: 'orders', label: 'Pedidos', icon: ShoppingBasket },
   { id: 'catalog', label: 'Catalogo', icon: Boxes },
+  { id: 'integracao', label: 'Integracao', icon: Plug },
   { id: 'delivery', label: 'Entregas', icon: Truck },
   { id: 'customers', label: 'Clientes', icon: UsersRound },
   { id: 'reports', label: 'Relatorios', icon: BarChart3 },
@@ -1032,6 +1035,7 @@ const PRINT_AGENT_TEST_URL = 'http://127.0.0.1:4177/test-print';
 function AutoPrintPanel() {
   const [status, setStatus] = useState({ loading: true, online: false, detail: null, error: '' });
   const [testing, setTesting] = useState(false);
+  const [downloading, setDownloading] = useState(false);
 
   const check = useCallback(async () => {
     try {
@@ -1050,7 +1054,19 @@ function AutoPrintPanel() {
     return () => window.clearInterval(timer);
   }, [check]);
 
-  async function testPrint() {
+async function downloadInstaller() {
+  setDownloading(true);
+  try {
+    await api.downloadPrintAgent();
+    setStatus(current => ({ ...current, error: '' }));
+  } catch (error) {
+    setStatus(current => ({ ...current, error: error.message || 'Falha ao baixar o instalador' }));
+  } finally {
+    setDownloading(false);
+  }
+}
+
+async function testPrint() {
     setTesting(true);
     try {
       const response = await fetch(PRINT_AGENT_TEST_URL, { method: 'POST', signal: AbortSignal.timeout(10_000) });
@@ -1090,15 +1106,24 @@ function AutoPrintPanel() {
       </div>
       {status.error && <div className="form-error">{status.error}</div>}
       <div className="print-agent-actions">
+        <button type="button" className="secondary" onClick={downloadInstaller} disabled={downloading}><Download size={16} />{downloading ? 'Baixando...' : 'Baixar Pedidos Agent (Windows)'}</button>
         <button type="button" className="secondary" onClick={check} disabled={status.loading}><RefreshCw size={16} /> Atualizar status</button>
         <button type="button" className="primary" onClick={testPrint} disabled={!status.online || testing}><Printer size={16} />{testing ? 'Imprimindo...' : 'Testar impressao'}</button>
       </div>
       <ol className="print-agent-steps">
         <li>Abra o app <code>AiMerc Pedidos Agent</code>, conecte e ative o inicio automatico.</li>
-        <li>Pode fechar a janela: ele continua no fundo e volta quando o Mac ligar.</li>
+        <li>Pode fechar a janela: ele continua no fundo e volta quando o Windows ligar.</li>
         <li>Pedidos novos imprimem sozinhos na termica da rede.</li>
       </ol>
     </section>
+  );
+}
+
+function IntegracaoPanel() {
+  return (
+    <div className="integracao-grid">
+      <AutoPrintPanel />
+    </div>
   );
 }
 
@@ -1267,7 +1292,6 @@ function Storefront({ store, categories = [], deliveryZones = [], banners, campa
 
   return (
     <div className="storefront-grid">
-      <AutoPrintPanel />
       <section className="panel settings-panel">
         <div className="panel-heading"><div><p className="overline">Operacao comercial</p><h2>Taxas e funcionamento</h2></div><span className={`store-state ${settings.open ? 'open' : 'closed'}`}>{settings.open ? 'Loja aberta' : 'Loja fechada'}</span></div>
         <form className="settings-form" onSubmit={submitSettings}>
@@ -1617,6 +1641,7 @@ export default function App() {
     delivery: ['Entregas', 'Pedidos que saem da loja ate o cliente'],
     customers: ['Clientes', 'Historico, recorrencia e endereco de cada comprador'],
     reports: ['Relatorios', 'Vendas, ticket medio e clientes recorrentes'],
+    integracao: ['Integracao', 'Pedidos Agent Windows e impressao automatica na loja'],
     storefront: ['Loja & App', 'Taxas, funcionamento e vitrine do aplicativo']
   }[active];
 
@@ -1634,6 +1659,7 @@ export default function App() {
           {active === 'delivery' && <Delivery orders={orders} selected={selected} setSelected={setSelected} onAdvance={advance} busy={busy} />}
           {active === 'customers' && <Customers customers={customers} query={customerQuery} setQuery={setCustomerQuery} />}
           {active === 'reports' && <Reports report={report} devices={deviceSummary} />}
+          {active === 'integracao' && <IntegracaoPanel />}
           {active === 'storefront' && <Storefront store={summary?.store} categories={categories} deliveryZones={deliveryZones} banners={banners} campaigns={campaigns} automations={automations} onSaveSettings={saveSettings} onCreateBanner={createBanner} onUpdateBanner={updateBanner} onDeleteBanner={deleteBanner} onCreateCampaign={createCampaign} onSendCampaign={sendCampaign} onDeleteCampaign={deleteCampaign} onCreateAutomation={createAutomation} onToggleAutomation={toggleAutomation} onRunAutomation={runAutomation} onDeleteAutomation={deleteAutomation} />}
         </div>
       </main>

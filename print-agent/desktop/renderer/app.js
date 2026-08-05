@@ -33,7 +33,7 @@ function setMessage(text, type = '') {
 
 function renderService(flag) {
   serviceStatus.textContent = flag
-    ? 'Inicio automatico: ATIVO (sobe com o Mac e reinicia se cair).'
+    ? 'Inicio automatico: ATIVO (sobe com o Windows e fica na bandeja).'
     : 'Inicio automatico: desligado.';
 }
 
@@ -125,7 +125,7 @@ connectBtn.addEventListener('click', async () => {
     await window.aimercAgent.saveConfig(config);
     const status = await window.aimercAgent.connect(config);
     renderStatus(status);
-    setMessage('Servico ativo. Pode fechar a janela: ele continua no fundo e volta com o Mac.', 'ok');
+    setMessage('Servico ativo. Pode fechar a janela: ele continua no fundo e volta com o Windows.', 'ok');
   } catch (error) {
     setMessage(error.message || 'Falha ao conectar', 'error');
     connectBtn.disabled = false;

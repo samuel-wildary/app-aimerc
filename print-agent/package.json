@@ -10,6 +10,7 @@
     "health": "node --env-file-if-exists=.env src/index.js --health-only",
     "desktop": "electron .",
     "desktop:mac": "electron-packager . \"AiMerc Pedidos Agent\" --platform=darwin --arch=x64 --out=dist-desktop --overwrite --prune=true --ignore=\"dist($|/)\" --ignore=\"dist-desktop($|/)\" --ignore=\"\\.env$\"",
+    "desktop:windows": "node build-desktop-windows.mjs",
     "build:mac": "node build-mac.mjs",
     "build:windows": "node build-windows.mjs"
   },
