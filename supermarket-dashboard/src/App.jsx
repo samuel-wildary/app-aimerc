@@ -1054,19 +1054,19 @@ function AutoPrintPanel() {
     return () => window.clearInterval(timer);
   }, [check]);
 
-async function downloadInstaller() {
-  setDownloading(true);
-  try {
-    await api.downloadPrintAgent();
-    setStatus(current => ({ ...current, error: '' }));
-  } catch (error) {
-    setStatus(current => ({ ...current, error: error.message || 'Falha ao baixar o instalador' }));
-  } finally {
-    setDownloading(false);
+  async function downloadInstaller() {
+    setDownloading(true);
+    try {
+      await api.downloadPrintAgent();
+      setStatus(current => ({ ...current, error: '' }));
+    } catch (error) {
+      setStatus(current => ({ ...current, error: error.message || 'Falha ao baixar o instalador' }));
+    } finally {
+      setDownloading(false);
+    }
   }
-}
 
-async function testPrint() {
+  async function testPrint() {
     setTesting(true);
     try {
       const response = await fetch(PRINT_AGENT_TEST_URL, { method: 'POST', signal: AbortSignal.timeout(10_000) });
@@ -1083,21 +1083,22 @@ async function testPrint() {
 
   const printerLabel = status.detail?.printer?.host
     ? `${status.detail.printer.host}:${status.detail.printer.port || 9100}`
-    : 'IP da termica no .env do agent';
+    : 'IP da termica no app do agent';
 
   return (
     <section className="panel print-agent-panel">
       <div className="panel-heading">
         <div>
-          <p className="overline">Cupom na loja</p>
-          <h2>Impressao automatica</h2>
+          <p className="overline">PC da loja · Windows</p>
+          <h2>Pedidos Agent</h2>
         </div>
         <span className={`store-state ${status.online ? 'open' : 'closed'}`}>
           {status.loading ? 'Verificando...' : status.online ? 'Agent online' : 'Agent offline'}
         </span>
       </div>
       <p className="panel-description">
-        O app <strong>AiMerc Pedidos Agent</strong> no PC da loja abre uma janela com login, busca a termica na rede e imprime pedidos novos sozinho.
+        Baixe o app no computador da loja, entre com o mesmo e-mail/senha deste painel, escolha a termica e deixe rodando.
+        Pedidos novos imprimem sozinhos na guia de separacao.
       </p>
       <div className="print-agent-meta">
         <div><span>Status realtime</span><strong>{status.detail?.connected ? 'Conectado ao AiMerc' : status.online ? 'Aguardando conexao' : 'Offline'}</strong></div>
@@ -1106,14 +1107,14 @@ async function testPrint() {
       </div>
       {status.error && <div className="form-error">{status.error}</div>}
       <div className="print-agent-actions">
-        <button type="button" className="secondary" onClick={downloadInstaller} disabled={downloading}><Download size={16} />{downloading ? 'Baixando...' : 'Baixar Pedidos Agent (Windows)'}</button>
+        <button type="button" className="primary" onClick={downloadInstaller} disabled={downloading}><Download size={16} />{downloading ? 'Abrindo download...' : 'Baixar para Windows'}</button>
         <button type="button" className="secondary" onClick={check} disabled={status.loading}><RefreshCw size={16} /> Atualizar status</button>
-        <button type="button" className="primary" onClick={testPrint} disabled={!status.online || testing}><Printer size={16} />{testing ? 'Imprimindo...' : 'Testar impressao'}</button>
+        <button type="button" className="secondary" onClick={testPrint} disabled={!status.online || testing}><Printer size={16} />{testing ? 'Imprimindo...' : 'Testar impressao'}</button>
       </div>
       <ol className="print-agent-steps">
-        <li>Abra o app <code>AiMerc Pedidos Agent</code>, conecte e ative o inicio automatico.</li>
-        <li>Pode fechar a janela: ele continua no fundo e volta quando o Windows ligar.</li>
-        <li>Pedidos novos imprimem sozinhos na termica da rede.</li>
+        <li>Baixe o zip, extraia no PC da loja e abra <code>AiMerc Pedidos Agent.exe</code>.</li>
+        <li>Entre com o e-mail e senha deste painel, busque a termica (porta 9100) e conecte.</li>
+        <li>Pode fechar a janela: ele continua na bandeja e sobe com o Windows.</li>
       </ol>
     </section>
   );

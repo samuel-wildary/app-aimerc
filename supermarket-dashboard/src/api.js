@@ -100,27 +100,19 @@ export class ApiClient {
   runPushAutomation(id) { return this.request(`/push-automations/${id}/run`, { method: 'POST' }); }
   deletePushAutomation(id) { return this.request(`/push-automations/${id}`, { method: 'DELETE' }); }
   updateStatus(id, status) { return this.request(`/orders/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }); }
-async downloadPrintAgent() {
-  const response = await fetch(`${API_URL}/store/print-agent/download`, {
-    headers: {
-      ...(this.token ? { Authorization: `Bearer ${this.token}` } : {})
-    }
-  });
-  if (!response.ok) {
-    const data = await response.json().catch(() => ({}));
-    throw new Error(data.error || 'Nao foi possivel baixar o Pedidos Agent');
+  async downloadPrintAgent() {
+    const data = await this.request('/store/print-agent/download');
+    const url = String(data?.url || '').trim();
+    if (!url) throw new Error('URL de download indisponivel');
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.rel = 'noopener noreferrer';
+    anchor.target = '_blank';
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    return data;
   }
-  const blob = await response.blob();
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = 'AiMerc-Pedidos-Agent-Windows.zip';
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  URL.revokeObjectURL(url);
-}
-
   createDemoOrder(items) {
     return this.request('/public/stores/aimerc-demo/orders', {
       method: 'POST',
