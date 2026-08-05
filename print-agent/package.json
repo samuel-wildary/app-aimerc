@@ -1,0 +1,14 @@
+{
+  "name": "aimerc-print-agent",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node --env-file-if-exists=.env src/index.js",
+    "test-print": "node --env-file-if-exists=.env src/index.js --test-print",
+    "health": "node --env-file-if-exists=.env src/index.js --health-only"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

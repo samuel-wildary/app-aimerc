@@ -325,7 +325,7 @@ function OrdersPanel({ orders, selected, setSelected, title = 'Painel de pedidos
         <div>
           <p className="overline">Fluxo da loja</p>
           <h2>{title}</h2>
-          <p className="kanban-help">Clique no card para ver os detalhes. Use o botao da etapa para avancar sem abrir o modal.</p>
+          <p className="kanban-help">Clique no card para ver os detalhes. Use o botao da etapa para avancar sem abrir o modal. Cupom automatico: rode o Print Agent no PC da loja (Loja & App).</p>
         </div>
         <span className="counter">{activeOrders.length}</span>
       </div>
@@ -1026,6 +1026,82 @@ function PushAutomations({ automations, onCreate, onToggle, onRun, onDelete }) {
   </section>;
 }
 
+const PRINT_AGENT_HEALTH_URL = 'http://127.0.0.1:4177/health';
+const PRINT_AGENT_TEST_URL = 'http://127.0.0.1:4177/test-print';
+
+function AutoPrintPanel() {
+  const [status, setStatus] = useState({ loading: true, online: false, detail: null, error: '' });
+  const [testing, setTesting] = useState(false);
+
+  const check = useCallback(async () => {
+    try {
+      const response = await fetch(PRINT_AGENT_HEALTH_URL, { signal: AbortSignal.timeout(2_500) });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.ok) throw new Error(data.error || 'Agent indisponivel');
+      setStatus({ loading: false, online: true, detail: data, error: '' });
+    } catch {
+      setStatus({ loading: false, online: false, detail: null, error: 'Print Agent offline neste PC' });
+    }
+  }, []);
+
+  useEffect(() => {
+    check();
+    const timer = window.setInterval(check, 15_000);
+    return () => window.clearInterval(timer);
+  }, [check]);
+
+  async function testPrint() {
+    setTesting(true);
+    try {
+      const response = await fetch(PRINT_AGENT_TEST_URL, { method: 'POST', signal: AbortSignal.timeout(10_000) });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.ok) throw new Error(data.error || 'Falha ao imprimir teste');
+      setStatus(current => ({ ...current, error: '' }));
+    } catch (error) {
+      setStatus(current => ({ ...current, error: error.message || 'Falha ao imprimir teste' }));
+    } finally {
+      setTesting(false);
+      check();
+    }
+  }
+
+  const printerLabel = status.detail?.printer?.host
+    ? `${status.detail.printer.host}:${status.detail.printer.port || 9100}`
+    : 'IP da termica no .env do agent';
+
+  return (
+    <section className="panel print-agent-panel">
+      <div className="panel-heading">
+        <div>
+          <p className="overline">Cupom na loja</p>
+          <h2>Impressao automatica</h2>
+        </div>
+        <span className={`store-state ${status.online ? 'open' : 'closed'}`}>
+          {status.loading ? 'Verificando...' : status.online ? 'Agent online' : 'Agent offline'}
+        </span>
+      </div>
+      <p className="panel-description">
+        O navegador nao imprime sozinho. No PC da loja rode o <strong>AiMerc Print Agent</strong>: ele escuta pedidos novos e manda o cupom direto na termica de rede (porta 9100), sem confirmacao.
+      </p>
+      <div className="print-agent-meta">
+        <div><span>Status realtime</span><strong>{status.detail?.connected ? 'Conectado ao AiMerc' : status.online ? 'Aguardando conexao' : 'Offline'}</strong></div>
+        <div><span>Impressora</span><strong>{printerLabel}</strong></div>
+        <div><span>Loja no cupom</span><strong>{status.detail?.storeName || '—'}</strong></div>
+      </div>
+      {status.error && <div className="form-error">{status.error}</div>}
+      <div className="print-agent-actions">
+        <button type="button" className="secondary" onClick={check} disabled={status.loading}><RefreshCw size={16} /> Atualizar status</button>
+        <button type="button" className="primary" onClick={testPrint} disabled={!status.online || testing}><Printer size={16} />{testing ? 'Imprimindo...' : 'Testar impressao'}</button>
+      </div>
+      <ol className="print-agent-steps">
+        <li>Instale o Print Agent na pasta <code>print-agent</code> do AiMerc.</li>
+        <li>Configure <code>PRINTER_HOST</code> (IP da termica) e o login do gestor no <code>.env</code>.</li>
+        <li>Execute <code>npm start</code> e deixe o agent rodando (inicie com o Windows).</li>
+      </ol>
+    </section>
+  );
+}
+
 function Storefront({ store, categories = [], deliveryZones = [], banners, campaigns, automations, onSaveSettings, onCreateBanner, onUpdateBanner, onDeleteBanner, onCreateCampaign, onSendCampaign, onDeleteCampaign, onCreateAutomation, onToggleAutomation, onRunAutomation, onDeleteAutomation }) {
   const [settings, setSettings] = useState({
     minimumOrder: store?.minimumOrder ?? 0,
@@ -1191,6 +1267,7 @@ function Storefront({ store, categories = [], deliveryZones = [], banners, campa
 
   return (
     <div className="storefront-grid">
+      <AutoPrintPanel />
       <section className="panel settings-panel">
         <div className="panel-heading"><div><p className="overline">Operacao comercial</p><h2>Taxas e funcionamento</h2></div><span className={`store-state ${settings.open ? 'open' : 'closed'}`}>{settings.open ? 'Loja aberta' : 'Loja fechada'}</span></div>
         <form className="settings-form" onSubmit={submitSettings}>
