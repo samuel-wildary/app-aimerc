@@ -183,7 +183,7 @@ async function synchronize() {
 
 async function main() {
   if (process.argv.includes('--version')) {
-    console.log('AiMerc Sync Agent 1.1.5');
+    console.log('AiMerc Sync Agent 1.1.6');
     return;
   }
   const isPackagedExecutable = path.extname(process.execPath).toLowerCase() === '.exe'
@@ -215,7 +215,7 @@ async function main() {
     firebirdTimeoutMs: Math.max(30_000, Number(process.env.FIREBIRD_TIMEOUT_SECONDS || 300) * 1_000),
     interval: Math.max(30, Number(process.env.SYNC_INTERVAL_SECONDS) || 300),
     batchSize: Math.max(50, Math.min(1_000, Number(process.env.SYNC_BATCH_SIZE) || 500)),
-    version: String(process.env.AGENT_VERSION || '1.1.5')
+    version: String(process.env.AGENT_VERSION || '1.1.6')
   };
   dataDirectory = path.resolve(process.env.AIMERC_DATA_DIR || path.join(path.dirname(configPath), 'data'));
   queuePath = path.join(dataDirectory, 'pending-products.json');
@@ -229,6 +229,18 @@ async function main() {
     await synchronize();
     setTimeout(runScheduled, config.interval * 1_000);
   };
+  // Heartbeat a cada 60s, separado do sync (que pode ser 5+ min).
+  // Janela ONLINE no backend continua 3 min: offline real aparece rapido.
+  const runHeartbeat = async () => {
+    try {
+      await heartbeat();
+    } catch (error) {
+      await log('error', { ok: false, event: 'heartbeat', error: error.message }).catch(() => {});
+    } finally {
+      setTimeout(runHeartbeat, 60_000);
+    }
+  };
+  runHeartbeat();
   await runScheduled();
 }
 
