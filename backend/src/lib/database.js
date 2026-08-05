@@ -803,10 +803,17 @@ export async function recordStoreIntegrationSync(storeId, status, message) {
     [storeId, isoNow(), status, String(message || '').slice(0, 500)]);
 }
 
-function mapIntegrationAgent(row) {
+function mapIntegrationAgent(row, options = {}) {
   if (!row) return null;
   const lastSeen = row.last_seen_at ? new Date(row.last_seen_at) : null;
-  const online = lastSeen && Date.now() - lastSeen.getTime() < 3 * 60_000;
+  // Agentes antigos so fazem heartbeat no ciclo de sync. Janela = 2x o intervalo + 30s
+  // (minimo 3 min). Assim nao fica falso OFFLINE entre syncs; offline real ainda aparece.
+  const syncIntervalSeconds = Math.max(
+    30,
+    Number(options.syncIntervalSeconds ?? row.sync_interval_seconds) || 300
+  );
+  const onlineWindowMs = Math.max(3 * 60_000, (syncIntervalSeconds * 2 + 30) * 1_000);
+  const online = lastSeen && Date.now() - lastSeen.getTime() < onlineWindowMs;
   return {
     id: row.id,
     storeId: row.store_id,
@@ -817,7 +824,8 @@ function mapIntegrationAgent(row) {
     capabilities: row.capabilities || [],
     lastIp: row.last_ip || '',
     lastSeenAt: row.last_seen_at,
-    createdAt: row.created_at
+    createdAt: row.created_at,
+    onlineWindowSeconds: Math.round(onlineWindowMs / 1_000)
   };
 }
 
@@ -869,7 +877,7 @@ export async function listIntegrationOverview() {
       id: row.agent_id, store_id: row.store_id, name: row.agent_name, provider_code: row.provider_code,
       version: row.agent_version, status: row.agent_status, capabilities: row.agent_capabilities,
       last_ip: row.agent_last_ip, last_seen_at: row.agent_last_seen_at, created_at: row.agent_created_at
-    }) : null,
+    }, { syncIntervalSeconds: row.sync_interval_seconds }) : null,
     lastRun: runByStore.get(row.store_id) || null
   }));
 }
