@@ -22,3 +22,4 @@ queiroz-*.png
 .env.*
 !.env.example
 !.env.production.example
+**/dist-desktop/

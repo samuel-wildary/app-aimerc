@@ -1,56 +1,32 @@
-# AiMerc Pedidos Agent
+# AiMerc Pedidos Agent (app com janela)
 
-Um unico agent no PC/Mac da loja:
+Abre um programa com:
 
-1. Faz login na VPS com o **mesmo email/senha do painel web**
-2. Abre WebSocket e escuta **pedidos** daquela loja
-3. Se `PRINTER_HOST` estiver configurado, imprime o cupom sozinho na termica
+- e-mail e senha (iguais ao painel web)
+- busca de impressoras termicas na rede (porta 9100)
+- conectar / desconectar
+- impressao automatica dos pedidos novos
 
-## Configuracao (.env ao lado do executavel)
-
-```env
-AIMERC_API_URL=https://wildhub-aimerc-backend-app.5mos1l.easypanel.host/api
-AIMERC_EMAIL=gestor@sua-loja.com
-AIMERC_PASSWORD=sua_senha
-PRINTER_HOST=192.168.1.50
-PRINTER_PORT=9100
-AUTO_PRINT=true
-```
-
-- Email/senha: iguais ao login do Chrome no painel
-- `PRINTER_HOST`: IP da termica **na rede da loja** (nunca na VPS)
-
-## Mac (executavel)
+## Rodar no Mac (desenvolvimento)
 
 ```bash
 cd print-agent
 npm install
-npm run build:mac
-# sai em dist/AiMerc-Print-Agent
-cp .env.example dist/.env
-# edite dist/.env
-./dist/AiMerc-Print-Agent
+npm run desktop
 ```
 
-Teste de impressao:
+## Gerar o app no Desktop
 
 ```bash
-./dist/AiMerc-Print-Agent --test-print
+npm run desktop:mac
 ```
 
-## Windows
+Copia a pasta `AiMerc Pedidos Agent-darwin-x64/AiMerc Pedidos Agent.app` para o Desktop.
 
-No PC Windows:
+## Como usar
 
-```bash
-npm install
-npm run build:windows
-```
-
-Gera `dist/AiMerc-Print-Agent.exe`.
-
-## Health
-
-`http://127.0.0.1:4177/health`
-
-O painel (Loja & App) usa esse endereco para mostrar se o agent esta online.
+1. Abra o app
+2. Digite e-mail e senha do gestor
+3. Clique em **Buscar na rede** e escolha a termica
+4. Clique em **Conectar**
+5. Deixe aberto — pedidos novos imprimem sozinhos

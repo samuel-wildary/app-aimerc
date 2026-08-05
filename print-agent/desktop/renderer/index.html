@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AiMerc Pedidos Agent</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="shell">
+    <header>
+      <p class="overline">AiMerc</p>
+      <h1>Pedidos Agent</h1>
+      <p class="subtitle">Login da loja, escolha a termica e deixe conectado. Pedidos novos imprimem sozinhos.</p>
+    </header>
+
+    <section class="card">
+      <label>E-mail do painel
+        <input id="email" type="email" autocomplete="username" placeholder="gestor@sua-loja.com" />
+      </label>
+      <label>Senha
+        <input id="password" type="password" autocomplete="current-password" placeholder="Mesma senha do painel web" />
+      </label>
+      <label>API (normalmente nao mexe)
+        <input id="apiUrl" type="url" />
+      </label>
+    </section>
+
+    <section class="card">
+      <div class="row-head">
+        <strong>Impressora termica</strong>
+        <button id="scanBtn" type="button" class="ghost">Buscar na rede</button>
+      </div>
+      <p id="scanStatus" class="hint">Clique em buscar para listar impressoras com porta 9100 na sua rede.</p>
+      <label>Impressoras encontradas
+        <select id="printerSelect">
+          <option value="">Selecione uma impressora</option>
+        </select>
+      </label>
+      <label>Ou digite o IP manualmente
+        <input id="printerHost" type="text" placeholder="192.168.1.50" />
+      </label>
+      <button id="testBtn" type="button" class="secondary">Testar impressao</button>
+    </section>
+
+    <section class="card actions">
+      <div id="statusPill" class="pill offline">Desconectado</div>
+      <div class="buttons">
+        <button id="connectBtn" type="button" class="primary">Conectar</button>
+        <button id="disconnectBtn" type="button" class="ghost" disabled>Desconectar</button>
+      </div>
+      <p id="message" class="message"></p>
+    </section>
+
+    <section class="card logs">
+      <strong>Atividade</strong>
+      <div id="logList" class="log-list"></div>
+    </section>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>

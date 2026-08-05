@@ -1,16 +1,22 @@
 {
   "name": "aimerc-print-agent",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
   "type": "module",
+  "main": "desktop/main.cjs",
   "scripts": {
     "start": "node --env-file-if-exists=.env src/index.js",
     "test-print": "node --env-file-if-exists=.env src/index.js --test-print",
     "health": "node --env-file-if-exists=.env src/index.js --health-only",
+    "desktop": "electron .",
+    "desktop:mac": "electron-packager . \"AiMerc Pedidos Agent\" --platform=darwin --arch=x64 --out=dist-desktop --overwrite --prune=true --ignore=\"dist($|/)\" --ignore=\"dist-desktop($|/)\" --ignore=\"\\.env$\"",
     "build:mac": "node build-mac.mjs",
     "build:windows": "node build-windows.mjs"
   },
+  "dependencies": {},
   "devDependencies": {
+    "electron": "^37.2.0",
+    "electron-packager": "^17.1.2",
     "esbuild": "^0.25.0",
     "postject": "^1.0.0-alpha.6"
   },

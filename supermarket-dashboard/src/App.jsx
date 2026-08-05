@@ -1081,7 +1081,7 @@ function AutoPrintPanel() {
         </span>
       </div>
       <p className="panel-description">
-        Um unico <strong>AiMerc Pedidos Agent</strong> no PC da loja faz login com o mesmo email/senha do painel, escuta pedidos por WebSocket e imprime na termica local (IP:9100), sem confirmacao do navegador.
+        O app <strong>AiMerc Pedidos Agent</strong> no PC da loja abre uma janela com login, busca a termica na rede e imprime pedidos novos sozinho.
       </p>
       <div className="print-agent-meta">
         <div><span>Status realtime</span><strong>{status.detail?.connected ? 'Conectado ao AiMerc' : status.online ? 'Aguardando conexao' : 'Offline'}</strong></div>
@@ -1094,9 +1094,9 @@ function AutoPrintPanel() {
         <button type="button" className="primary" onClick={testPrint} disabled={!status.online || testing}><Printer size={16} />{testing ? 'Imprimindo...' : 'Testar impressao'}</button>
       </div>
       <ol className="print-agent-steps">
-        <li>No Mac/Windows da loja, rode o executavel <code>AiMerc-Pedidos-Agent</code>.</li>
-        <li>No <code>.env</code> ao lado do executavel: email/senha do painel + <code>PRINTER_HOST</code> (IP da termica).</li>
-        <li>Deixe o agent aberto; pedidos novos imprimem sozinhos.</li>
+        <li>Abra o app <code>AiMerc Pedidos Agent</code> no Mac/PC da loja.</li>
+        <li>Entre com o mesmo e-mail/senha do painel e busque a termica na rede.</li>
+        <li>Clique em Conectar e deixe o app aberto.</li>
       </ol>
     </section>
   );
