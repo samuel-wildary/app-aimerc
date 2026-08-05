@@ -482,6 +482,26 @@ export async function listActivePushDevices(storeId) {
   return rows.map(row => ({ token: row.token, customerPhone: row.customer_phone }));
 }
 
+function phoneDigits(value) {
+  return String(value || '').replace(/\D/g, '');
+}
+
+export async function listActivePushDevicesForPhone(storeId, phone) {
+  const target = phoneDigits(phone);
+  if (target.length < 8) return [];
+  const devices = await listActivePushDevices(storeId);
+  return devices.filter(device => {
+    const digits = phoneDigits(device.customerPhone);
+    if (digits.length < 8) return false;
+    return digits === target || digits.endsWith(target) || target.endsWith(digits);
+  });
+}
+
+export async function deactivatePushTokens(storeId, tokens) {
+  if (!tokens?.length) return;
+  await query('UPDATE push_devices SET active=0 WHERE store_id=$1 AND token=ANY($2::text[])', [storeId, tokens]);
+}
+
 export async function pushDeviceSummary(storeId) {
   const row = (await query(`SELECT
     COUNT(*) FILTER (WHERE active=1)::int AS installed_devices,

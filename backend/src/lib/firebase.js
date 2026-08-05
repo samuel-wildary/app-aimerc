@@ -34,13 +34,20 @@ export async function sendFirebaseNotification(tokens, campaign) {
   let successCount = 0;
   let failureCount = 0;
   const invalidTokens = [];
+  const data = {
+    campaignId: String(campaign.id || ''),
+    title: String(campaign.title || ''),
+    body: String(campaign.body || ''),
+    ...(campaign.data || {})
+  };
+  Object.keys(data).forEach(key => { data[key] = String(data[key] ?? ''); });
 
   for (let index = 0; index < tokens.length; index += 500) {
     const batch = tokens.slice(index, index + 500);
     const response = await messaging.sendEachForMulticast({
       tokens: batch,
       notification: { title: campaign.title, body: campaign.body },
-      data: { campaignId: campaign.id, title: campaign.title, body: campaign.body },
+      data,
       android: { priority: 'high', notification: { channelId: 'aimerc_offers', sound: 'default' } }
     });
     successCount += response.successCount;

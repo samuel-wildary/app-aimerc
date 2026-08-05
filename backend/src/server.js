@@ -40,6 +40,8 @@ import {
   listProducts,
   countProducts,
   listActivePushDevices,
+  listActivePushDevicesForPhone,
+  deactivatePushTokens,
   pushDeviceSummary,
   listPendingPushCampaigns,
   listPushCampaigns,
@@ -177,6 +179,58 @@ async function managerStore(req) {
   if (!store) throw new ApiError(404, 'Supermercado nao encontrado');
   if (!['TRIAL', 'ACTIVE'].includes(store.status)) throw new ApiError(403, 'Conta do supermercado bloqueada');
   return store;
+}
+
+function orderStatusPushCopy(store, order) {
+  const storeName = store?.name || 'Sua loja';
+  const orderLabel = `#${order.id}`;
+  const delivery = order.fulfillmentType === 'DELIVERY';
+  switch (order.status) {
+    case 'PICKING':
+      return { title: storeName, body: `Seu pedido ${orderLabel} esta sendo separado.` };
+    case 'READY':
+      return {
+        title: storeName,
+        body: delivery
+          ? `Seu pedido ${orderLabel} esta pronto e logo sai para entrega.`
+          : `Seu pedido ${orderLabel} esta pronto para retirada.`
+      };
+    case 'OUT_FOR_DELIVERY':
+      return { title: storeName, body: `Seu pedido ${orderLabel} saiu para entrega.` };
+    case 'DONE':
+      return {
+        title: storeName,
+        body: delivery
+          ? `Pedido ${orderLabel} entregue. Obrigado pela preferencia!`
+          : `Pedido ${orderLabel} retirado. Obrigado pela preferencia!`
+      };
+    case 'CANCELLED':
+      return { title: storeName, body: `Seu pedido ${orderLabel} foi cancelado.` };
+    default:
+      return null;
+  }
+}
+
+async function notifyCustomerOrderStatusPush(store, order) {
+  const copy = orderStatusPushCopy(store, order);
+  if (!copy || !firebaseStatus().configured) return;
+  try {
+    const devices = await listActivePushDevicesForPhone(store.id, order.customer?.phone);
+    if (!devices.length) return;
+    const result = await sendFirebaseNotification(devices.map(device => device.token), {
+      id: `order_${order.id}_${order.status}`,
+      title: copy.title,
+      body: copy.body,
+      data: {
+        type: 'ORDER_STATUS',
+        orderId: order.id,
+        status: order.status
+      }
+    });
+    if (result.invalidTokens?.length) await deactivatePushTokens(store.id, result.invalidTokens);
+  } catch (error) {
+    console.error('Falha ao enviar push de status do pedido', order.id, error.message);
+  }
 }
 
 function publicApiBase(req) {
@@ -513,10 +567,12 @@ app.get('/api/orders', requireAuth('STORE_MANAGER'), asyncRoute(async (req, res)
 
 app.patch('/api/orders/:id/status', requireAuth('STORE_MANAGER'), asyncRoute(async (req, res) => {
   const status = oneOf(req.body.status, ['PICKING', 'READY', 'OUT_FOR_DELIVERY', 'DONE', 'CANCELLED'], 'Status');
-  const order = await updateOrderStatus(req.user.storeId, req.params.id, status);
+  const store = await managerStore(req);
+  const order = await updateOrderStatus(store.id, req.params.id, status);
   if (!order) throw new ApiError(404, 'Pedido nao encontrado');
-  await writeAuditLog({ storeId: req.user.storeId, actorId: req.user.sub, action: 'ORDER_STATUS_CHANGED', entityType: 'ORDER', entityId: req.params.id, metadata: { status } });
-  notifyOrderUpdated(req.user.storeId, order);
+  await writeAuditLog({ storeId: store.id, actorId: req.user.sub, action: 'ORDER_STATUS_CHANGED', entityType: 'ORDER', entityId: req.params.id, metadata: { status } });
+  notifyOrderUpdated(store.id, order);
+  await notifyCustomerOrderStatusPush(store, order);
   res.json(order);
 }));
 
