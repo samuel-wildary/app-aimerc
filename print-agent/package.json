@@ -6,7 +6,13 @@
   "scripts": {
     "start": "node --env-file-if-exists=.env src/index.js",
     "test-print": "node --env-file-if-exists=.env src/index.js --test-print",
-    "health": "node --env-file-if-exists=.env src/index.js --health-only"
+    "health": "node --env-file-if-exists=.env src/index.js --health-only",
+    "build:mac": "node build-mac.mjs",
+    "build:windows": "node build-windows.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0",
+    "postject": "^1.0.0-alpha.6"
   },
   "engines": {
     "node": ">=20"

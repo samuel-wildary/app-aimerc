@@ -1,60 +1,56 @@
-# AiMerc Print Agent
+# AiMerc Pedidos Agent
 
-Imprime automaticamente a guia de separacao na termica **sem dialogo do navegador**.
+Um unico agent no PC/Mac da loja:
 
-Quando um pedido novo chega no AiMerc, este programa (rodando no PC da loja) recebe o evento em tempo real e envia o cupom ESC/POS direto para a impressora em rede (`IP:9100`).
+1. Faz login na VPS com o **mesmo email/senha do painel web**
+2. Abre WebSocket e escuta **pedidos** daquela loja
+3. Se `PRINTER_HOST` estiver configurado, imprime o cupom sozinho na termica
 
-## Requisitos
+## Configuracao (.env ao lado do executavel)
 
-- Windows (ou Linux/macOS) com Node.js 20+
-- Termica 80mm acessivel na rede local (Epson, Elgin, Bematech, etc.)
-- Conta de gestor da loja (mesmo login do painel)
+```env
+AIMERC_API_URL=https://wildhub-aimerc-backend-app.5mos1l.easypanel.host/api
+AIMERC_EMAIL=gestor@sua-loja.com
+AIMERC_PASSWORD=sua_senha
+PRINTER_HOST=192.168.1.50
+PRINTER_PORT=9100
+AUTO_PRINT=true
+```
 
-## Instalacao rapida
+- Email/senha: iguais ao login do Chrome no painel
+- `PRINTER_HOST`: IP da termica **na rede da loja** (nunca na VPS)
+
+## Mac (executavel)
 
 ```bash
 cd print-agent
-copy .env.example .env
-# edite .env: AIMERC_EMAIL, AIMERC_PASSWORD, PRINTER_HOST
-npm start
+npm install
+npm run build:mac
+# sai em dist/AiMerc-Print-Agent
+cp .env.example dist/.env
+# edite dist/.env
+./dist/AiMerc-Print-Agent
 ```
 
-Teste a impressora:
+Teste de impressao:
 
 ```bash
-npm run test-print
+./dist/AiMerc-Print-Agent --test-print
 ```
 
-Health (o painel consulta isso):
+## Windows
 
-```text
-http://127.0.0.1:4177/health
+No PC Windows:
+
+```bash
+npm install
+npm run build:windows
 ```
 
-## Configuracao (.env)
+Gera `dist/AiMerc-Print-Agent.exe`.
 
-| Variavel | Descricao |
-|----------|-----------|
-| `AIMERC_API_URL` | URL da API AiMerc |
-| `AIMERC_EMAIL` / `AIMERC_PASSWORD` | Login do gestor |
-| `AIMERC_TOKEN` | Alternativa: JWT pronto |
-| `PRINTER_HOST` | IP da termica (ex.: `192.168.1.50`) |
-| `PRINTER_PORT` | Porta raw (padrao `9100`) |
-| `HEALTH_PORT` | Porta local do health (padrao `4177`) |
+## Health
 
-## Iniciar com o Windows
+`http://127.0.0.1:4177/health`
 
-1. Crie um atalho de `npm start` (ou `node src/index.js`) na pasta Inicializar
-2. Ou use o Agendador de Tarefas: ao fazer logon, executar `node src\index.js` com pasta inicial `print-agent`
-
-O Chrome **nao precisa** estar aberto. Enquanto o Print Agent estiver rodando, cada pedido novo sai sozinho na termica.
-
-## Painel
-
-Em **Loja & App** o dashboard mostra se o agent local esta online (`127.0.0.1:4177`). O botao **Imprimir guia** no pedido continua disponivel como fallback (com dialogo do navegador).
-
-## Solucao de problemas
-
-- `Timeout ao conectar na impressora`: confira IP, cabo/Wi-Fi e se a porta 9100 esta liberada
-- Pedido nao imprime: veja o log do agent; confirme login e se o websocket ficou `Print Agent pronto`
-- Cupom com caracteres estranhos: acentuacao e removida no ESC/POS ASCII por compatibilidade
+O painel (Loja & App) usa esse endereco para mostrar se o agent esta online.

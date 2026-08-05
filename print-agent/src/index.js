@@ -1,13 +1,19 @@
 import http from 'node:http';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { isSea } from 'node:sea';
 import { WebSocket } from './websocket.js';
 import { buildOrderReceipt, buildTestReceipt } from './escpos.js';
 import { sendRawToPrinter } from './print.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const rootDir = path.resolve(__dirname, '..');
+function resolveRootDir() {
+  try {
+    if (typeof isSea === 'function' && isSea()) return path.dirname(process.execPath);
+  } catch {}
+  return process.cwd();
+}
+
+const rootDir = resolveRootDir();
 const args = new Set(process.argv.slice(2));
 const printedOrders = new Map();
 const PRINT_DEDUPE_TTL_MS = 24 * 60 * 60 * 1_000;
@@ -53,12 +59,21 @@ function realtimeUrl() {
   return `${base}/realtime`;
 }
 
+function printerConfigured() {
+  return Boolean(String(process.env.PRINTER_HOST || '').trim());
+}
+
 function printerHost() {
   return required('PRINTER_HOST');
 }
 
 function printerPort() {
   return Number(process.env.PRINTER_PORT || 9100);
+}
+
+function autoPrintEnabled() {
+  const flag = String(process.env.AUTO_PRINT || 'true').trim().toLowerCase();
+  return flag !== '0' && flag !== 'false' && flag !== 'no' && printerConfigured();
 }
 
 function healthPort() {
@@ -96,12 +111,16 @@ async function login() {
     body: JSON.stringify({ email, password })
   });
   const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.error || 'Falha no login do Print Agent');
+  if (!response.ok) throw new Error(data.error || 'Falha no login do AiMerc Pedidos Agent');
   return data;
 }
 
 async function printOrder(order, storeName) {
   if (!order?.id) throw new Error('Pedido sem id');
+  if (!autoPrintEnabled()) {
+    log('info', 'Pedido recebido (impressao desligada ou sem PRINTER_HOST)', { orderId: order.id });
+    return { skipped: true, reason: 'auto-print-off' };
+  }
   if (!rememberPrinted(order.id)) {
     log('info', 'Pedido ja impresso nesta sessao', { orderId: order.id });
     return { skipped: true };
@@ -113,6 +132,7 @@ async function printOrder(order, storeName) {
 }
 
 async function printTest(storeName) {
+  if (!printerConfigured()) throw new Error('PRINTER_HOST nao configurada no .env');
   const payload = buildTestReceipt(storeName);
   await sendRawToPrinter(printerHost(), printerPort(), payload);
   log('info', 'Cupom de teste enviado', { host: printerHost(), port: printerPort() });
@@ -135,12 +155,16 @@ function startHealthServer(state) {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({
         ok: true,
-        service: 'aimerc-print-agent',
+        service: 'aimerc-orders-agent',
         connected: Boolean(state.connected),
         storeName: state.storeName || null,
-        printer: { host: process.env.PRINTER_HOST || null, port: printerPort() },
+        autoPrint: autoPrintEnabled(),
+        printer: printerConfigured()
+          ? { host: process.env.PRINTER_HOST, port: printerPort() }
+          : null,
         printedCount: printedOrders.size,
-        version: '1.0.0'
+        lastOrderId: state.lastOrderId || null,
+        version: '1.1.0'
       }));
       return;
     }
@@ -190,7 +214,7 @@ function connectRealtime(token, storeName, state) {
 
       if (data.type === 'ready') {
         state.connected = true;
-        log('info', 'Print Agent pronto', { storeId: data.storeId });
+        log('info', 'AiMerc Pedidos Agent pronto', { storeId: data.storeId });
         return;
       }
 
@@ -201,12 +225,19 @@ function connectRealtime(token, storeName, state) {
       }
 
       if (data.type === 'order.created' && data.order) {
+        state.lastOrderId = data.order.id;
+        log('info', 'Novo pedido recebido', { orderId: data.order.id, total: data.order.total });
         try {
           await printOrder(data.order, storeName);
         } catch (error) {
           printedOrders.delete(data.order.id);
           log('error', 'Falha ao imprimir pedido', { orderId: data.order.id, error: error.message });
         }
+      }
+
+      if (data.type === 'order.updated' && data.order) {
+        state.lastOrderId = data.order.id;
+        log('info', 'Pedido atualizado', { orderId: data.order.id, status: data.order.status });
       }
     });
 
@@ -234,7 +265,7 @@ function connectRealtime(token, storeName, state) {
 
 async function main() {
   await loadConfigFile();
-  const state = { connected: false, storeName: process.env.STORE_NAME || 'AiMerc' };
+  const state = { connected: false, storeName: process.env.STORE_NAME || 'AiMerc', lastOrderId: null };
 
   if (args.has('--test-print')) {
     await printTest(state.storeName);
@@ -251,10 +282,11 @@ async function main() {
   }
 
   const realtime = connectRealtime(session.token, state.storeName, state);
-  log('info', 'AiMerc Print Agent iniciado', {
+  log('info', 'AiMerc Pedidos Agent iniciado', {
     api: apiBase(),
-    printer: `${printerHost()}:${printerPort()}`,
-    store: state.storeName
+    store: state.storeName,
+    autoPrint: autoPrintEnabled(),
+    printer: autoPrintEnabled() ? `${printerHost()}:${printerPort()}` : null
   });
 
   const shutdown = () => {

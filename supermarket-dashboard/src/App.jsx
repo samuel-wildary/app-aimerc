@@ -1081,7 +1081,7 @@ function AutoPrintPanel() {
         </span>
       </div>
       <p className="panel-description">
-        O navegador nao imprime sozinho. No PC da loja rode o <strong>AiMerc Print Agent</strong>: ele escuta pedidos novos e manda o cupom direto na termica de rede (porta 9100), sem confirmacao.
+        Um unico <strong>AiMerc Pedidos Agent</strong> no PC da loja faz login com o mesmo email/senha do painel, escuta pedidos por WebSocket e imprime na termica local (IP:9100), sem confirmacao do navegador.
       </p>
       <div className="print-agent-meta">
         <div><span>Status realtime</span><strong>{status.detail?.connected ? 'Conectado ao AiMerc' : status.online ? 'Aguardando conexao' : 'Offline'}</strong></div>
@@ -1094,9 +1094,9 @@ function AutoPrintPanel() {
         <button type="button" className="primary" onClick={testPrint} disabled={!status.online || testing}><Printer size={16} />{testing ? 'Imprimindo...' : 'Testar impressao'}</button>
       </div>
       <ol className="print-agent-steps">
-        <li>Instale o Print Agent na pasta <code>print-agent</code> do AiMerc.</li>
-        <li>Configure <code>PRINTER_HOST</code> (IP da termica) e o login do gestor no <code>.env</code>.</li>
-        <li>Execute <code>npm start</code> e deixe o agent rodando (inicie com o Windows).</li>
+        <li>No Mac/Windows da loja, rode o executavel <code>AiMerc-Pedidos-Agent</code>.</li>
+        <li>No <code>.env</code> ao lado do executavel: email/senha do painel + <code>PRINTER_HOST</code> (IP da termica).</li>
+        <li>Deixe o agent aberto; pedidos novos imprimem sozinhos.</li>
       </ol>
     </section>
   );
