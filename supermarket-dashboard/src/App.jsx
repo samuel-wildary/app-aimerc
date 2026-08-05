@@ -282,9 +282,9 @@ function OrderDetail({ order, onClose, onAdvance, onPrint, busy }) {
   if (!order) return null;
   const { next, action } = nextStatusFor(order);
   return (
-    <div className="drawer-backdrop" onMouseDown={event => event.target === event.currentTarget && onClose()}>
-      <aside className="order-drawer">
-        <div className="drawer-head"><div><span>Pedido</span><h2>#{order.id}</h2></div><button className="icon-button" onClick={onClose} aria-label="Fechar detalhe"><X /></button></div>
+    <div className="order-modal-backdrop" onMouseDown={event => event.target === event.currentTarget && onClose()}>
+      <div className="order-modal" role="dialog" aria-modal="true" aria-labelledby="order-modal-title">
+        <div className="drawer-head"><div><span>Pedido</span><h2 id="order-modal-title">#{order.id}</h2></div><button className="icon-button" onClick={onClose} aria-label="Fechar detalhe"><X /></button></div>
         <div className="drawer-status"><StatusBadge status={order.status} /><span>Recebido as {shortTime(order.createdAt)}</span></div>
         {order.scheduledTo && new Date(order.scheduledTo).getTime() > Date.now() && <section className="scheduled-notice"><CalendarClock size={19} /><div><strong>Pedido recebido fora do horario</strong><span>Separar a partir de {new Date(order.scheduledTo).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}</span></div></section>}
         <section className="customer-block"><div className="avatar">{order.customer.name.slice(0, 1)}</div><div><strong>{order.customer.name}</strong><span>{order.customer.phone}</span></div></section>
@@ -296,7 +296,7 @@ function OrderDetail({ order, onClose, onAdvance, onPrint, busy }) {
           <button className="print-slip" onClick={() => onPrint(order)}><Printer size={17} /> Imprimir guia de separacao</button>
           {next ? <button className="primary large" disabled={busy} onClick={() => onAdvance(order, next)}>{busy ? 'Atualizando...' : action}<ArrowRight size={18} /></button> : <div className="completed-message"><Check size={19} /> Pedido encerrado</div>}
         </div>
-      </aside>
+      </div>
     </div>
   );
 }
@@ -325,7 +325,7 @@ function OrdersPanel({ orders, selected, setSelected, title = 'Painel de pedidos
         <div>
           <p className="overline">Fluxo da loja</p>
           <h2>{title}</h2>
-          <p className="kanban-help">O funcionario clica no botao da proxima etapa e o pedido avanca no painel.</p>
+          <p className="kanban-help">Clique no card para ver os detalhes. Use o botao da etapa para avancar sem abrir o modal.</p>
         </div>
         <span className="counter">{activeOrders.length}</span>
       </div>
@@ -1453,7 +1453,7 @@ export default function App() {
     setBusy(true);
     try {
       const updated = await api.updateStatus(order.id, status);
-      setSelected(updated);
+      setSelected(current => (current?.id === order.id ? updated : current));
       await refreshOrdersLive();
     } catch (requestError) {
       setError(requestError.message);
