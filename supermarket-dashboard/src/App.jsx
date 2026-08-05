@@ -55,6 +55,13 @@ const STATUS = {
   CANCELLED: { label: 'Cancelado', tone: 'red' }
 };
 
+const KANBAN_COLUMNS = [
+  { status: 'RECEIVED', hint: 'Aguardando inicio' },
+  { status: 'PICKING', hint: 'Na bancada agora' },
+  { status: 'READY', hint: 'Pronto para sair' },
+  { status: 'OUT_FOR_DELIVERY', hint: 'A caminho do cliente' }
+];
+
 const navItems = [
   { id: 'overview', label: 'Visao geral', icon: LayoutDashboard },
   { id: 'orders', label: 'Pedidos', icon: ShoppingBasket },
@@ -64,6 +71,14 @@ const navItems = [
   { id: 'reports', label: 'Relatorios', icon: BarChart3 },
   { id: 'storefront', label: 'Loja & App', icon: Images }
 ];
+
+function nextStatusFor(order) {
+  const meta = STATUS[order.status] || {};
+  if (order.status === 'READY' && order.fulfillmentType !== 'DELIVERY') {
+    return { next: 'DONE', action: 'Cliente retirou' };
+  }
+  return { next: meta.next, action: meta.action };
+}
 
 const money = value => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(value || 0));
 const shortTime = value => new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit' }).format(new Date(value));
@@ -221,9 +236,51 @@ function OrderCard({ order, selected, onSelect }) {
   );
 }
 
+function KanbanCard({ order, selected, onSelect, onAdvance, busy }) {
+  const { next, action } = nextStatusFor(order);
+  const nextMeta = next ? STATUS[next] : null;
+  const scheduled = order.scheduledTo && new Date(order.scheduledTo).getTime() > Date.now();
+  return (
+    <article className={`kanban-card ${selected ? 'selected' : ''}`}>
+      <button type="button" className="kanban-card-body" onClick={() => onSelect(order)}>
+        <div className="kanban-card-top">
+          <span className="order-id">#{order.id}</span>
+          <small>{shortTime(order.createdAt)}</small>
+        </div>
+        <strong>{order.customer.name}</strong>
+        <small>{order.items.length} itens · {order.fulfillmentType === 'DELIVERY' ? 'Entrega' : 'Retirada'}</small>
+        {scheduled && <span className="scheduled-order">Separar em {new Date(order.scheduledTo).toLocaleString('pt-BR', { weekday: 'short', hour: '2-digit', minute: '2-digit' })}</span>}
+        <div className="kanban-card-foot">
+          <strong>{money(order.total)}</strong>
+          <StatusBadge status={order.status} />
+        </div>
+      </button>
+      {next && (
+        <button
+          type="button"
+          className="kanban-advance"
+          disabled={busy}
+          onClick={event => {
+            event.stopPropagation();
+            onAdvance(order, next);
+          }}
+        >
+          {busy ? 'Atualizando...' : (
+            <>
+              <span>{action}</span>
+              {nextMeta && nextMeta.label !== 'Concluido' ? <em>→ {nextMeta.label}</em> : null}
+              <ArrowRight size={15} />
+            </>
+          )}
+        </button>
+      )}
+    </article>
+  );
+}
+
 function OrderDetail({ order, onClose, onAdvance, onPrint, busy }) {
   if (!order) return null;
-  const meta = STATUS[order.status] || {};
+  const { next, action } = nextStatusFor(order);
   return (
     <div className="drawer-backdrop" onMouseDown={event => event.target === event.currentTarget && onClose()}>
       <aside className="order-drawer">
@@ -237,7 +294,7 @@ function OrderDetail({ order, onClose, onAdvance, onPrint, busy }) {
         <section className="totals"><div><span>Subtotal</span><b>{money(order.subtotal)}</b></div><div><span>Entrega</span><b>{money(order.deliveryFee)}</b></div><div className="grand"><span>Total</span><strong>{money(order.total)}</strong></div></section>
         <div className="drawer-footer">
           <button className="print-slip" onClick={() => onPrint(order)}><Printer size={17} /> Imprimir guia de separacao</button>
-          {meta.next ? <button className="primary large" disabled={busy} onClick={() => onAdvance(order, meta.next)}>{busy ? 'Atualizando...' : meta.action}<ArrowRight size={18} /></button> : <div className="completed-message"><Check size={19} /> Pedido encerrado</div>}
+          {next ? <button className="primary large" disabled={busy} onClick={() => onAdvance(order, next)}>{busy ? 'Atualizando...' : action}<ArrowRight size={18} /></button> : <div className="completed-message"><Check size={19} /> Pedido encerrado</div>}
         </div>
       </aside>
     </div>
@@ -248,14 +305,63 @@ function EmptyState({ title, text, action }) {
   return <div className="empty-state"><div><ShoppingBasket size={24} /></div><h3>{title}</h3><p>{text}</p>{action}</div>;
 }
 
-function OrdersPanel({ orders, selected, setSelected, title = 'Fila de pedidos', compact = false }) {
+function OrdersPanel({ orders, selected, setSelected, title = 'Painel de pedidos', compact = false, onAdvance, busy = false }) {
   const activeOrders = orders.filter(order => !['DONE', 'CANCELLED'].includes(order.status));
+
+  if (compact) {
+    return (
+      <section className="panel orders-panel compact">
+        <div className="panel-heading"><div><p className="overline">Agora</p><h2>{title}</h2></div><span className="counter">{activeOrders.length}</span></div>
+        <div className="order-list">
+          {activeOrders.length ? activeOrders.map(order => <OrderCard key={order.id} order={order} selected={selected?.id === order.id} onSelect={setSelected} />) : <EmptyState title="Fila limpa" text="Nenhum pedido aguardando acao neste momento." />}
+        </div>
+      </section>
+    );
+  }
+
   return (
-    <section className={`panel orders-panel ${compact ? 'compact' : ''}`}>
-      <div className="panel-heading"><div><p className="overline">Agora</p><h2>{title}</h2></div><span className="counter">{activeOrders.length}</span></div>
-      <div className="order-list">
-        {activeOrders.length ? activeOrders.map(order => <OrderCard key={order.id} order={order} selected={selected?.id === order.id} onSelect={setSelected} />) : <EmptyState title="Fila limpa" text="Nenhum pedido aguardando acao neste momento." />}
+    <section className="panel orders-panel kanban-panel">
+      <div className="panel-heading">
+        <div>
+          <p className="overline">Fluxo da loja</p>
+          <h2>{title}</h2>
+          <p className="kanban-help">O funcionario clica no botao da proxima etapa e o pedido avanca no painel.</p>
+        </div>
+        <span className="counter">{activeOrders.length}</span>
       </div>
+      {!activeOrders.length ? (
+        <EmptyState title="Painel limpo" text="Nenhum pedido em andamento. Novos pedidos entram na coluna Novo." />
+      ) : (
+        <div className="kanban-board">
+          {KANBAN_COLUMNS.map(column => {
+            const meta = STATUS[column.status];
+            const columnOrders = activeOrders.filter(order => order.status === column.status);
+            return (
+              <div key={column.status} className={`kanban-column ${meta.tone}`}>
+                <header className="kanban-column-head">
+                  <div>
+                    <strong>{meta.label}</strong>
+                    <span>{column.hint}</span>
+                  </div>
+                  <em>{columnOrders.length}</em>
+                </header>
+                <div className="kanban-column-body">
+                  {columnOrders.length ? columnOrders.map(order => (
+                    <KanbanCard
+                      key={order.id}
+                      order={order}
+                      selected={selected?.id === order.id}
+                      onSelect={setSelected}
+                      onAdvance={onAdvance}
+                      busy={busy}
+                    />
+                  )) : <div className="kanban-empty">Sem pedidos nesta etapa</div>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </section>
   );
 }
@@ -276,7 +382,7 @@ function Overview({ summary, orders, products, selected, setSelected, createDemo
         <StatCard icon={Boxes} label="Estoque baixo" value={summary?.lowStock || 0} detail={`de ${summary?.products || products.length} produtos`} tone="red" />
       </section>
       <section className="overview-grid">
-        <OrdersPanel orders={orders} selected={selected} setSelected={setSelected} compact />
+        <OrdersPanel orders={orders} selected={selected} setSelected={setSelected} title="Fila de pedidos" compact />
         <section className="panel pulse-panel">
           <div className="panel-heading"><div><p className="overline">Ritmo da loja</p><h2>Fluxo operacional</h2></div></div>
           <div className="flow-list">
@@ -774,9 +880,9 @@ function Catalog({ products, categories, query, setQuery, category, setCategory,
   );
 }
 
-function Delivery({ orders, selected, setSelected }) {
+function Delivery({ orders, selected, setSelected, onAdvance, busy }) {
   const deliveries = orders.filter(order => order.fulfillmentType === 'DELIVERY');
-  return <OrdersPanel orders={deliveries} selected={selected} setSelected={setSelected} title="Entregas da loja" />;
+  return <OrdersPanel orders={deliveries} selected={selected} setSelected={setSelected} title="Entregas da loja" onAdvance={onAdvance} busy={busy} />;
 }
 
 function Customers({ customers, query, setQuery }) {
@@ -1429,7 +1535,7 @@ export default function App() {
 
   const pageMeta = {
     overview: ['Visao geral', 'Prioridades e desempenho do turno atual'],
-    orders: ['Pedidos', 'Acompanhe cada etapa da separacao'],
+    orders: ['Pedidos', 'Avance cada pedido pelo painel Kanban'],
     catalog: ['Catalogo', 'Precos e estoque recebidos da integracao'],
     delivery: ['Entregas', 'Pedidos que saem da loja ate o cliente'],
     customers: ['Clientes', 'Historico, recorrencia e endereco de cada comprador'],
@@ -1446,9 +1552,9 @@ export default function App() {
         {error && <div className="global-error"><span>{error}</span><button onClick={() => setError('')}><X size={17} /></button></div>}
         <div className="page-content">
           {active === 'overview' && <Overview summary={summary} orders={orders} products={products} selected={selected} setSelected={setSelected} createDemo={createDemo} creatingDemo={creatingDemo} />}
-          {active === 'orders' && <OrdersPanel orders={orders} selected={selected} setSelected={setSelected} />}
+          {active === 'orders' && <OrdersPanel orders={orders} selected={selected} setSelected={setSelected} onAdvance={advance} busy={busy} />}
           {active === 'catalog' && <Catalog products={products} categories={categories} query={query} setQuery={setQuery} category={category} setCategory={setCategory} onChanged={load} />}
-          {active === 'delivery' && <Delivery orders={orders} selected={selected} setSelected={setSelected} />}
+          {active === 'delivery' && <Delivery orders={orders} selected={selected} setSelected={setSelected} onAdvance={advance} busy={busy} />}
           {active === 'customers' && <Customers customers={customers} query={customerQuery} setQuery={setCustomerQuery} />}
           {active === 'reports' && <Reports report={report} devices={deviceSummary} />}
           {active === 'storefront' && <Storefront store={summary?.store} categories={categories} deliveryZones={deliveryZones} banners={banners} campaigns={campaigns} automations={automations} onSaveSettings={saveSettings} onCreateBanner={createBanner} onUpdateBanner={updateBanner} onDeleteBanner={deleteBanner} onCreateCampaign={createCampaign} onSendCampaign={sendCampaign} onDeleteCampaign={deleteCampaign} onCreateAutomation={createAutomation} onToggleAutomation={toggleAutomation} onRunAutomation={runAutomation} onDeleteAutomation={deleteAutomation} />}
