@@ -1094,9 +1094,9 @@ function AutoPrintPanel() {
         <button type="button" className="primary" onClick={testPrint} disabled={!status.online || testing}><Printer size={16} />{testing ? 'Imprimindo...' : 'Testar impressao'}</button>
       </div>
       <ol className="print-agent-steps">
-        <li>Abra o app <code>AiMerc Pedidos Agent</code> no Mac/PC da loja.</li>
-        <li>Entre com o mesmo e-mail/senha do painel e busque a termica na rede.</li>
-        <li>Clique em Conectar e deixe o app aberto.</li>
+        <li>Abra o app <code>AiMerc Pedidos Agent</code>, conecte e ative o inicio automatico.</li>
+        <li>Pode fechar a janela: ele continua no fundo e volta quando o Mac ligar.</li>
+        <li>Pedidos novos imprimem sozinhos na termica da rede.</li>
       </ol>
     </section>
   );

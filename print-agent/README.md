@@ -1,32 +1,30 @@
-# AiMerc Pedidos Agent (app com janela)
+# AiMerc Pedidos Agent (app + servico)
 
-Abre um programa com:
+App com janela para configurar, e **servico em segundo plano** para nao parar.
 
-- e-mail e senha (iguais ao painel web)
-- busca de impressoras termicas na rede (porta 9100)
-- conectar / desconectar
-- impressao automatica dos pedidos novos
+## O que ele faz
 
-## Rodar no Mac (desenvolvimento)
+1. Voce abre o app, entra com e-mail/senha e escolhe a termica
+2. Clica **Conectar e iniciar servico**
+3. Pode fechar a janela — fica no icone da barra de menus
+4. Se o Mac desligar e ligar de novo, o agent sobe sozinho (`LaunchAgent` + `KeepAlive`)
+5. Se a conexao cair, ele reconecta sozinho
+
+## Mac
 
 ```bash
 cd print-agent
 npm install
-npm run desktop
+npm run desktop          # desenvolvimento
+npm run desktop:mac      # gera o .app
 ```
 
-## Gerar o app no Desktop
+No app:
+- **Conectar e iniciar servico** → conecta + ativa inicio automatico
+- **Ativar inicio automatico** / **Remover inicio automatico**
 
-```bash
-npm run desktop:mac
-```
+## Importante
 
-Copia a pasta `AiMerc Pedidos Agent-darwin-x64/AiMerc Pedidos Agent.app` para o Desktop.
-
-## Como usar
-
-1. Abra o app
-2. Digite e-mail e senha do gestor
-3. Clique em **Buscar na rede** e escolha a termica
-4. Clique em **Conectar**
-5. Deixe aberto — pedidos novos imprimem sozinhos
+- O agent precisa do Mac ligado (e logado) para imprimir
+- A termica precisa estar na rede local
+- Nao rode duas copias do app; a segunda so abre a janela da que ja esta no fundo

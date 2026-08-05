@@ -11,7 +11,7 @@
     <header>
       <p class="overline">AiMerc</p>
       <h1>Pedidos Agent</h1>
-      <p class="subtitle">Login da loja, escolha a termica e deixe conectado. Pedidos novos imprimem sozinhos.</p>
+      <p class="subtitle">Servico da loja: login, termica e conexao permanente com os pedidos. Fecha a janela que ele continua no fundo.</p>
     </header>
 
     <section class="card">
@@ -43,12 +43,18 @@
       <button id="testBtn" type="button" class="secondary">Testar impressao</button>
     </section>
 
-    <section class="card actions">
+    <section className="card actions">
       <div id="statusPill" class="pill offline">Desconectado</div>
       <div class="buttons">
-        <button id="connectBtn" type="button" class="primary">Conectar</button>
-        <button id="disconnectBtn" type="button" class="ghost" disabled>Desconectar</button>
+        <button id="connectBtn" type="button" class="primary">Conectar e iniciar servico</button>
+        <button id="disconnectBtn" type="button" class="ghost" disabled>Pausar agora</button>
       </div>
+      <p class="hint">Ao conectar, o agent fica em segundo plano (icone na barra) e sobe sozinho quando o Mac ligar.</p>
+      <div class="buttons">
+        <button id="installServiceBtn" type="button" class="secondary">Ativar inicio automatico</button>
+        <button id="uninstallServiceBtn" type="button" class="ghost">Remover inicio automatico</button>
+      </div>
+      <p id="serviceStatus" class="hint">Inicio automatico: verificando...</p>
       <p id="message" class="message"></p>
     </section>
 

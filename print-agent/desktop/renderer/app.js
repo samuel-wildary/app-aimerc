@@ -8,6 +8,9 @@ const scanStatus = document.getElementById('scanStatus');
 const testBtn = document.getElementById('testBtn');
 const connectBtn = document.getElementById('connectBtn');
 const disconnectBtn = document.getElementById('disconnectBtn');
+const installServiceBtn = document.getElementById('installServiceBtn');
+const uninstallServiceBtn = document.getElementById('uninstallServiceBtn');
+const serviceStatus = document.getElementById('serviceStatus');
 const statusPill = document.getElementById('statusPill');
 const message = document.getElementById('message');
 const logList = document.getElementById('logList');
@@ -18,13 +21,20 @@ function currentConfig() {
     email: email.value.trim(),
     password: password.value,
     printerHost: printerHost.value.trim() || printerSelect.value.trim(),
-    printerPort: 9100
+    printerPort: 9100,
+    autoStart: true
   };
 }
 
 function setMessage(text, type = '') {
   message.textContent = text || '';
   message.className = `message ${type}`.trim();
+}
+
+function renderService(flag) {
+  serviceStatus.textContent = flag
+    ? 'Inicio automatico: ATIVO (sobe com o Mac e reinicia se cair).'
+    : 'Inicio automatico: desligado.';
 }
 
 function renderLogs(logs = []) {
@@ -42,6 +52,7 @@ function renderStatus(status = {}) {
   statusPill.className = `pill ${online ? 'online' : 'offline'}`;
   connectBtn.disabled = online;
   disconnectBtn.disabled = !online;
+  if (status.autoStartInstalled != null) renderService(status.autoStartInstalled);
   renderLogs(status.logs || []);
 }
 
@@ -104,13 +115,17 @@ connectBtn.addEventListener('click', async () => {
     setMessage('Preencha e-mail e senha do painel.', 'error');
     return;
   }
+  if (!config.printerHost) {
+    setMessage('Selecione ou informe a impressora.', 'error');
+    return;
+  }
   connectBtn.disabled = true;
-  setMessage('Conectando...');
+  setMessage('Conectando e ativando servico...');
   try {
     await window.aimercAgent.saveConfig(config);
     const status = await window.aimercAgent.connect(config);
     renderStatus(status);
-    setMessage('Agent conectado. Pedidos novos serao impressos automaticamente.', 'ok');
+    setMessage('Servico ativo. Pode fechar a janela: ele continua no fundo e volta com o Mac.', 'ok');
   } catch (error) {
     setMessage(error.message || 'Falha ao conectar', 'error');
     connectBtn.disabled = false;
@@ -120,7 +135,33 @@ connectBtn.addEventListener('click', async () => {
 disconnectBtn.addEventListener('click', async () => {
   const status = await window.aimercAgent.disconnect();
   renderStatus(status);
-  setMessage('Desconectado.');
+  setMessage('Conexao pausada. O inicio automatico continua instalado ate voce remover.');
+});
+
+installServiceBtn.addEventListener('click', async () => {
+  installServiceBtn.disabled = true;
+  try {
+    const status = await window.aimercAgent.installService(currentConfig());
+    renderStatus(status);
+    setMessage('Inicio automatico ativado.', 'ok');
+  } catch (error) {
+    setMessage(error.message || 'Falha ao ativar inicio automatico', 'error');
+  } finally {
+    installServiceBtn.disabled = false;
+  }
+});
+
+uninstallServiceBtn.addEventListener('click', async () => {
+  uninstallServiceBtn.disabled = true;
+  try {
+    const status = await window.aimercAgent.uninstallService();
+    renderStatus(status);
+    setMessage('Inicio automatico removido.');
+  } catch (error) {
+    setMessage(error.message || 'Falha ao remover inicio automatico', 'error');
+  } finally {
+    uninstallServiceBtn.disabled = false;
+  }
 });
 
 window.aimercAgent.onStatus(renderStatus);
@@ -132,5 +173,6 @@ window.aimercAgent.onStatus(renderStatus);
   apiUrl.value = config.apiUrl || '';
   printerHost.value = config.printerHost || '';
   fillPrinters(config.printerHost ? [{ host: config.printerHost, label: `Termica ${config.printerHost}` }] : [], config.printerHost || '');
+  renderService(Boolean(config.autoStartInstalled));
   renderStatus(await window.aimercAgent.status());
 })();

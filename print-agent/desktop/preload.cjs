@@ -8,6 +8,9 @@ contextBridge.exposeInMainWorld('aimercAgent', {
   connect: config => ipcRenderer.invoke('agent:connect', config),
   disconnect: () => ipcRenderer.invoke('agent:disconnect'),
   status: () => ipcRenderer.invoke('agent:status'),
+  serviceStatus: () => ipcRenderer.invoke('service:status'),
+  installService: config => ipcRenderer.invoke('service:install', config),
+  uninstallService: () => ipcRenderer.invoke('service:uninstall'),
   onStatus: handler => {
     const listener = (_event, data) => handler(data);
     ipcRenderer.on('agent:status', listener);
