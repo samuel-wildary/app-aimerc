@@ -8,7 +8,8 @@
     "start": "node src/server.js",
     "test": "node --test",
     "migrate:legacy-sqlite": "node scripts/migrate-sqlite-to-postgres.js",
-    "migrate:image-library": "node --env-file-if-exists=.env.local scripts/migrate-image-library.js"
+    "migrate:image-library": "node --env-file-if-exists=.env.local scripts/migrate-image-library.js",
+    "backup": "node scripts/backup-postgres.js"
   },
   "dependencies": {
     "axios": "^1.18.1",
