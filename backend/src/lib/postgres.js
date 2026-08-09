@@ -402,6 +402,7 @@ CREATE INDEX IF NOT EXISTS products_store_active_category_idx ON products(store_
 CREATE INDEX IF NOT EXISTS delivery_zones_store_match_idx ON delivery_zones(store_id, neighborhood_normalized, city_normalized, state);
 CREATE INDEX IF NOT EXISTS products_store_catalog_category_idx ON products(store_id, catalog_category);
 CREATE INDEX IF NOT EXISTS products_store_barcode_idx ON products(store_id, barcode);
+CREATE INDEX IF NOT EXISTS products_store_updated_idx ON products(store_id, updated_at);
 CREATE INDEX IF NOT EXISTS orders_store_created_idx ON orders(store_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS orders_customer_phone_idx ON orders(store_id, customer_phone, created_at DESC);
 CREATE UNIQUE INDEX IF NOT EXISTS orders_idempotency_idx ON orders(store_id, idempotency_key) WHERE idempotency_key IS NOT NULL;

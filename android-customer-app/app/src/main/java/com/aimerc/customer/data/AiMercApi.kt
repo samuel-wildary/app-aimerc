@@ -19,29 +19,19 @@ import java.net.URL
 
 class ApiException(message: String) : Exception(message)
 
+class ProductSyncResult(val products: List<Product>, val serverTime: String)
+class StoreSummary(val store: StoreInfo, val categories: List<String>, val banners: List<Banner>, val serverTime: String)
+
 object AiMercApi {
     private const val STORE_SLUG = "aimerc-demo"
 
-    suspend fun catalog(): Catalog = withContext(Dispatchers.IO) {
+    suspend fun catalog(): Catalog = catalogWithTime().first
+
+    suspend fun catalogWithTime(): Pair<Catalog, String> = withContext(Dispatchers.IO) {
         val json = request("/public/stores/$STORE_SLUG/catalog")
-        val storeJson = json.getJSONObject("store")
-        val store = StoreInfo(
-            id = storeJson.getString("id"),
-            slug = storeJson.getString("slug"),
-            name = storeJson.getString("name"),
-            city = storeJson.optString("city"),
-            state = storeJson.optString("state"),
-            minimumOrder = storeJson.optDouble("minimumOrder", 0.0),
-            deliveryFee = storeJson.optDouble("deliveryFee", 0.0),
-            freeDeliveryAbove = storeJson.optDouble("freeDeliveryAbove", 0.0),
-            open = storeJson.optBoolean("open", false),
-            enablePickupScheduling = storeJson.optBoolean("enablePickupScheduling", true),
-            pickupSlots = storeJson.optString("pickupSlots", "08:00 - 10:00, 10:00 - 12:00, 12:00 - 14:00, 14:00 - 16:00, 16:00 - 18:00, 18:00 - 20:00")
-        )
+        val store = parseStore(json.getJSONObject("store"))
         val categories = json.getJSONArray("categories").toStringList()
-        val banners = json.getJSONArray("banners").mapObjects { item ->
-            Banner(item.getString("id"), item.optString("eyebrow"), item.getString("title"), item.optString("subtitle"), item.optString("image"), item.optInt("position"))
-        }
+        val banners = parseBanners(json.getJSONArray("banners"))
         val productMap = linkedMapOf<String, Product>()
         val promotions = json.getJSONArray("promotions")
         for (index in 0 until promotions.length()) {
@@ -58,8 +48,48 @@ object AiMercApi {
         }
         // The public products endpoint guarantees that categories without a shelf still appear in search.
         val allProducts = requestArray("/public/stores/$STORE_SLUG/products").mapObjects { it.toProduct() }
+        allProducts.forEach { productMap[it.id] = it }
         val sortedProducts = productMap.values.sortedWith(compareByDescending<Product> { it.image.isNotBlank() })
-        Catalog(store, categories, banners, sortedProducts)
+        Pair(Catalog(store, categories, banners, sortedProducts), json.optString("serverTime"))
+    }
+
+    /** Resumo leve (loja, categorias, banners) usado junto do cache + delta. */
+    suspend fun summary(): StoreSummary = withContext(Dispatchers.IO) {
+        val json = request("/public/stores/$STORE_SLUG/summary")
+        StoreSummary(
+            store = parseStore(json.getJSONObject("store")),
+            categories = json.getJSONArray("categories").toStringList(),
+            banners = parseBanners(json.getJSONArray("banners")),
+            serverTime = json.getString("serverTime")
+        )
+    }
+
+    /** Sync incremental: devolve produtos alterados desde `since` (inclusive inativos, para remocao local). */
+    suspend fun productDelta(since: String?): ProductSyncResult = withContext(Dispatchers.IO) {
+        val query = if (since.isNullOrBlank()) "" else "?since=${java.net.URLEncoder.encode(since, "UTF-8")}"
+        val json = request("/public/stores/$STORE_SLUG/products/sync$query")
+        ProductSyncResult(
+            products = json.getJSONArray("products").mapObjects { it.toProduct() },
+            serverTime = json.getString("serverTime")
+        )
+    }
+
+    private fun parseStore(storeJson: JSONObject) = StoreInfo(
+        id = storeJson.getString("id"),
+        slug = storeJson.getString("slug"),
+        name = storeJson.getString("name"),
+        city = storeJson.optString("city"),
+        state = storeJson.optString("state"),
+        minimumOrder = storeJson.optDouble("minimumOrder", 0.0),
+        deliveryFee = storeJson.optDouble("deliveryFee", 0.0),
+        freeDeliveryAbove = storeJson.optDouble("freeDeliveryAbove", 0.0),
+        open = storeJson.optBoolean("open", false),
+        enablePickupScheduling = storeJson.optBoolean("enablePickupScheduling", true),
+        pickupSlots = storeJson.optString("pickupSlots", "08:00 - 10:00, 10:00 - 12:00, 12:00 - 14:00, 14:00 - 16:00, 16:00 - 18:00, 18:00 - 20:00")
+    )
+
+    private fun parseBanners(array: JSONArray) = array.mapObjects { item ->
+        Banner(item.getString("id"), item.optString("eyebrow"), item.getString("title"), item.optString("subtitle"), item.optString("image"), item.optInt("position"))
     }
 
     suspend fun createOrder(checkout: CheckoutData, lines: List<CartLine>): OrderReceipt = withContext(Dispatchers.IO) {
@@ -158,7 +188,10 @@ private fun JSONObject.toProduct() = Product(
     stock = optDouble("stock"),
     unit = optString("unit", "UN"),
     image = optString("image"),
-    promo = optBoolean("promo")
+    promo = optBoolean("promo"),
+    active = optBoolean("active", true),
+    catalogVisible = optBoolean("catalogVisible", true),
+    updatedAt = optString("updatedAt")
 )
 
 private fun JSONObject.toCustomerOrder() = CustomerOrder(

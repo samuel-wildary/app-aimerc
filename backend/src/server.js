@@ -403,17 +403,24 @@ app.post('/api/auth/login', asyncRoute(async (req, res) => {
   });
 }));
 
+const CATEGORY_PRIORITY = ['Mercearia', 'Bebidas', 'Hortifruti', 'Laticinios', 'Frios e Embutidos', 'Padaria', 'Frigorifico', 'Peixaria', 'Congelados', 'Biscoitos', 'Doces e Snacks', 'Limpeza', 'Higiene e Beleza', 'Casa e Bazar'];
+
+function sortedCatalogCategories(products) {
+  const categories = [...new Set(products.map(product => product.category))];
+  categories.sort((left, right) => {
+    const leftIndex = CATEGORY_PRIORITY.indexOf(left);
+    const rightIndex = CATEGORY_PRIORITY.indexOf(right);
+    return (leftIndex < 0 ? 999 : leftIndex) - (rightIndex < 0 ? 999 : rightIndex) || left.localeCompare(right, 'pt-BR');
+  });
+  return categories;
+}
+
 app.get('/api/public/stores/:slug/catalog', asyncRoute(async (req, res) => {
   const store = await publicStore(req);
   const products = (await listProducts(store.id, { q: req.query.q, category: req.query.category, sellable: true })).map(product => publicProduct(req, store, product));
-  const categories = [...new Set(products.map(product => product.category))];
-  const categoryPriority = ['Mercearia', 'Bebidas', 'Hortifruti', 'Laticinios', 'Frios e Embutidos', 'Padaria', 'Frigorifico', 'Peixaria', 'Congelados', 'Biscoitos', 'Doces e Snacks', 'Limpeza', 'Higiene e Beleza', 'Casa e Bazar'];
-  categories.sort((left, right) => {
-    const leftIndex = categoryPriority.indexOf(left);
-    const rightIndex = categoryPriority.indexOf(right);
-    return (leftIndex < 0 ? 999 : leftIndex) - (rightIndex < 0 ? 999 : rightIndex) || left.localeCompare(right, 'pt-BR');
-  });
+  const categories = sortedCatalogCategories(products);
   res.json({
+    serverTime: new Date().toISOString(),
     store: { ...store, operatingStatus: storeOperatingStatus(store) },
     categories,
     banners: await listBanners(store.id),
@@ -438,6 +445,30 @@ app.get('/api/public/catalog-library/:ean/image', asyncRoute(async (req, res) =>
 app.get('/api/public/stores/:slug/products', asyncRoute(async (req, res) => {
   const store = await publicStore(req);
   res.json((await listProducts(store.id, { q: req.query.q, category: req.query.category, sellable: true })).map(product => publicProduct(req, store, product)));
+}));
+
+// Sync incremental do app: devolve todos os produtos (inclusive inativos/ocultos)
+// alterados desde `since` (ISO). Sem `since`, devolve o catalogo inteiro.
+app.get('/api/public/stores/:slug/products/sync', asyncRoute(async (req, res) => {
+  const store = await publicStore(req);
+  const since = String(req.query.since || '').trim() || null;
+  const products = await listProducts(store.id, { includeInactive: true, includeHidden: true, since });
+  res.json({
+    serverTime: new Date().toISOString(),
+    products: products.map(product => publicProduct(req, store, product))
+  });
+}));
+
+// Resumo leve (loja, categorias, banners) para o app abrir com cache + delta.
+app.get('/api/public/stores/:slug/summary', asyncRoute(async (req, res) => {
+  const store = await publicStore(req);
+  const products = await listProducts(store.id, { sellable: true });
+  res.json({
+    serverTime: new Date().toISOString(),
+    store: { ...store, operatingStatus: storeOperatingStatus(store) },
+    categories: sortedCatalogCategories(products.map(product => publicProduct(req, store, product))),
+    banners: await listBanners(store.id)
+  });
 }));
 
 app.get('/api/public/stores/:slug/products/:productId/image', asyncRoute(async (req, res) => {

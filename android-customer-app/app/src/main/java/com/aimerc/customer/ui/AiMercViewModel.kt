@@ -10,6 +10,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKeys
 import com.aimerc.customer.data.AiMercApi
+import com.aimerc.customer.data.CatalogCache
 import com.aimerc.customer.model.CartLine
 import com.aimerc.customer.model.Catalog
 import com.aimerc.customer.model.CheckoutData
@@ -21,6 +22,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 class AiMercViewModel(application: Application) : AndroidViewModel(application) {
+    private val catalogCache = CatalogCache(application)
     private val preferences = EncryptedSharedPreferences.create(
         "aimerc_customer_secure",
         MasterKeys.getOrCreate(MasterKeys.AES256_GCM_SPEC),
@@ -147,11 +149,38 @@ class AiMercViewModel(application: Application) : AndroidViewModel(application) 
 
     fun loadCatalog() {
         viewModelScope.launch {
-            loading = true
+            val cached = catalogCache.load()
+            if (cached == null) loading = true
             error = null
-            try { catalog = AiMercApi.catalog() }
-            catch (exception: Exception) { error = exception.message ?: "Falha ao carregar o catalogo" }
-            finally { loading = false }
+            try {
+                if (cached == null) {
+                    // Primeira abertura: carga cheia
+                    val (full, serverTime) = AiMercApi.catalogWithTime()
+                    catalog = full
+                    if (serverTime.isNotBlank()) catalogCache.save(full, serverTime)
+                } else {
+                    // Abre instantaneamente com o cache e atualiza em segundo plano
+                    catalog = cached.first
+                    loading = false
+                    val delta = AiMercApi.productDelta(cached.second)
+                    val summary = AiMercApi.summary()
+                    val merged = cached.first.products.associateBy { it.id }.toMutableMap()
+                    delta.products.forEach { product ->
+                        if (product.active && product.catalogVisible && product.price >= 0.001 && product.stock > 0) {
+                            merged[product.id] = product
+                        } else {
+                            merged.remove(product.id)
+                        }
+                    }
+                    val products = merged.values.sortedWith(compareByDescending<Product> { it.image.isNotBlank() })
+                    val updated = Catalog(summary.store, summary.categories, summary.banners, products)
+                    catalog = updated
+                    catalogCache.save(updated, delta.serverTime)
+                }
+            } catch (exception: Exception) {
+                // Se o delta falhar, o cache exibido continua valendo
+                if (catalog == null) error = exception.message ?: "Falha ao carregar o catalogo"
+            } finally { loading = false }
         }
     }
 

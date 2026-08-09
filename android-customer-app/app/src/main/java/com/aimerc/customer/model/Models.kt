@@ -24,7 +24,10 @@ data class Product(
     val stock: Double,
     val unit: String,
     val image: String,
-    val promo: Boolean
+    val promo: Boolean,
+    val active: Boolean = true,
+    val catalogVisible: Boolean = true,
+    val updatedAt: String = ""
 )
 
 data class Banner(

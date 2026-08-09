@@ -603,6 +603,10 @@ export async function listProducts(storeId, filters = {}) {
     values.push(normalizeCategory(filters.category));
     clauses.push(`COALESCE(NULLIF(p.catalog_category,''),p.source_category,p.category) = $${values.length}`);
   }
+  if (filters.since) {
+    values.push(String(filters.since));
+    clauses.push(`p.updated_at > $${values.length}`);
+  }
 
   const limit = Number.isFinite(Number(filters.limit)) ? Math.min(500, Math.max(1, Number(filters.limit))) : null;
   const offset = Number.isFinite(Number(filters.offset)) ? Math.max(0, Number(filters.offset)) : 0;
