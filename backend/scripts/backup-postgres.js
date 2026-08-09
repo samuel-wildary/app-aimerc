@@ -24,7 +24,13 @@ const s3 = new S3Client({
 const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
 const file = path.join(os.tmpdir(), `aimerc-${timestamp}.dump`);
 console.log('Gerando dump...');
-await execFileAsync('pg_dump', ['--dbname', databaseUrl, '--format=custom', '--compress', '6', '--file', file], { maxBuffer: 64 * 1024 * 1024 });
+try {
+  await execFileAsync('pg_dump', ['--dbname', databaseUrl, '--format=custom', '--compress', '6', '--file', file], { maxBuffer: 64 * 1024 * 1024 });
+} catch (error) {
+  if (error.message) error.message = error.message.replaceAll(databaseUrl, '***REDACTED***');
+  if (error.stack) error.stack = error.stack.replaceAll(databaseUrl, '***REDACTED***');
+  throw error;
+}
 const { size } = fs.statSync(file);
 if (size < 1024) throw new Error(`Dump suspeito (apenas ${size} bytes)`);
 const key = `${PREFIX}aimerc-${timestamp}.dump`;
