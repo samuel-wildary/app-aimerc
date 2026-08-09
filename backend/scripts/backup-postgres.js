@@ -1,10 +1,8 @@
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
+import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { S3Client, PutObjectCommand, ListObjectsV2Command, DeleteObjectCommand } from '@aws-sdk/client-s3';
-const execFileAsync = promisify(execFile);
 const databaseUrl = String(process.env.DATABASE_URL || '').trim();
 if (!databaseUrl) throw new Error('DATABASE_URL nao configurada');
 const accountId = String(process.env.AIMERC_R2_ACCOUNT_ID || '').trim();
@@ -25,7 +23,27 @@ const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
 const file = path.join(os.tmpdir(), `aimerc-${timestamp}.dump`);
 console.log('Gerando dump...');
 try {
-  await execFileAsync('pg_dump', ['--dbname', databaseUrl, '--format=custom', '--compress', '6', '--file', file], { maxBuffer: 64 * 1024 * 1024 });
+  await new Promise((resolve, reject) => {
+    const child = spawn('pg_dump', ['--dbname', databaseUrl, '--format=custom', '--compress', '6', '--file', file, '--verbose']);
+    let errOutput = '';
+    child.stderr.on('data', (chunk) => {
+      const text = chunk.toString();
+      errOutput += text;
+      const lines = text.split('\n');
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (trimmed) {
+          const sanitized = trimmed.replaceAll(databaseUrl, '***REDACTED***');
+          console.log(`[pg_dump] ${sanitized}`);
+        }
+      }
+    });
+    child.on('error', reject);
+    child.on('close', (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(`pg_dump falhou (codigo ${code}): ${errOutput}`));
+    });
+  });
 } catch (error) {
   if (error.message) error.message = error.message.replaceAll(databaseUrl, '***REDACTED***');
   if (error.stack) error.stack = error.stack.replaceAll(databaseUrl, '***REDACTED***');
