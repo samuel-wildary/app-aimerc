@@ -2,7 +2,8 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { S3Client, PutObjectCommand, ListObjectsV2Command, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, ListObjectsV2Command, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { Upload } from '@aws-sdk/lib-storage';
 const databaseUrl = String(process.env.DATABASE_URL || '').trim();
 if (!databaseUrl) throw new Error('DATABASE_URL nao configurada');
 const accountId = String(process.env.AIMERC_R2_ACCOUNT_ID || '').trim();
@@ -53,7 +54,11 @@ const { size } = fs.statSync(file);
 if (size < 1024) throw new Error(`Dump suspeito (apenas ${size} bytes)`);
 const key = `${PREFIX}aimerc-${timestamp}.dump`;
 console.log(`Enviando ${(size / 1024 / 1024).toFixed(1)} MB para r2://${bucket}/${key}`);
-await s3.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: fs.createReadStream(file) }));
+const upload = new Upload({
+  client: s3,
+  params: { Bucket: bucket, Key: key, Body: fs.createReadStream(file) },
+});
+await upload.done();
 fs.unlinkSync(file);
 const listed = await s3.send(new ListObjectsV2Command({ Bucket: bucket, Prefix: PREFIX }));
 const cutoff = Date.now() - RETENTION_DAYS * 86_400_000;
