@@ -84,7 +84,7 @@ import {
   startCatalogScan,
   cancelCatalogScan
 } from './lib/catalog-library.js';
-import { seedVirtualAssets } from './lib/postgres.js';
+import { query, seedVirtualAssets } from './lib/postgres.js';
 import { normalizeCategory } from './lib/categories.js';
 import { beautifyProductName } from './lib/product-names.js';
 import { createToken, passwordNeedsUpgrade, requireAuth, verifyPassword } from './lib/auth.js';
@@ -127,6 +127,19 @@ app.use(cors({
   }
 }));
 app.use(express.json({ limit: '1mb' }));
+app.use((req, res, next) => {
+  if (req.path === '/api/health') return next();
+  const startedAt = process.hrtime.bigint();
+  res.on('finish', () => {
+    const ms = Number(process.hrtime.bigint() - startedAt) / 1e6;
+    console.log(JSON.stringify({
+      type: 'http', method: req.method, path: req.path,
+      status: res.statusCode, ms: Math.round(ms),
+      storeId: req.user?.storeId || null
+    }));
+  });
+  next();
+});
 app.use((req, res, next) => {
   const isPublicImageRead = req.method === 'GET' && (
     /^\/api\/public\/catalog-library\/[^/]+\/image$/.test(req.path)
@@ -383,6 +396,29 @@ app.get('/api/health', asyncRoute(async (req, res) => {
     persistence: 'postgresql',
     port: PORT
   });
+}));
+
+// Health das integracoes ERP: 503 se alguma loja habilitada esta com sync
+// em erro ou sem sincronizar ha 3x o intervalo configurado (min. 15 min).
+app.get('/api/health/integrations', asyncRoute(async (req, res) => {
+  const result = await query(`
+    SELECT store_id, last_sync_status, last_sync_at, sync_interval_seconds
+    FROM store_integrations WHERE enabled = 1
+  `);
+  const now = Date.now();
+  const unhealthy = result.rows.filter(row => {
+    if (row.last_sync_status === 'ERROR') return true;
+    if (!row.last_sync_at) return true;
+    const staleMs = Math.max(Number(row.sync_interval_seconds) || 300, 300) * 3 * 1000;
+    return now - new Date(row.last_sync_at).getTime() > staleMs;
+  });
+  if (unhealthy.length > 0) {
+    return res.status(503).json({
+      status: 'UNHEALTHY',
+      stores: unhealthy.map(row => row.store_id)
+    });
+  }
+  res.json({ status: 'HEALTHY', stores: result.rowCount });
 }));
 
 app.post('/api/auth/login', asyncRoute(async (req, res) => {
@@ -1634,6 +1670,9 @@ async function start() {
   }, 60_000);
   pushAutomationTimer.unref();
   processPushAutomations().catch(error => console.error('Falha ao iniciar automacoes de push', error));
+  process.on('unhandledRejection', error => {
+    console.error(JSON.stringify({ type: 'unhandledRejection', message: String(error?.message || error), stack: String(error?.stack || '').slice(0, 2000) }));
+  });
   const server = http.createServer(app);
   attachRealtime(server);
   server.listen(PORT, '0.0.0.0', () => {
