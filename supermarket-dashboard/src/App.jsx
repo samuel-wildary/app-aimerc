@@ -398,6 +398,120 @@ function Overview({ summary, orders, products, selected, setSelected, createDemo
   );
 }
 
+function InlineStockEditor({ product, api, onChanged, setAssimilateMsg }) {
+  const sourceIsKg = String(product.sourceUnit || product.unit || '').toUpperCase() === 'KG';
+  
+  const [saleMode, setSaleMode] = useState(
+    product.saleMode === 'WEIGHT' ? (product.quantityStep === 1 ? 'WEIGHT_1000' : 'WEIGHT_100') : (product.saleMode || 'AUTO')
+  );
+  
+  const [stockOverride, setStockOverride] = useState(product.stockOverride === null ? '' : product.stockOverride);
+  const [stockUnit, setStockUnit] = useState('KG');
+  const [busy, setBusy] = useState(false);
+
+  async function handleSaleModeChange(newVal) {
+    setSaleMode(newVal);
+    let sMode = 'AUTO';
+    let qStep = 1;
+    if (newVal === 'UNIT') {
+      sMode = 'UNIT';
+    } else if (newVal.startsWith('WEIGHT_')) {
+      sMode = 'WEIGHT';
+      qStep = Number(newVal.split('_')[1]) / 1000;
+    }
+    setBusy(true);
+    try {
+      await api.updateProductCatalog(product.id, {
+        saleMode: sMode,
+        quantityStep: qStep,
+        stockOverride: stockOverride === '' ? null : Number(stockOverride)
+      });
+      if (onChanged) await onChanged();
+    } catch (e) {
+      if (setAssimilateMsg) setAssimilateMsg(e.message || 'Erro ao salvar a forma de venda');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveStock(newVal) {
+    let finalStock = newVal === '' ? '' : (stockUnit === 'G' ? Number(newVal) / 1000 : Number(newVal));
+    setStockOverride(finalStock);
+    let sMode = 'AUTO';
+    let qStep = 1;
+    if (saleMode === 'UNIT') {
+      sMode = 'UNIT';
+    } else if (saleMode.startsWith('WEIGHT_')) {
+      sMode = 'WEIGHT';
+      qStep = Number(saleMode.split('_')[1]) / 1000;
+    }
+    setBusy(true);
+    try {
+      await api.updateProductCatalog(product.id, {
+        saleMode: sMode,
+        quantityStep: qStep,
+        stockOverride: finalStock === '' ? null : Number(finalStock)
+      });
+      if (onChanged) await onChanged();
+    } catch (e) {
+      if (setAssimilateMsg) setAssimilateMsg(e.message || 'Erro ao salvar estoque manual');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!sourceIsKg) {
+    return <div className="inline-stock-readonly">{product.stock} {product.unit}</div>;
+  }
+
+  return (
+    <div className={`inline-stock-editor ${busy ? 'busy' : ''}`}>
+      <select 
+        value={saleMode} 
+        onChange={e => handleSaleModeChange(e.target.value)}
+        disabled={busy}
+        className="inline-sale-mode-select"
+        title="Forma de Venda"
+      >
+        <option value="AUTO">ERP</option>
+        <option value="UNIT">Por Un</option>
+        <option value="WEIGHT_1000">Por 1kg</option>
+        <option value="WEIGHT_500">Por 500g</option>
+        <option value="WEIGHT_100">Por 100g</option>
+      </select>
+      
+      {saleMode !== 'UNIT' && (
+        <div className="inline-stock-inputs">
+          <input 
+            type="number" 
+            min="0"
+            step={stockUnit === 'G' ? '1' : '0.001'}
+            placeholder={stockUnit === 'G' ? `${(product.sourceStock ?? product.stock) * 1000}` : `${product.sourceStock ?? product.stock}`}
+            value={stockOverride === '' ? '' : (stockUnit === 'G' ? Number(stockOverride) * 1000 : stockOverride)}
+            onChange={e => setStockOverride(e.target.value === '' ? '' : (stockUnit === 'G' ? Number(e.target.value) / 1000 : e.target.value))}
+            onBlur={e => saveStock(e.target.value)}
+            disabled={busy}
+            className="inline-stock-input"
+            title="Estoque manual (deixe vazio para usar a integração)"
+          />
+          <select 
+            value={stockUnit} 
+            onChange={e => {
+              setStockUnit(e.target.value);
+            }}
+            disabled={busy}
+            className="inline-stock-unit-select"
+            title="Unidade de entrada"
+          >
+            <option value="KG">kg</option>
+            <option value="G">g</option>
+          </select>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ProductEditor({ product, categories, onClose, onSaved }) {
   const sourceIsKg = String(product.sourceUnit || product.unit || '').toUpperCase() === 'KG';
   const [form, setForm] = useState({
@@ -712,6 +826,28 @@ function Catalog({ products, categories, query, setQuery, category, setCategory,
     }
   }
 
+  async function handleBulkSaleMode(option) {
+    if (!option || !selectedProducts.length) return;
+    let saleMode = 'AUTO';
+    let quantityStepGrams = 1000;
+    if (option === 'UNIT') {
+      saleMode = 'UNIT';
+    } else if (option.startsWith('WEIGHT_')) {
+      saleMode = 'WEIGHT';
+      quantityStepGrams = Number(option.split('_')[1]);
+    }
+    
+    try {
+      setAssimilateMsg('Atualizando forma de venda...');
+      const result = await api.updateBulkCatalog(selectedProducts.map(p => p.id), saleMode, quantityStepGrams);
+      setAssimilateMsg(`A forma de venda de ${result.updated || selectedProducts.length} produto(s) foi atualizada.`);
+      setSelectedIds(new Set());
+      if (onChanged) await onChanged();
+    } catch (error) {
+      setAssimilateMsg(error.message || 'Falha ao alterar forma de venda');
+    }
+  }
+
   return (
     <section className="panel catalog-panel">
       <div className="panel-heading catalog-heading">
@@ -773,6 +909,19 @@ function Catalog({ products, categories, query, setQuery, category, setCategory,
             <button type="button" className="secondary" onClick={clearSelectedImages}>
               <Trash2 size={15} /> Remover fotos
             </button>
+            <select
+              className="bulk-select-action"
+              value=""
+              onChange={e => handleBulkSaleMode(e.target.value)}
+              style={{ marginLeft: 8, padding: '6px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface)' }}
+            >
+              <option value="" disabled>Alterar forma de venda...</option>
+              <option value="AUTO">Automático pelo ERP</option>
+              <option value="UNIT">Forçar venda por Unidade</option>
+              <option value="WEIGHT_1000">Por Peso (de 1 em 1 kg)</option>
+              <option value="WEIGHT_500">Por Peso (de 500 em 500 g)</option>
+              <option value="WEIGHT_100">Por Peso (de 100 em 100 g)</option>
+            </select>
           </div>
         </div>
       )}
@@ -849,7 +998,7 @@ function Catalog({ products, categories, query, setQuery, category, setCategory,
                   <td><code>{product.barcode || product.sku}</code></td>
                   <td><span className="category-pill">{product.category}</span></td>
                   <td><strong>{money(product.price)}</strong></td>
-                  <td>{product.stock} {product.unit}</td>
+                  <td><InlineStockEditor product={product} api={api} onChanged={onChanged} setAssimilateMsg={setAssimilateMsg} /></td>
                   <td><span className={statusClass}>{statusIcon}{statusText}</span></td>
                   <td>
                     <div className="catalog-row-actions">

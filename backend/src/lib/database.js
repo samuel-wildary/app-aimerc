@@ -782,6 +782,12 @@ export async function updateProductCatalog(storeId, productId, input) {
   return result.rowCount ? getProduct(storeId, productId) : null;
 }
 
+export async function updateProductsBulkSaleMode(storeId, productIds, input) {
+  await query(`UPDATE products SET sale_mode=$3, quantity_step=$4, updated_at=$5 WHERE store_id=$1 AND id=ANY($2::text[])`, [
+    storeId, productIds, input.saleMode || 'AUTO', input.quantityStep || 0.1, isoNow()
+  ]);
+}
+
 export async function listProductCategories(storeId, includeDisabled = false) {
   const store = await getStore(storeId);
   const disabledCats = new Set(

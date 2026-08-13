@@ -48,6 +48,12 @@ export class ApiClient {
       body: JSON.stringify(product)
     });
   }
+  updateBulkCatalog(productIds, saleMode, quantityStepGrams) {
+    return this.request('/products/bulk-catalog', {
+      method: 'PATCH',
+      body: JSON.stringify({ productIds, saleMode, quantityStepGrams })
+    });
+  }
   clearProductImages(productIds = []) {
     return this.request('/products/clear-images', {
       method: 'POST',

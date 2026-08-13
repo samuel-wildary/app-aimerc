@@ -62,6 +62,7 @@ import {
   recordIntegrationRun,
   updateOrderStatus,
   updateProductCatalog,
+  updateProductsBulkSaleMode,
   updatePushCampaign,
   updatePushAutomation,
   updateBanner,
@@ -695,6 +696,32 @@ app.patch('/api/products/:productId/catalog', requireAuth('STORE_MANAGER'), asyn
     metadata: { category: product.category, visible: product.catalogVisible }
   });
   res.json(publicProduct(req, await getStore(req.user.storeId), product));
+}));
+
+app.patch('/api/products/bulk-catalog', requireAuth('STORE_MANAGER'), asyncRoute(async (req, res) => {
+  await managerStore(req);
+  const { productIds, saleMode, quantityStepGrams } = req.body;
+  if (!Array.isArray(productIds) || !productIds.length) throw new ApiError(400, 'Nenhum produto selecionado');
+  const safeSaleMode = String(saleMode || 'AUTO').toUpperCase();
+  if (!['AUTO', 'UNIT', 'WEIGHT'].includes(safeSaleMode)) throw new ApiError(400, 'Forma de venda invalida');
+  const quantityStep = Number(quantityStepGrams ?? 100) / 1000;
+  if (safeSaleMode === 'WEIGHT' && (!Number.isFinite(quantityStep) || quantityStep < 0.001 || quantityStep > 100)) throw new ApiError(400, 'Fracao de peso invalida');
+  
+  await updateProductsBulkSaleMode(req.user.storeId, productIds, {
+    saleMode: safeSaleMode,
+    quantityStep
+  });
+  
+  notifyCatalogUpdated(req.user.storeId);
+  await writeAuditLog({
+    storeId: req.user.storeId,
+    actorId: req.user.sub,
+    action: 'PRODUCT_BULK_CATALOG_UPDATED',
+    entityType: 'PRODUCT',
+    entityId: 'BULK',
+    metadata: { count: productIds.length, saleMode: safeSaleMode, quantityStep }
+  });
+  res.json({ success: true, updated: productIds.length });
 }));
 
 app.get('/api/customers', requireAuth('STORE_MANAGER'), asyncRoute(async (req, res) => {
