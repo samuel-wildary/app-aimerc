@@ -448,6 +448,10 @@ function InlineStockEditor({ product, api, onChanged, setAssimilateMsg }) {
     setBusy(true);
     try {
       await api.updateProductCatalog(product.id, {
+        catalogName: product.catalogName,
+        catalogCategory: product.catalogCategory,
+        description: product.description,
+        catalogVisible: product.catalogVisible,
         saleMode: sMode,
         quantityStep: qStep,
         stockOverride: finalStock === '' ? null : Number(finalStock)
@@ -509,6 +513,48 @@ function InlineStockEditor({ product, api, onChanged, setAssimilateMsg }) {
         </div>
       )}
     </div>
+  );
+}
+
+function InlineNameEditor({ product, api, onChanged, setAssimilateMsg }) {
+  const [name, setName] = useState(product.catalogName || product.name);
+  const [busy, setBusy] = useState(false);
+
+  async function handleBlur() {
+    const trimmed = name.trim();
+    if (trimmed === (product.catalogName || product.name)) return;
+    
+    setBusy(true);
+    try {
+      await api.updateProductCatalog(product.id, {
+        catalogName: trimmed === product.sourceName ? '' : trimmed,
+        catalogCategory: product.catalogCategory,
+        description: product.description,
+        catalogVisible: product.catalogVisible,
+        saleMode: product.saleMode,
+        quantityStep: product.quantityStep,
+        stockOverride: product.stockOverride
+      });
+      if (onChanged) await onChanged();
+    } catch (e) {
+      if (setAssimilateMsg) setAssimilateMsg(e.message || 'Erro ao salvar o nome');
+      setName(product.catalogName || product.name);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <input
+      type="text"
+      className={`inline-name-input ${busy ? 'busy' : ''}`}
+      value={name}
+      onChange={e => setName(e.target.value)}
+      onBlur={handleBlur}
+      disabled={busy}
+      placeholder={product.sourceName}
+      title="Clique para editar o nome"
+    />
   );
 }
 
@@ -989,7 +1035,7 @@ function Catalog({ products, categories, query, setQuery, category, setCategory,
                         {!product.hasImage && <ImageOff size={17} />}
                       </button>
                       <div>
-                        <strong>{product.name}</strong>
+                        <InlineNameEditor product={product} api={api} onChanged={onChanged} setAssimilateMsg={setAssimilateMsg} />
                         {product.catalogName && <small>Nome personalizado</small>}
                         {!product.hasImage && <small className="missing-image-label">Imagem pendente</small>}
                       </div>
