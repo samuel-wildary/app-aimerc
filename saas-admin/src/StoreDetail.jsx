@@ -196,8 +196,119 @@ function PhotoQueueModal({
   );
 }
 
+function EditStoreModal({ store, close, onSave }) {
+  const [form, setForm] = useState({
+    name: store.name || '',
+    owner: store.owner || '',
+    email: store.email || '',
+    phone: store.phone || '',
+    city: store.city || '',
+    state: store.state || 'CE',
+    plan: store.plan || 'PROFESSIONAL',
+    monthlyPrice: store.monthlyPrice || 497,
+    minimumOrder: store.minimumOrder || 30,
+    deliveryFee: store.deliveryFee ?? 6,
+    supportPhone: store.supportPhone || ''
+  });
+  const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
+  function field(name, value) { setForm(current => ({ ...current, [name]: value })); }
+  async function submit(event) {
+    event.preventDefault();
+    setSaving(true);
+    setError('');
+    try {
+      await onSave(form);
+      close();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+  return (
+    <div className="modal-layer" onMouseDown={event => event.target === event.currentTarget && close()}>
+      <form className="modal" onSubmit={submit}>
+        <div className="modal-head">
+          <div>
+            <p className="eyebrow">Atualizar dados</p>
+            <h2>Editar supermercado</h2>
+          </div>
+          <button type="button" className="icon" onClick={close}><X size={20} /></button>
+        </div>
+        <div className="form-grid">
+          <label className="wide">Nome do supermercado<input value={form.name} onChange={event => field('name',event.target.value)} required /></label>
+          <label>Responsavel<input value={form.owner} onChange={event => field('owner',event.target.value)} required /></label>
+          <label>E-mail de acesso<input type="email" value={form.email} onChange={event => field('email',event.target.value)} required /></label>
+          <label>Telefone<input value={form.phone} onChange={event => field('phone',event.target.value)} /></label>
+          <label>Telefone do suporte<input value={form.supportPhone} onChange={event => field('supportPhone',event.target.value)} /></label>
+          <label>Cidade<input value={form.city} onChange={event => field('city',event.target.value)} required /></label>
+          <label>UF<input maxLength="2" value={form.state} onChange={event => field('state',event.target.value)} required /></label>
+          <label>Plano<select value={form.plan} onChange={event => field('plan',event.target.value)}>
+            <option value="STARTER">Starter</option><option value="PROFESSIONAL">Profissional</option><option value="PREMIUM">Premium</option>
+          </select></label>
+          <label>Mensalidade<input type="number" min="1" value={form.monthlyPrice} onChange={event => field('monthlyPrice',event.target.value)} required /></label>
+          <label>Pedido minimo<input type="number" min="1" value={form.minimumOrder} onChange={event => field('minimumOrder',event.target.value)} /></label>
+          <label>Taxa de entrega<input type="number" min="0" value={form.deliveryFee} onChange={event => field('deliveryFee',event.target.value)} /></label>
+        </div>
+        {error && <div className="error">{error}</div>}
+        <div className="modal-actions">
+          <button type="button" className="ghost" onClick={close}>Cancelar</button>
+          <button className="accent" disabled={saving}>{saving ? 'Salvando...' : 'Salvar alteracoes'}</button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function ResetPasswordModal({ store, close, onSave }) {
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
+  async function submit(event) {
+    event.preventDefault();
+    setSaving(true);
+    setError('');
+    try {
+      await onSave(password);
+      close();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+  return (
+    <div className="modal-layer" onMouseDown={event => event.target === event.currentTarget && close()}>
+      <form className="modal" onSubmit={submit} style={{ maxWidth: 400 }}>
+        <div className="modal-head">
+          <div>
+            <p className="eyebrow danger-text">Acesso do supermercado</p>
+            <h2>Redefinir senha</h2>
+          </div>
+          <button type="button" className="icon" onClick={close}><X size={20} /></button>
+        </div>
+        <p style={{ fontSize: 14, color: 'var(--text-dim)', marginBottom: 20 }}>
+          Defina uma nova senha para <strong>{store.name}</strong>. A senha antiga sera invalidada imediatamente.
+        </p>
+        <label>
+          Nova senha de acesso
+          <input type="password" autoFocus required value={password} onChange={e => setPassword(e.target.value)} />
+        </label>
+        {error && <div className="error">{error}</div>}
+        <div className="modal-actions">
+          <button type="button" className="ghost" onClick={close}>Cancelar</button>
+          <button className="danger-button" disabled={saving || !password}>{saving ? 'Redefinindo...' : 'Confirmar e trocar senha'}</button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
 export default function StoreDetail({ storeId, onBack, onEditBrand, onDelete }) {
   const [tab, setTab] = useState('cadastro');
+  const [editingStore, setEditingStore] = useState(false);
+  const [resettingPassword, setResettingPassword] = useState(false);
   const [detail, setDetail] = useState(null);
   const [products, setProducts] = useState({ items: [], total: 0 });
   const [productFilter, setProductFilter] = useState('all');
@@ -609,6 +720,10 @@ export default function StoreDetail({ storeId, onBack, onEditBrand, onDelete }) 
             <div>
               <p className="eyebrow">Dados do cliente</p>
               <h2>Cadastro completo</h2>
+            </div>
+            <div className="top-actions">
+              <button className="ghost" onClick={() => setEditingStore(true)}>Editar cadastro</button>
+              <button className="ghost" onClick={() => setResettingPassword(true)}>Redefinir senha</button>
             </div>
           </div>
           <div className="overview-grid">
@@ -1028,6 +1143,9 @@ export default function StoreDetail({ storeId, onBack, onEditBrand, onDelete }) 
           <MatchReport samples={job?.samples || []} />
         </section>
       )}
+
+      {editingStore && <EditStoreModal store={store} close={() => setEditingStore(false)} onSave={async (data) => { await api.updateStore(storeId, data); await loadDetail({ quiet: true }); }} />}
+      {resettingPassword && <ResetPasswordModal store={store} close={() => setResettingPassword(false)} onSave={async (password) => { await api.updateStorePassword(storeId, password); }} />}
     </div>
   );
 }

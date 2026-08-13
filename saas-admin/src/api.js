@@ -32,6 +32,8 @@ class AdminApi {
   }
   subscriptions() { return this.request('/admin/subscriptions'); }
   createStore(data) { return this.request('/admin/stores', { method: 'POST', body: JSON.stringify(data) }); }
+  updateStore(id, data) { return this.request(`/admin/stores/${id}`, { method: 'PATCH', body: JSON.stringify(data) }); }
+  updateStorePassword(id, password) { return this.request(`/admin/stores/${id}/password`, { method: 'PATCH', body: JSON.stringify({ password }) }); }
   updateStatus(id, status) { return this.request(`/admin/stores/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }); }
   updateBranding(id, colors) { return this.request(`/admin/stores/${id}/branding`, { method: 'PATCH', body: JSON.stringify(colors) }); }
   deleteStore(id, password) { return this.request(`/admin/stores/${id}`, { method: 'DELETE', body: JSON.stringify({ password }) }); }

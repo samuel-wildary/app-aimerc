@@ -356,6 +356,26 @@ export async function createStore(input) {
   return getStore(id);
 }
 
+export async function updateStore(id, input) {
+  await transaction(async client => {
+    await client.query(`UPDATE stores SET
+      name=$1, owner=$2, email=$3, phone=$4, city=$5, state=$6, plan=$7, monthly_price=$8,
+      minimum_order=$9, delivery_fee=$10, support_phone=$11
+      WHERE id=$12`,
+      [input.name, input.owner, input.email, input.phone, input.city, input.state, input.plan,
+       input.monthlyPrice, input.minimumOrder, input.deliveryFee, input.supportPhone || input.phone, id]);
+       
+    await client.query(`UPDATE subscriptions SET plan=$1, amount=$2 WHERE store_id=$3 AND status != 'CANCELLED'`, [input.plan, input.monthlyPrice, id]);
+    await client.query(`UPDATE users SET name=$1, email=$2 WHERE store_id=$3 AND role='STORE_MANAGER'`, [input.owner, input.email, id]);
+  });
+  return getStore(id);
+}
+
+export async function updateStorePassword(id, password) {
+  const credentials = hashPassword(password);
+  await query(`UPDATE users SET password_hash=$1, password_salt=$2 WHERE store_id=$3 AND role='STORE_MANAGER'`, [credentials.hash, credentials.salt, id]);
+}
+
 export async function updateStoreStatus(id, status) {
   await transaction(async client => {
     await client.query('UPDATE stores SET status=$1 WHERE id=$2', [status, id]);

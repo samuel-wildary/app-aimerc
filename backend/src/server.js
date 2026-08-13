@@ -65,8 +65,10 @@ import {
   updatePushAutomation,
   updateBanner,
   updateStoreSettings,
+  updateStore,
   updateStoreStatus,
   updateStoreBranding,
+  updateStorePassword,
   updateUserPassword,
   writeAuditLog,
   saveStoreIntegration,
@@ -1263,6 +1265,33 @@ app.post('/api/admin/stores', requireAuth('PLATFORM_ADMIN'), asyncRoute(async (r
   });
   await writeAuditLog({ storeId: store.id, actorId: req.user.sub, action: 'STORE_CREATED', entityType: 'STORE', entityId: store.id });
   res.status(201).json(store);
+}));
+
+app.patch('/api/admin/stores/:id', requireAuth('PLATFORM_ADMIN'), asyncRoute(async (req, res) => {
+  const input = {
+    name: requiredText(req.body.name, 'Nome', 100),
+    owner: requiredText(req.body.owner, 'Responsavel', 100),
+    email: requiredText(req.body.email, 'E-mail', 200),
+    phone: requiredText(req.body.phone, 'Telefone', 20),
+    city: requiredText(req.body.city, 'Cidade', 100),
+    state: requiredText(req.body.state, 'UF', 2).toUpperCase(),
+    plan: oneOf(req.body.plan, ['STARTER', 'PROFESSIONAL', 'PREMIUM'], 'Plano'),
+    monthlyPrice: positiveNumber(req.body.monthlyPrice, 'Mensalidade'),
+    minimumOrder: positiveNumber(req.body.minimumOrder || 30, 'Pedido minimo'),
+    deliveryFee: positiveNumber(req.body.deliveryFee ?? 6, 'Taxa de entrega', { min: 0 }),
+    supportPhone: req.body.supportPhone ? String(req.body.supportPhone).trim() : null
+  };
+  const store = await updateStore(req.params.id, input);
+  if (!store) throw new ApiError(404, 'Supermercado nao encontrado');
+  await writeAuditLog({ storeId: store.id, actorId: req.user.sub, action: 'STORE_UPDATED', entityType: 'STORE', entityId: store.id });
+  res.json(store);
+}));
+
+app.patch('/api/admin/stores/:id/password', requireAuth('PLATFORM_ADMIN'), asyncRoute(async (req, res) => {
+  const password = requiredText(req.body.password, 'Nova senha', 200);
+  await updateStorePassword(req.params.id, password);
+  await writeAuditLog({ storeId: req.params.id, actorId: req.user.sub, action: 'STORE_PASSWORD_RESET', entityType: 'STORE', entityId: req.params.id });
+  res.json({ success: true });
 }));
 
 app.patch('/api/admin/stores/:id/status', requireAuth('PLATFORM_ADMIN'), asyncRoute(async (req, res) => {
