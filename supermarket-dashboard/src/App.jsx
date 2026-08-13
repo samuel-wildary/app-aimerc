@@ -126,8 +126,8 @@ function storeTheme(store) {
 }
 
 function Login({ onSuccess }) {
-  const [email, setEmail] = useState('gestor@aimerc.local');
-  const [password, setPassword] = useState('Aimerc@2026');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -171,7 +171,6 @@ function Login({ onSuccess }) {
           <label>Senha<input type="password" value={password} onChange={event => setPassword(event.target.value)} autoComplete="current-password" required /></label>
           {error && <div className="form-error">{error}</div>}
           <button className="primary large" disabled={loading}>{loading ? 'Entrando...' : <>Entrar no painel <ArrowRight size={18} /></>}</button>
-          <small className="demo-note">Acesso local preenchido para demonstracao.</small>
         </form>
       </section>
     </main>
