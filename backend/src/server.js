@@ -43,6 +43,7 @@ import {
   listActivePushDevicesForPhone,
   deactivatePushTokens,
   pushDeviceSummary,
+  trackStoreIp,
   listPendingPushCampaigns,
   listPushCampaigns,
   listPushAutomations,
@@ -187,6 +188,7 @@ async function publicStore(req) {
   const store = await getStoreBySlug(req.params.slug);
   if (!store) throw new ApiError(404, 'Supermercado nao encontrado');
   if (!['TRIAL', 'ACTIVE'].includes(store.status)) throw new ApiError(403, 'Supermercado temporariamente indisponivel');
+  trackStoreIp(store.id, req.ip);
   return store;
 }
 

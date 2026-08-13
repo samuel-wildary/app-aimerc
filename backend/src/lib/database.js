@@ -525,15 +525,34 @@ export async function deactivatePushTokens(storeId, tokens) {
   await query('UPDATE push_devices SET active=0 WHERE store_id=$1 AND token=ANY($2::text[])', [storeId, tokens]);
 }
 
+const storeVisitorIps = new Map();
+
+export function trackStoreIp(storeId, ip) {
+  if (!ip) return;
+  if (!storeVisitorIps.has(storeId)) storeVisitorIps.set(storeId, new Map());
+  storeVisitorIps.get(storeId).set(ip, Date.now());
+}
+
+function getActiveIpCount(storeId, minutes = 15) {
+  const ips = storeVisitorIps.get(storeId);
+  if (!ips) return 0;
+  const cutoff = Date.now() - (minutes * 60 * 1000);
+  let count = 0;
+  for (const [ip, time] of ips) {
+    if (time >= cutoff) count++;
+    else ips.delete(ip);
+  }
+  return count;
+}
+
 export async function pushDeviceSummary(storeId) {
   const row = (await query(`SELECT
-    COUNT(*) FILTER (WHERE active=1)::int AS installed_devices,
-    COUNT(*) FILTER (WHERE active=1 AND last_seen_at::timestamptz >= NOW()-INTERVAL '15 minutes')::int AS online_devices,
+    COUNT(*) FILTER (WHERE active=1 AND last_seen_at::timestamptz >= NOW()-INTERVAL '30 days')::int AS installed_devices,
     COUNT(*) FILTER (WHERE active=1 AND last_seen_at::timestamptz >= NOW()-INTERVAL '24 hours')::int AS seen_today
     FROM push_devices WHERE store_id=$1`, [storeId])).rows[0];
   return {
     installedDevices: Number(row.installed_devices || 0),
-    onlineDevices: Number(row.online_devices || 0),
+    onlineDevices: getActiveIpCount(storeId, 15),
     seenToday: Number(row.seen_today || 0),
     onlineWindowMinutes: 15
   };
