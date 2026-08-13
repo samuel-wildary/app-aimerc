@@ -73,7 +73,8 @@ import {
   writeAuditLog,
   saveStoreIntegration,
   quoteDeliveryFee,
-  upsertProducts
+  upsertProducts,
+  reportDeliveries
 } from './lib/database.js';
 import { firebaseStatus, sendFirebaseNotification } from './lib/firebase.js';
 import { productImage, storeProductImage, clearShortEanProductImages, clearProductImages } from './lib/product-images.js';
@@ -702,6 +703,13 @@ app.get('/api/customers', requireAuth('STORE_MANAGER'), asyncRoute(async (req, r
 app.get('/api/reports/overview', requireAuth('STORE_MANAGER'), asyncRoute(async (req, res) => {
   await managerStore(req);
   res.json(await storeReports(req.user.storeId));
+}));
+
+app.get('/api/reports/deliveries', requireAuth('STORE_MANAGER'), asyncRoute(async (req, res) => {
+  await managerStore(req);
+  const start = req.query.start || new Date(new Date().setHours(0, 0, 0, 0)).toISOString();
+  const end = req.query.end || new Date(new Date().setHours(23, 59, 59, 999)).toISOString();
+  res.json(await reportDeliveries(req.user.storeId, start, end));
 }));
 
 app.get('/api/push-devices/summary', requireAuth('STORE_MANAGER'), asyncRoute(async (req, res) => {

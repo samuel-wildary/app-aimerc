@@ -883,9 +883,100 @@ function Catalog({ products, categories, query, setQuery, category, setCategory,
   );
 }
 
-function Delivery({ orders, selected, setSelected, onAdvance, busy }) {
-  const deliveries = orders.filter(order => order.fulfillmentType === 'DELIVERY');
-  return <OrdersPanel orders={deliveries} selected={selected} setSelected={setSelected} title="Entregas da loja" onAdvance={onAdvance} busy={busy} />;
+function Delivery() {
+  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [deliveries, setDeliveries] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let active = true;
+    async function load() {
+      setLoading(true);
+      setError('');
+      try {
+        const startStr = new Date(`${date}T00:00:00-03:00`).toISOString();
+        const endStr = new Date(`${date}T23:59:59.999-03:00`).toISOString();
+        const data = await api.reportDeliveries(startStr, endStr);
+        if (active) setDeliveries(data);
+      } catch (e) {
+        if (active) setError(e.message);
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+    load();
+    return () => { active = false; };
+  }, [date]);
+
+  const totalValue = deliveries.reduce((sum, d) => sum + (Number(d.subtotal) || 0), 0);
+  const totalFees = deliveries.reduce((sum, d) => sum + (Number(d.deliveryFee) || 0), 0);
+
+  return (
+    <section className="panel deliveries-report" style={{ display: 'flex', flexDirection: 'column' }}>
+      <div className="panel-heading catalog-heading">
+        <div>
+          <p className="overline">Fechamento do Motoboy</p>
+          <h2>Relatorio de Entregas</h2>
+        </div>
+        <div className="catalog-toolbar" style={{ border: 'none', padding: 0 }}>
+          <input type="date" value={date} onChange={e => setDate(e.target.value)} style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', outline: 'none', fontSize: 14 }} />
+        </div>
+      </div>
+      
+      {error && <div style={{ color: 'red', margin: '0 30px 20px' }}>{error}</div>}
+      
+      <div className="report-metrics" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 20, marginBottom: 30, padding: '0 30px' }}>
+        <div className="metric-card" style={{ background: 'var(--surface-sunken)', padding: 20, borderRadius: 12 }}>
+          <p style={{ color: 'var(--text-dim)', fontSize: 13, marginBottom: 5 }}>Entregas concluidas</p>
+          <strong style={{ fontSize: 24, display: 'block' }}>{deliveries.length}</strong>
+        </div>
+        <div className="metric-card" style={{ background: 'var(--surface-sunken)', padding: 20, borderRadius: 12 }}>
+          <p style={{ color: 'var(--text-dim)', fontSize: 13, marginBottom: 5 }}>Valor das mercadorias</p>
+          <strong style={{ fontSize: 24, color: 'var(--primary)', display: 'block' }}>{money(totalValue)}</strong>
+        </div>
+        <div className="metric-card" style={{ background: 'var(--surface-sunken)', padding: 20, borderRadius: 12 }}>
+          <p style={{ color: 'var(--text-dim)', fontSize: 13, marginBottom: 5 }}>Taxas de entrega (Motoboy)</p>
+          <strong style={{ fontSize: 24, display: 'block' }}>{money(totalFees)}</strong>
+        </div>
+      </div>
+
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Pedido</th>
+              <th>Horario</th>
+              <th>Cliente</th>
+              <th>Endereco</th>
+              <th>Mercadorias</th>
+              <th>Taxa de entrega</th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading && deliveries.length === 0 ? (
+              <tr><td colSpan="6" style={{ textAlign: 'center', padding: 40 }}>Carregando...</td></tr>
+            ) : deliveries.length === 0 ? (
+              <tr><td colSpan="6" style={{ textAlign: 'center', padding: 40, color: 'var(--text-dim)' }}>Nenhuma entrega finalizada nesta data.</td></tr>
+            ) : (
+              deliveries.map(d => (
+                <tr key={d.id}>
+                  <td><strong>#{d.id.slice(-8).toUpperCase()}</strong></td>
+                  <td>{new Date(d.updatedAt || d.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</td>
+                  <td>{d.customer?.name}</td>
+                  <td className="address-cell" style={{ maxWidth: 250, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {d.customer?.address}
+                  </td>
+                  <td>{money(d.subtotal)}</td>
+                  <td><strong>{money(d.deliveryFee)}</strong></td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
 }
 
 function Customers({ customers, query, setQuery }) {

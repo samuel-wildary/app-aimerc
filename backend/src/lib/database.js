@@ -1012,6 +1012,12 @@ export async function listOrders(storeId, filters = {}) {
   return rows.map(row => hydrateOrder(row, items.get(row.id)));
 }
 
+export async function reportDeliveries(storeId, start, end) {
+  const rows = (await query(`SELECT * FROM orders WHERE store_id=$1 AND status='DONE' AND fulfillment_type='DELIVERY' AND updated_at >= $2 AND updated_at <= $3 ORDER BY updated_at DESC`, [storeId, start, end])).rows;
+  const items = await orderItems({ query }, storeId, rows.map(row => row.id));
+  return rows.map(row => hydrateOrder(row, items.get(row.id)));
+}
+
 export async function createOrder(store, input) {
   const trackingToken = crypto.randomBytes(24).toString('base64url');
   return transaction(async client => {

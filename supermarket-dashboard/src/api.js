@@ -69,6 +69,7 @@ export class ApiClient {
   }
   customers(query = '') { return this.request(`/customers${query ? `?q=${encodeURIComponent(query)}` : ''}`); }
   reports() { return this.request('/reports/overview'); }
+  reportDeliveries(start, end) { return this.request(`/reports/deliveries?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`); }
   pushDeviceSummary() { return this.request('/push-devices/summary'); }
   banners() { return this.request('/banners'); }
   async uploadBannerImage(file) {
