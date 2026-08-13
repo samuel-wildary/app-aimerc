@@ -366,14 +366,17 @@ export async function updateStore(id, input) {
        input.monthlyPrice, input.minimumOrder, input.deliveryFee, input.supportPhone || input.phone, id]);
        
     await client.query(`UPDATE subscriptions SET plan=$1, amount=$2 WHERE store_id=$3 AND status != 'CANCELLED'`, [input.plan, input.monthlyPrice, id]);
-    await client.query(`UPDATE users SET name=$1, email=$2 WHERE store_id=$3 AND role='STORE_MANAGER'`, [input.owner, input.email, id]);
+    await client.query(`UPDATE users SET name=$1, email=$2 WHERE store_id=$3`, [input.owner, input.email, id]);
   });
   return getStore(id);
 }
 
 export async function updateStorePassword(id, password) {
   const credentials = hashPassword(password);
-  await query(`UPDATE users SET password_hash=$1, password_salt=$2 WHERE store_id=$3 AND role='STORE_MANAGER'`, [credentials.hash, credentials.salt, id]);
+  const result = await query(`UPDATE users SET password_hash=$1, password_salt=$2 WHERE store_id=$3`, [credentials.hash, credentials.salt, id]);
+  if (result.rowCount === 0) {
+    throw new Error('Nenhum usuario encontrado para este supermercado');
+  }
 }
 
 export async function updateStoreStatus(id, status) {
