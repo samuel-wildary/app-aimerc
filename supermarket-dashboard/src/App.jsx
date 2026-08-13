@@ -407,7 +407,8 @@ function ProductEditor({ product, categories, onClose, onSaved }) {
     catalogVisible: product.catalogVisible,
     saleMode: sourceIsKg ? (product.saleMode || 'AUTO') : (product.saleMode === 'UNIT' ? 'UNIT' : 'AUTO'),
     quantityStepGrams: Math.round((product.quantityStep || 0.1) * 1000),
-    stockOverride: product.stockOverride ?? ''
+    stockOverride: product.stockOverride ?? '',
+    stockUnit: 'KG'
   });
   const [imageFile, setImageFile] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -455,7 +456,30 @@ function ProductEditor({ product, categories, onClose, onSaved }) {
           <div className="sale-rule-grid">
             <label>Forma de venda<select value={form.saleMode} onChange={event => setForm(current => ({ ...current, saleMode: event.target.value }))}><option value="AUTO">Automatica pela unidade do ERP</option><option value="UNIT">Forcar venda por unidade</option>{sourceIsKg && <option value="WEIGHT">Por peso (kg)</option>}</select></label>
             <label>Fracao de cada adicao (gramas)<input type="number" min="1" max="100000" step="1" value={form.quantityStepGrams} disabled={!sourceIsKg || form.saleMode === 'UNIT'} onChange={event => setForm(current => ({ ...current, quantityStepGrams: event.target.value }))} required={sourceIsKg && form.saleMode !== 'UNIT'} /></label>
-            {sourceIsKg && form.saleMode !== 'UNIT' && <label>Estoque manual disponivel (kg)<input type="number" min="0" step="0.001" value={form.stockOverride} onChange={event => setForm(current => ({ ...current, stockOverride: event.target.value }))} placeholder={`Integracao: ${product.sourceStock ?? product.stock} kg`} /><small>Deixe vazio para voltar a usar o estoque da integracao.</small></label>}
+            {sourceIsKg && form.saleMode !== 'UNIT' && (
+              <label>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                  <span>Estoque manual disponivel</span>
+                  <select value={form.stockUnit} onChange={e => setForm(current => ({ ...current, stockUnit: e.target.value }))} style={{ width: 'auto', padding: '2px 8px', fontSize: 12, height: 24, borderRadius: 4, border: '1px solid var(--border)', background: 'var(--surface-sunken)' }}>
+                    <option value="KG">Quilos (kg)</option>
+                    <option value="G">Gramas (g)</option>
+                  </select>
+                </div>
+                <input 
+                  type="number" 
+                  min="0" 
+                  step={form.stockUnit === 'G' ? "1" : "0.001"} 
+                  value={form.stockOverride === '' ? '' : (form.stockUnit === 'G' ? Number(form.stockOverride) * 1000 : form.stockOverride)} 
+                  onChange={e => {
+                    const val = e.target.value;
+                    const override = val === '' ? '' : (form.stockUnit === 'G' ? Number(val) / 1000 : val);
+                    setForm(current => ({ ...current, stockOverride: override }));
+                  }} 
+                  placeholder={form.stockUnit === 'G' ? `Integracao: ${(product.sourceStock ?? product.stock) * 1000} g` : `Integracao: ${product.sourceStock ?? product.stock} kg`} 
+                />
+                <small>Deixe vazio para voltar a usar o estoque da integracao.</small>
+              </label>
+            )}
           </div>
           <div className="weight-rule-note"><strong>Como funciona</strong><span>{sourceIsKg && form.saleMode !== 'UNIT' ? `Este produto sera vendido de ${Number(form.quantityStepGrams || 0).toLocaleString('pt-BR')} g em ${Number(form.quantityStepGrams || 0).toLocaleString('pt-BR')} g. O aplicativo exibira ${money(product.price * (Number(form.quantityStepGrams || 0) / 1000))} por essa fracao.` : 'Produto recebido como unidade. Mesmo que o nome mencione 1 kg, ele continua sendo vendido como uma unidade fechada.'}</span></div>
           <div className="source-reference"><span>Informacao recebida da integracao</span><strong>{product.sourceName}</strong><small>{product.sourceCategory} · Unidade original {product.sourceUnit || product.unit} · EAN {product.barcode || 'nao informado'}</small></div>
