@@ -552,9 +552,9 @@ export async function pushDeviceSummary(storeId) {
     FROM push_devices WHERE store_id=$1`, [storeId])).rows[0];
   return {
     installedDevices: Number(row.installed_devices || 0),
-    onlineDevices: getActiveIpCount(storeId, 15),
+    onlineDevices: getActiveIpCount(storeId, 3),
     seenToday: Number(row.seen_today || 0),
-    onlineWindowMinutes: 15
+    onlineWindowMinutes: 3
   };
 }
 
