@@ -1164,6 +1164,73 @@ export async function updateOrderStatus(storeId, orderId, status) {
   });
 }
 
+export async function updateOrderItems(storeId, orderId, inputItems) {
+  return transaction(async client => {
+    const result = await client.query('SELECT * FROM orders WHERE store_id=$1 AND id=$2 FOR UPDATE', [storeId, orderId]);
+    if (!result.rowCount) return null;
+    const current = result.rows[0];
+    if (['DONE', 'CANCELLED'].includes(current.status)) {
+      throw Object.assign(new Error('Nao e possivel editar itens de um pedido finalizado ou cancelado'), { status: 400 });
+    }
+
+    const now = isoNow();
+    const existingItems = (await client.query('SELECT * FROM order_items WHERE store_id=$1 AND order_id=$2', [storeId, orderId])).rows;
+    for (const item of existingItems) {
+      await client.query(`UPDATE products SET
+        stock=CASE WHEN catalog_stock IS NULL THEN stock+$3 ELSE stock END,
+        catalog_stock=CASE WHEN catalog_stock IS NULL THEN NULL ELSE catalog_stock+$3 END,
+        updated_at=$4 WHERE store_id=$1 AND id=$2`, [storeId, item.product_id, item.quantity, now]);
+    }
+
+    await client.query('DELETE FROM order_items WHERE store_id=$1 AND order_id=$2', [storeId, orderId]);
+
+    const validItems = (inputItems || []).filter(item => Number(item.quantity) > 0);
+    if (!validItems.length) {
+      throw Object.assign(new Error('O pedido deve conter pelo menos 1 item com quantidade maior que zero'), { status: 400 });
+    }
+
+    const productIds = validItems.map(item => item.productId);
+    const productsResult = await client.query('SELECT * FROM products WHERE store_id=$1 AND id=ANY($2::text[])', [storeId, productIds]);
+    const productsMap = new Map(productsResult.rows.map(row => [row.id, row]));
+
+    let subtotal = 0;
+    for (const item of validItems) {
+      const dbProduct = productsMap.get(item.productId);
+      const name = item.name || dbProduct?.name || 'Produto';
+      const unit = item.unit || dbProduct?.unit || 'UN';
+      const price = item.price != null ? Number(item.price) : Number(dbProduct?.price || 0);
+      const quantity = Number(item.quantity);
+      const total = Number((quantity * price).toFixed(2));
+      subtotal += total;
+
+      await client.query(`INSERT INTO order_items (store_id,order_id,product_id,name,unit,quantity,price,total)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+        [storeId, orderId, item.productId, name, unit, quantity, price, total]);
+
+      if (dbProduct) {
+        await client.query(`UPDATE products SET
+          stock=CASE WHEN catalog_stock IS NULL THEN stock-$3 ELSE stock END,
+          catalog_stock=CASE WHEN catalog_stock IS NULL THEN NULL ELSE catalog_stock-$3 END,
+          updated_at=$4 WHERE store_id=$1 AND id=$2`, [storeId, item.productId, quantity, now]);
+      }
+    }
+
+    subtotal = Number(subtotal.toFixed(2));
+    const deliveryFee = Number(current.delivery_fee || 0);
+    const total = Number((subtotal + deliveryFee).toFixed(2));
+
+    await client.query(`UPDATE orders SET subtotal=$3, total=$4, updated_at=$5 WHERE store_id=$1 AND id=$2`,
+      [storeId, orderId, subtotal, total, now]);
+
+    const [row, finalItems] = await Promise.all([
+      client.query('SELECT * FROM orders WHERE store_id=$1 AND id=$2', [storeId, orderId]),
+      client.query('SELECT * FROM order_items WHERE store_id=$1 AND order_id=$2 ORDER BY id', [storeId, orderId])
+    ]);
+
+    return hydrateOrder(row.rows[0], finalItems.rows);
+  });
+}
+
 export async function dashboardSummary(storeId) {
   const [statuses, sales, lowStock, products] = await Promise.all([
     query('SELECT status,COUNT(*)::int AS total FROM orders WHERE store_id=$1 GROUP BY status', [storeId]),

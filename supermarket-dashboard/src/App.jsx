@@ -280,23 +280,322 @@ function KanbanCard({ order, selected, onSelect, onAdvance, busy }) {
   );
 }
 
-function OrderDetail({ order, onClose, onAdvance, onPrint, busy }) {
+function OrderDetail({ order, onClose, onAdvance, onPrint, onUpdateItems, busy, products = [] }) {
   if (!order) return null;
   const { next, action } = nextStatusFor(order);
+  const [editing, setEditing] = useState(false);
+  const [items, setItems] = useState([]);
+  const [saving, setSaving] = useState(false);
+  const [productSearch, setProductSearch] = useState('');
+  const [showAddPicker, setShowAddPicker] = useState(false);
+
+  useEffect(() => {
+    if (order?.items) {
+      setItems(order.items.map(it => ({ ...it })));
+      setEditing(false);
+      setShowAddPicker(false);
+      setProductSearch('');
+    }
+  }, [order]);
+
+  const canEdit = !['DONE', 'CANCELLED'].includes(order.status);
+
+  function handleQuantityChange(index, newQty) {
+    const parsed = Math.max(0, parseFloat(newQty) || 0);
+    setItems(current => {
+      const copy = [...current];
+      copy[index] = {
+        ...copy[index],
+        quantity: parsed,
+        total: Number((parsed * Number(copy[index].price || 0)).toFixed(2))
+      };
+      return copy;
+    });
+  }
+
+  function handleRemoveItem(index) {
+    setItems(current => current.filter((_, i) => i !== index));
+  }
+
+  function handleAddProduct(product) {
+    const defaultQty = String(product.unit || '').toUpperCase() === 'KG' ? 1.0 : 1;
+    const price = Number(product.price || 0);
+    const existingIndex = items.findIndex(it => it.productId === product.id);
+    if (existingIndex >= 0) {
+      handleQuantityChange(existingIndex, items[existingIndex].quantity + defaultQty);
+    } else {
+      setItems(current => [
+        ...current,
+        {
+          productId: product.id,
+          name: product.name,
+          unit: product.unit || 'UN',
+          quantity: defaultQty,
+          price: price,
+          total: Number((defaultQty * price).toFixed(2))
+        }
+      ]);
+    }
+    setShowAddPicker(false);
+    setProductSearch('');
+  }
+
+  const calculatedSubtotal = useMemo(() => {
+    return Number(items.reduce((sum, it) => sum + (Number(it.quantity) || 0) * (Number(it.price) || 0), 0).toFixed(2));
+  }, [items]);
+
+  const calculatedTotal = useMemo(() => {
+    return Number((calculatedSubtotal + Number(order.deliveryFee || 0)).toFixed(2));
+  }, [calculatedSubtotal, order.deliveryFee]);
+
+  async function saveItems() {
+    const validItems = items.filter(it => Number(it.quantity) > 0);
+    if (!validItems.length) {
+      alert('O pedido deve conter pelo menos 1 item com quantidade maior que zero.');
+      return;
+    }
+    setSaving(true);
+    try {
+      if (onUpdateItems) {
+        await onUpdateItems(order, validItems);
+      }
+      setEditing(false);
+    } catch (e) {
+      alert('Erro ao atualizar itens: ' + (e.message || 'Tente novamente'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function cancelEdit() {
+    setItems(order.items.map(it => ({ ...it })));
+    setEditing(false);
+    setShowAddPicker(false);
+  }
+
+  const filteredProducts = useMemo(() => {
+    if (!productSearch.trim()) return products.slice(0, 8);
+    const q = productSearch.toLowerCase();
+    return products.filter(p => p.name.toLowerCase().includes(q) || (p.category && p.category.toLowerCase().includes(q))).slice(0, 10);
+  }, [products, productSearch]);
+
   return (
     <div className="order-modal-backdrop" onMouseDown={event => event.target === event.currentTarget && onClose()}>
       <div className="order-modal" role="dialog" aria-modal="true" aria-labelledby="order-modal-title">
-        <div className="drawer-head"><div><span>Pedido</span><h2 id="order-modal-title">#{order.id}</h2></div><button className="icon-button" onClick={onClose} aria-label="Fechar detalhe"><X /></button></div>
-        <div className="drawer-status"><StatusBadge status={order.status} /><span>Recebido as {shortTime(order.createdAt)}</span></div>
-        {order.scheduledTo && new Date(order.scheduledTo).getTime() > Date.now() && <section className="scheduled-notice"><CalendarClock size={19} /><div><strong>Pedido recebido fora do horario</strong><span>Separar a partir de {new Date(order.scheduledTo).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}</span></div></section>}
-        <section className="customer-block"><div className="avatar">{order.customer.name.slice(0, 1)}</div><div><strong>{order.customer.name}</strong><span>{order.customer.phone}</span></div></section>
-        {order.fulfillmentType === 'DELIVERY' && <section className="address-block"><MapPin size={19} /><div><span>Entregar em</span><strong>{order.customer.address}</strong><small>CEP {order.customer.cep || 'nao informado'}{order.customer.reference ? ` · Ref.: ${order.customer.reference}` : ''}</small></div></section>}
-        <section className="items-block"><div className="section-label"><span>Itens do pedido</span><strong>{order.items.length}</strong></div>{order.items.map(item => <div className="detail-item" key={item.productId}><b>{item.quantity} {item.unit}</b><span>{item.name}</span><strong>{money(item.total)}</strong></div>)}</section>
+        <div className="drawer-head">
+          <div>
+            <span>Pedido</span>
+            <h2 id="order-modal-title">#{order.id}</h2>
+          </div>
+          <button className="icon-button" onClick={onClose} aria-label="Fechar detalhe"><X /></button>
+        </div>
+
+        <div className="drawer-status">
+          <StatusBadge status={order.status} />
+          <span>Recebido as {shortTime(order.createdAt)}</span>
+        </div>
+
+        {order.scheduledTo && new Date(order.scheduledTo).getTime() > Date.now() && (
+          <section className="scheduled-notice">
+            <CalendarClock size={19} />
+            <div>
+              <strong>Pedido recebido fora do horario</strong>
+              <span>Separar a partir de {new Date(order.scheduledTo).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}</span>
+            </div>
+          </section>
+        )}
+
+        <section className="customer-block">
+          <div className="avatar">{order.customer.name.slice(0, 1)}</div>
+          <div>
+            <strong>{order.customer.name}</strong>
+            <span>{order.customer.phone}</span>
+          </div>
+        </section>
+
+        {order.fulfillmentType === 'DELIVERY' && (
+          <section className="address-block">
+            <MapPin size={19} />
+            <div>
+              <span>Entregar em</span>
+              <strong>{order.customer.address}</strong>
+              <small>CEP {order.customer.cep || 'nao informado'}{order.customer.reference ? ` · Ref.: ${order.customer.reference}` : ''}</small>
+            </div>
+          </section>
+        )}
+
+        <section className="items-block">
+          <div className="section-label order-items-head">
+            <div>
+              <span>Itens do pedido</span>
+              <strong>{editing ? items.length : order.items.length}</strong>
+            </div>
+            {canEdit && !editing && (
+              <button
+                type="button"
+                className="edit-items-trigger"
+                onClick={() => setEditing(true)}
+              >
+                <Pencil size={13} />
+                <span>Ajustar itens / peso real</span>
+              </button>
+            )}
+            {editing && (
+              <span className="editing-badge">
+                Modo de ajuste ativo
+              </span>
+            )}
+          </div>
+
+          {!editing ? (
+            <div className="order-items-list">
+              {order.items.map(item => (
+                <div className="detail-item" key={item.productId}>
+                  <b>{item.quantity} {item.unit}</b>
+                  <span>{item.name}</span>
+                  <strong>{money(item.total)}</strong>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="order-items-editing-list">
+              {items.map((item, index) => {
+                const isKg = String(item.unit || '').toUpperCase() === 'KG';
+                return (
+                  <div className="edit-item-row" key={item.productId || index}>
+                    <div className="edit-item-info">
+                      <strong>{item.name}</strong>
+                      <small>{money(item.price)} / {item.unit || 'UN'}</small>
+                    </div>
+                    <div className="edit-item-inputs">
+                      <div className="edit-qty-wrapper">
+                        <input
+                          type="number"
+                          step={isKg ? '0.005' : '1'}
+                          min="0"
+                          value={item.quantity}
+                          onChange={e => handleQuantityChange(index, e.target.value)}
+                          aria-label={`Quantidade de ${item.name}`}
+                          className="edit-qty-input"
+                        />
+                        <span className="edit-qty-unit">{item.unit || 'UN'}</span>
+                      </div>
+                      <strong className="edit-item-total">{money(item.total)}</strong>
+                      <button
+                        type="button"
+                        className="edit-remove-btn"
+                        onClick={() => handleRemoveItem(index)}
+                        title="Remover item do pedido"
+                        aria-label="Remover item"
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {!showAddPicker ? (
+                <button
+                  type="button"
+                  className="add-item-btn"
+                  onClick={() => setShowAddPicker(true)}
+                >
+                  <Plus size={15} />
+                  <span>Adicionar produto do catálogo</span>
+                </button>
+              ) : (
+                <div className="add-product-picker">
+                  <div className="picker-search-box">
+                    <Search size={15} />
+                    <input
+                      type="text"
+                      placeholder="Buscar produto para adicionar..."
+                      value={productSearch}
+                      onChange={e => setProductSearch(e.target.value)}
+                      autoFocus
+                    />
+                    <button type="button" onClick={() => setShowAddPicker(false)} className="picker-close-btn" aria-label="Fechar busca">
+                      <X size={14} />
+                    </button>
+                  </div>
+                  <div className="picker-results">
+                    {filteredProducts.map(p => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        className="picker-product-item"
+                        onClick={() => handleAddProduct(p)}
+                      >
+                        <div className="picker-product-info">
+                          <span>{p.name}</span>
+                          <small>{p.category || 'Geral'} · {p.unit || 'UN'}</small>
+                        </div>
+                        <strong>{money(p.price)}</strong>
+                      </button>
+                    ))}
+                    {!filteredProducts.length && (
+                      <div className="picker-empty">Nenhum produto encontrado</div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              <div className="edit-actions-bar">
+                <button
+                  type="button"
+                  className="btn-cancel-edit"
+                  onClick={cancelEdit}
+                  disabled={saving}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  className="btn-save-edit"
+                  onClick={saveItems}
+                  disabled={saving || !items.length}
+                >
+                  {saving ? <RefreshCw size={14} className="spin" /> : <Save size={14} />}
+                  <span>{saving ? 'Salvando...' : 'Salvar ajustes'}</span>
+                </button>
+              </div>
+            </div>
+          )}
+        </section>
+
         {order.notes && <section className="notes"><span>Observacao</span><p>{order.notes}</p></section>}
-        <section className="totals"><div><span>Subtotal</span><b>{money(order.subtotal)}</b></div><div><span>Entrega</span><b>{money(order.deliveryFee)}</b></div><div className="grand"><span>Total</span><strong>{money(order.total)}</strong></div></section>
+
+        <section className="totals">
+          <div>
+            <span>Subtotal</span>
+            <b>{money(editing ? calculatedSubtotal : order.subtotal)}</b>
+          </div>
+          <div>
+            <span>Entrega</span>
+            <b>{money(order.deliveryFee)}</b>
+          </div>
+          <div className="grand">
+            <span>Total</span>
+            <strong>{money(editing ? calculatedTotal : order.total)}</strong>
+          </div>
+          {editing && calculatedTotal !== order.total && (
+            <div className="total-diff-notice">
+              <span>Variação de corte/ajuste: </span>
+              <strong>{calculatedTotal > order.total ? `+ ${money(calculatedTotal - order.total)}` : `- ${money(order.total - calculatedTotal)}`}</strong>
+            </div>
+          )}
+        </section>
+
         <div className="drawer-footer">
           <button className="print-slip" onClick={() => onPrint(order)}><Printer size={17} /> Imprimir guia de separacao</button>
-          {next ? <button className="primary large" disabled={busy} onClick={() => onAdvance(order, next)}>{busy ? 'Atualizando...' : action}<ArrowRight size={18} /></button> : <div className="completed-message"><Check size={19} /> Pedido encerrado</div>}
+          {next ? (
+            <button className="primary large" disabled={busy || editing} onClick={() => onAdvance(order, next)}>
+              {busy ? 'Atualizando...' : action}<ArrowRight size={18} />
+            </button>
+          ) : (
+            <div className="completed-message"><Check size={19} /> Pedido encerrado</div>
+          )}
         </div>
       </div>
     </div>
@@ -1873,6 +2172,21 @@ export default function App() {
     }
   }
 
+  async function handleUpdateOrderItems(order, updatedItems) {
+    setBusy(true);
+    try {
+      const updated = await api.updateOrderItems(order.id, updatedItems);
+      setSelected(current => (current?.id === order.id ? updated : current));
+      await refreshOrdersLive();
+      return updated;
+    } catch (requestError) {
+      setError(requestError.message);
+      throw requestError;
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function createDemo() {
     setCreatingDemo(true);
     try {
@@ -1973,7 +2287,7 @@ export default function App() {
           {active === 'storefront' && <Storefront store={summary?.store} categories={categories} deliveryZones={deliveryZones} banners={banners} campaigns={campaigns} automations={automations} onSaveSettings={saveSettings} onCreateBanner={createBanner} onUpdateBanner={updateBanner} onDeleteBanner={deleteBanner} onCreateCampaign={createCampaign} onSendCampaign={sendCampaign} onDeleteCampaign={deleteCampaign} onCreateAutomation={createAutomation} onToggleAutomation={toggleAutomation} onRunAutomation={runAutomation} onDeleteAutomation={deleteAutomation} />}
         </div>
       </main>
-      <OrderDetail order={selected} onClose={() => setSelected(null)} onAdvance={advance} onPrint={order => printOrderSlip(order, summary?.store || session.store)} busy={busy} />
+      <OrderDetail order={selected} onClose={() => setSelected(null)} onAdvance={advance} onUpdateItems={handleUpdateOrderItems} onPrint={order => printOrderSlip(order, summary?.store || session.store)} busy={busy} products={products} />
     </div>
   );
 }

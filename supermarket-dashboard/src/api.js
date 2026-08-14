@@ -105,8 +105,8 @@ export class ApiClient {
   createPushAutomation(automation) { return this.request('/push-automations', { method: 'POST', body: JSON.stringify(automation) }); }
   updatePushAutomation(id, automation) { return this.request(`/push-automations/${id}`, { method: 'PATCH', body: JSON.stringify(automation) }); }
   runPushAutomation(id) { return this.request(`/push-automations/${id}/run`, { method: 'POST' }); }
-  deletePushAutomation(id) { return this.request(`/push-automations/${id}`, { method: 'DELETE' }); }
   updateStatus(id, status) { return this.request(`/orders/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }); }
+  updateOrderItems(id, items) { return this.request(`/orders/${id}/items`, { method: 'PATCH', body: JSON.stringify({ items }) }); }
   async downloadPrintAgent() {
     const data = await this.request('/store/print-agent/download');
     const url = String(data?.url || '').trim();

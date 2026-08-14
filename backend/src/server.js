@@ -60,6 +60,7 @@ import {
   markPushCampaignResult,
   recordLoginResult,
   recordIntegrationRun,
+  updateOrderItems,
   updateOrderStatus,
   updateProductCatalog,
   updateProductsBulkSaleMode,
@@ -646,6 +647,40 @@ app.patch('/api/orders/:id/status', requireAuth('STORE_MANAGER'), asyncRoute(asy
   await writeAuditLog({ storeId: store.id, actorId: req.user.sub, action: 'ORDER_STATUS_CHANGED', entityType: 'ORDER', entityId: req.params.id, metadata: { status } });
   notifyOrderUpdated(store.id, order);
   await notifyCustomerOrderStatusPush(store, order);
+  res.json(order);
+}));
+
+app.patch('/api/orders/:id/items', requireAuth('STORE_MANAGER'), asyncRoute(async (req, res) => {
+  const store = await managerStore(req);
+  const items = Array.isArray(req.body.items) ? req.body.items : [];
+  if (!items.length) throw new ApiError(400, 'A lista de itens do pedido nao pode estar vazia');
+
+  const normalizedItems = items.map(item => {
+    const quantity = Number(item.quantity);
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+      throw new ApiError(400, 'Quantidade invalida informada para um dos itens');
+    }
+    return {
+      productId: String(item.productId || ''),
+      name: item.name ? String(item.name) : undefined,
+      unit: item.unit ? String(item.unit) : undefined,
+      quantity,
+      price: item.price != null ? Number(item.price) : undefined
+    };
+  });
+
+  const order = await updateOrderItems(store.id, req.params.id, normalizedItems);
+  if (!order) throw new ApiError(404, 'Pedido nao encontrado');
+
+  await writeAuditLog({
+    storeId: store.id,
+    actorId: req.user.sub,
+    action: 'ORDER_ITEMS_EDITED',
+    entityType: 'ORDER',
+    entityId: req.params.id,
+    metadata: { itemCount: normalizedItems.length, subtotal: order.subtotal, total: order.total }
+  });
+  notifyOrderUpdated(store.id, order);
   res.json(order);
 }));
 
