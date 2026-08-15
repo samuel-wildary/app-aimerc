@@ -2346,57 +2346,141 @@ function Storefront({
       {activeTab === 'hours' && (
         <div className="storefront-tab-content">
           <form className="storefront-two-cols" onSubmit={submitSettings}>
+            {/* Left Card: Horário de Funcionamento */}
             <section className="panel settings-panel">
               <div className="panel-heading">
                 <div>
-                  <p className="overline">Expediente</p>
+                  <p className="overline">EXPEDIENTE</p>
                   <h2>Horário de Funcionamento</h2>
+                  <p className="panel-subtitle">Configure o horário comercial e os dias de atendimento da sua loja.</p>
                 </div>
               </div>
+
               <div className="settings-form">
-                <div className="business-hours-editor">
-                  <div><strong>Horário comercial de abertura</strong><span>Pedidos fora desse período entram na fila para a próxima abertura.</span></div>
+                <div className="settings-section-block">
+                  <div className="section-title-wrap">
+                    <strong>Horário comercial de abertura</strong>
+                    <span>Pedidos fora desse período entram na fila para a próxima abertura.</span>
+                  </div>
                   <div className="settings-form-row">
                     <label className="mockup-field">
                       <span className="mockup-label">Abre às</span>
                       <div className="mockup-input-box">
-                        <input type="time" required value={settings.businessHoursStart} onChange={event => setSettings({ ...settings, businessHoursStart: event.target.value })} />
+                        <input
+                          type="time"
+                          required
+                          value={settings.businessHoursStart}
+                          onChange={event => setSettings({ ...settings, businessHoursStart: event.target.value })}
+                        />
                       </div>
                     </label>
                     <label className="mockup-field">
                       <span className="mockup-label">Fecha às</span>
                       <div className="mockup-input-box">
-                        <input type="time" required value={settings.businessHoursEnd} onChange={event => setSettings({ ...settings, businessHoursEnd: event.target.value })} />
+                        <input
+                          type="time"
+                          required
+                          value={settings.businessHoursEnd}
+                          onChange={event => setSettings({ ...settings, businessHoursEnd: event.target.value })}
+                        />
                       </div>
                     </label>
                   </div>
-                  <div className="business-days" aria-label="Dias de funcionamento">
-                    {businessDayOptions.map(day => <button type="button" className={selectedBusinessDays.has(day.value) ? 'selected' : ''} onClick={() => toggleBusinessDay(day.value)} key={day.value}>{day.label}</button>)}
-                  </div>
-                  <label className="open-toggle"><span><strong>Receber pedidos fora do horário</strong><small>O cliente compra normalmente e o pedido fica agendado para a próxima abertura.</small></span><input type="checkbox" checked={settings.acceptAfterHours} onChange={event => setSettings({ ...settings, acceptAfterHours: event.target.checked })} /></label>
                 </div>
-                <button className="primary large" disabled={savingSettings}>{savingSettings ? 'Salvando...' : 'Salvar horários'}</button>
+
+                <div className="settings-section-block">
+                  <div className="section-title-wrap">
+                    <strong>Dias de atendimento</strong>
+                    <span>Selecione os dias da semana em que a loja opera normalmente.</span>
+                  </div>
+                  <div className="business-days" aria-label="Dias de funcionamento">
+                    {businessDayOptions.map(day => (
+                      <button
+                        type="button"
+                        className={`business-day-pill ${selectedBusinessDays.has(day.value) ? 'selected' : ''}`}
+                        onClick={() => toggleBusinessDay(day.value)}
+                        key={day.value}
+                      >
+                        {day.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="toggle-switch-card">
+                  <div className="toggle-switch-info">
+                    <div className="toggle-switch-icon"><Clock3 size={18} /></div>
+                    <div>
+                      <strong>Receber pedidos fora do horário</strong>
+                      <small>O cliente compra normalmente e o pedido fica agendado para a próxima abertura.</small>
+                    </div>
+                  </div>
+                  <label className="ios-switch">
+                    <input
+                      type="checkbox"
+                      checked={settings.acceptAfterHours}
+                      onChange={event => setSettings({ ...settings, acceptAfterHours: event.target.checked })}
+                    />
+                    <span className="ios-slider" />
+                  </label>
+                </div>
+
+                <button className="primary large btn-forest-submit" disabled={savingSettings}>
+                  <Save size={16} />
+                  <span>{savingSettings ? 'Salvando...' : 'Salvar horários'}</span>
+                </button>
               </div>
             </section>
 
+            {/* Right Card: Retirada na Loja */}
             <section className="panel settings-panel">
               <div className="panel-heading">
                 <div>
-                  <p className="overline">Retirada na Loja</p>
+                  <p className="overline">RETIRADA NA LOJA</p>
                   <h2>Agendamento de Retirada</h2>
+                  <p className="panel-subtitle">Permita que o cliente escolha faixas de horário para buscar compras no balcão.</p>
                 </div>
               </div>
+
               <div className="settings-form">
-                <label className="open-toggle"><span><strong>Agendamento de horário na retirada</strong><small>Permitir que o cliente escolha a faixa de horário para buscar o pedido na loja.</small></span><input type="checkbox" checked={settings.enablePickupScheduling} onChange={event => setSettings({ ...settings, enablePickupScheduling: event.target.checked })} /></label>
+                <div className="toggle-switch-card">
+                  <div className="toggle-switch-info">
+                    <div className="toggle-switch-icon"><Store size={18} /></div>
+                    <div>
+                      <strong>Agendamento de horário na retirada</strong>
+                      <small>Permitir que o cliente escolha a faixa de horário para buscar o pedido na loja.</small>
+                    </div>
+                  </div>
+                  <label className="ios-switch">
+                    <input
+                      type="checkbox"
+                      checked={settings.enablePickupScheduling}
+                      onChange={event => setSettings({ ...settings, enablePickupScheduling: event.target.checked })}
+                    />
+                    <span className="ios-slider" />
+                  </label>
+                </div>
+
                 {settings.enablePickupScheduling && (
                   <label className="mockup-field" style={{ marginTop: '16px' }}>
                     <span className="mockup-label">Faixas de horário disponíveis para retirada</span>
-                    <span className="mockup-hint">Separe as opções por vírgula.</span>
-                    <textarea rows="3" className="mockup-textarea" value={settings.pickupSlots} onChange={event => setSettings({ ...settings, pickupSlots: event.target.value })} placeholder="08:00 - 10:00, 10:00 - 12:00, 12:00 - 14:00, 14:00 - 16:00, 16:00 - 18:00, 18:00 - 20:00" required={settings.enablePickupScheduling} />
+                    <span className="mockup-hint">Separe as opções por vírgula (ex.: 08:00 - 10:00, 10:00 - 12:00).</span>
+                    <textarea
+                      rows="4"
+                      className="mockup-textarea"
+                      value={settings.pickupSlots}
+                      onChange={event => setSettings({ ...settings, pickupSlots: event.target.value })}
+                      placeholder="08:00 - 10:00, 10:00 - 12:00, 12:00 - 14:00, 14:00 - 16:00, 16:00 - 18:00, 18:00 - 20:00"
+                      required={settings.enablePickupScheduling}
+                    />
                   </label>
                 )}
+
                 <div style={{ marginTop: 'auto', paddingTop: '16px' }}>
-                  <button className="primary large" disabled={savingSettings}>{savingSettings ? 'Salvando...' : 'Salvar agendamento'}</button>
+                  <button className="primary large btn-forest-submit" disabled={savingSettings}>
+                    <Save size={16} />
+                    <span>{savingSettings ? 'Salvando...' : 'Salvar agendamento'}</span>
+                  </button>
                 </div>
               </div>
             </section>
@@ -2502,8 +2586,11 @@ function Storefront({
                 )}
               </div>
 
-              <div style={{ marginTop: '8px' }}>
-                <button className="primary large" disabled={savingSettings}>{savingSettings ? 'Salvando...' : 'Salvar categorias do app'}</button>
+              <div style={{ marginTop: '14px' }}>
+                <button className="primary large btn-forest-submit" disabled={savingSettings}>
+                  <Save size={16} />
+                  <span>{savingSettings ? 'Salvando...' : 'Salvar categorias do app'}</span>
+                </button>
               </div>
             </form>
           </section>
