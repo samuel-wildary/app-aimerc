@@ -6,8 +6,11 @@ ENV VITE_API_URL=$VITE_API_URL
 
 COPY package.json package-lock.json ./
 RUN npm ci
+
 COPY . .
-RUN npm run build
+# Bust build cache to ensure fresh dist build
+ARG BUILD_ID=20260815-1330
+RUN echo "Building AiMerc Dashboard Build: $BUILD_ID" && npm run build
 
 FROM nginx:1.27-alpine
 COPY nginx.conf /etc/nginx/conf.d/default.conf
