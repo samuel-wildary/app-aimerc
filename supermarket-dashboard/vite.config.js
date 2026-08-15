@@ -12,8 +12,8 @@ export default defineConfig({
         changeOrigin: true,
         secure: false,
         headers: {
-          Origin: 'https://wildhub-aimerc-backend-app.5mos1l.easypanel.host',
-          Referer: 'https://wildhub-aimerc-backend-app.5mos1l.easypanel.host/'
+          origin: 'https://wildhub-aimerc-dashboard-app.5mos1l.easypanel.host',
+          referer: 'https://wildhub-aimerc-dashboard-app.5mos1l.easypanel.host/'
         }
       },
       '/realtime': {
@@ -22,7 +22,7 @@ export default defineConfig({
         secure: false,
         ws: true,
         headers: {
-          Origin: 'https://wildhub-aimerc-backend-app.5mos1l.easypanel.host'
+          origin: 'https://wildhub-aimerc-dashboard-app.5mos1l.easypanel.host'
         }
       }
     }
