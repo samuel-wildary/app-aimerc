@@ -2975,31 +2975,68 @@ export default function App() {
   const catalogRefreshTimer = useRef(null);
   const ordersRefreshTimer = useRef(null);
 
-  const load = useCallback(async () => {
+  const loadCore = useCallback(async () => {
     if (!api.token) return;
-    setRefreshing(true);
     try {
-      const [summaryData, ordersData, categoriesData, bannersData, customersData, reportData, campaignsData, automationsData, deliveryZonesData, deviceSummaryData] = await Promise.all([api.summary(), api.orders(), api.productCategories(), api.banners(), api.customers(customerQuery), api.reports(), api.pushCampaigns(), api.pushAutomations(), api.deliveryZones(), api.pushDeviceSummary()]);
+      const [summaryData, ordersData, categoriesData] = await Promise.all([
+        api.summary(),
+        api.orders(),
+        api.productCategories()
+      ]);
       setSummary(summaryData);
       setSession(current => current || { user: summaryData.user, store: summaryData.store });
       setOrders(ordersData);
       setCategories(categoriesData);
-      setBanners(bannersData);
-      setCustomers(customersData);
-      setReport(reportData);
-      setCampaigns(campaignsData);
-      setAutomations(automationsData);
-      setDeliveryZones(deliveryZonesData);
-      setDeviceSummary(deviceSummaryData);
       setSelected(current => current ? ordersData.find(order => order.id === current.id) || null : null);
       setError('');
+    } catch (requestError) {
+      if (requestError.status === 401) logout();
+      else setError(requestError.message);
+    }
+  }, []);
+
+  const load = useCallback(async () => {
+    if (!api.token) return;
+    setRefreshing(true);
+    try {
+      const [summaryData, ordersData, categoriesData] = await Promise.all([
+        api.summary(),
+        api.orders(),
+        api.productCategories()
+      ]);
+      setSummary(summaryData);
+      setSession(current => current || { user: summaryData.user, store: summaryData.store });
+      setOrders(ordersData);
+      setCategories(categoriesData);
+      setSelected(current => current ? ordersData.find(order => order.id === current.id) || null : null);
+      setError('');
+
+      // Background fetch tab secondary resources without blocking
+      if (active === 'customers') {
+        api.customers(customerQuery).then(setCustomers).catch(() => {});
+      } else if (active === 'reports') {
+        Promise.all([api.reports(), api.pushDeviceSummary()]).then(([rep, dev]) => {
+          setReport(rep);
+          setDeviceSummary(dev);
+        }).catch(() => {});
+      } else if (active === 'storefront') {
+        Promise.all([api.banners(), api.pushCampaigns(), api.pushAutomations(), api.deliveryZones(), api.pushDeviceSummary()]).then(([ban, cam, aut, del, dev]) => {
+          setBanners(ban);
+          setCampaigns(cam);
+          setAutomations(aut);
+          setDeliveryZones(del);
+          setDeviceSummary(dev);
+        }).catch(() => {});
+      } else if (active === 'catalog') {
+        api.products(query, category).then(setProducts).catch(() => {});
+      }
     } catch (requestError) {
       if (requestError.status === 401) logout();
       else setError(requestError.message);
     } finally {
       setRefreshing(false);
     }
-  }, [customerQuery]);
+  }, [active, customerQuery, query, category]);
 
   const refreshOrdersLive = useCallback(async () => {
     if (!api.token) return;
@@ -3017,17 +3054,8 @@ export default function App() {
   const refreshCatalogLive = useCallback(async () => {
     if (!api.token) return;
     try {
-      const [productsData, categoriesData, bannersData, summaryData] = await Promise.all([
-        api.products(query, category),
-        api.productCategories(),
-        api.banners(),
-        api.summary()
-      ]);
+      const productsData = await api.products(query, category);
       setProducts(productsData);
-      setCategories(categoriesData);
-      setBanners(bannersData);
-      setSummary(summaryData);
-      setSession(current => current || { user: summaryData.user, store: summaryData.store });
     } catch (requestError) {
       if (requestError.status === 401) logout();
     }
@@ -3060,7 +3088,7 @@ export default function App() {
 
   useEffect(() => {
     if (!api.token) return;
-    load();
+    loadCore();
     realtime.connect(api.token);
     const unsubscribe = realtime.onEvent((event) => {
       if (!event?.type) return;
@@ -3071,18 +3099,17 @@ export default function App() {
         if (ordersRefreshTimer.current) window.clearTimeout(ordersRefreshTimer.current);
         ordersRefreshTimer.current = window.setTimeout(() => {
           refreshOrdersLive();
-        }, 250);
+        }, 200);
         return;
       }
       if (event.type === 'catalog.updated') {
-        // Sync do agente manda varios lotes: espera estabilizar antes de puxar o catalogo.
         if (catalogRefreshTimer.current) window.clearTimeout(catalogRefreshTimer.current);
         catalogRefreshTimer.current = window.setTimeout(() => {
           refreshCatalogLive();
-        }, 4_000);
+        }, 2_000);
       }
     });
-    const interval = window.setInterval(refreshOrdersLive, 60_000);
+    const interval = window.setInterval(refreshOrdersLive, 45_000);
     return () => {
       unsubscribe();
       realtime.disconnect();
@@ -3090,24 +3117,42 @@ export default function App() {
       if (catalogRefreshTimer.current) window.clearTimeout(catalogRefreshTimer.current);
       if (ordersRefreshTimer.current) window.clearTimeout(ordersRefreshTimer.current);
     };
-  }, [load, refreshOrdersLive, refreshCatalogLive, soundEnabled]);
+  }, [loadCore, refreshOrdersLive, refreshCatalogLive, soundEnabled]);
 
   useEffect(() => {
     if (!session) return;
     realtime.connect(api.token);
   }, [session]);
 
+  // Tab lazy loader
   useEffect(() => {
-    if (!session || active !== 'catalog') return;
-    const timeout = window.setTimeout(refreshCatalogLive, 250);
-    return () => window.clearTimeout(timeout);
-  }, [query, category, active, session, refreshCatalogLive]);
-
-  useEffect(() => {
-    if (!session || active !== 'customers') return;
-    const timeout = window.setTimeout(load, 250);
-    return () => window.clearTimeout(timeout);
-  }, [customerQuery, active, session, load]);
+    if (!session) return;
+    if (active === 'catalog') {
+      const timeout = window.setTimeout(refreshCatalogLive, 150);
+      return () => window.clearTimeout(timeout);
+    }
+    if (active === 'customers') {
+      const timeout = window.setTimeout(() => {
+        api.customers(customerQuery).then(setCustomers).catch(() => {});
+      }, 150);
+      return () => window.clearTimeout(timeout);
+    }
+    if (active === 'reports') {
+      Promise.all([api.reports(), api.pushDeviceSummary()]).then(([rep, dev]) => {
+        setReport(rep);
+        setDeviceSummary(dev);
+      }).catch(() => {});
+    }
+    if (active === 'storefront') {
+      Promise.all([api.banners(), api.pushCampaigns(), api.pushAutomations(), api.deliveryZones(), api.pushDeviceSummary()]).then(([ban, cam, aut, del, dev]) => {
+        setBanners(ban);
+        setCampaigns(cam);
+        setAutomations(aut);
+        setDeliveryZones(del);
+        setDeviceSummary(dev);
+      }).catch(() => {});
+    }
+  }, [active, query, category, customerQuery, session, refreshCatalogLive]);
 
   function logout() {
     realtime.disconnect();

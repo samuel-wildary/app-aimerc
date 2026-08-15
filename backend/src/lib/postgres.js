@@ -399,12 +399,17 @@ ALTER TABLE order_items ALTER COLUMN id SET DEFAULT nextval('order_items_id_seq'
 SELECT setval('order_items_id_seq', GREATEST(COALESCE((SELECT MAX(id) FROM order_items), 0) + 1, 1), false);
 
 CREATE INDEX IF NOT EXISTS products_store_active_category_idx ON products(store_id, active, category);
+CREATE INDEX IF NOT EXISTS products_store_active_visible_idx ON products(store_id, active, catalog_visible);
+CREATE INDEX IF NOT EXISTS product_images_store_lookup_idx ON product_images(store_id, product_id);
 CREATE INDEX IF NOT EXISTS delivery_zones_store_match_idx ON delivery_zones(store_id, neighborhood_normalized, city_normalized, state);
 CREATE INDEX IF NOT EXISTS products_store_catalog_category_idx ON products(store_id, catalog_category);
 CREATE INDEX IF NOT EXISTS products_store_barcode_idx ON products(store_id, barcode);
 CREATE INDEX IF NOT EXISTS products_store_updated_idx ON products(store_id, updated_at);
 CREATE INDEX IF NOT EXISTS orders_store_created_idx ON orders(store_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS orders_store_status_created_idx ON orders(store_id, status, created_at DESC);
+CREATE INDEX IF NOT EXISTS order_items_store_order_lookup_idx ON order_items(store_id, order_id);
 CREATE INDEX IF NOT EXISTS orders_customer_phone_idx ON orders(store_id, customer_phone, created_at DESC);
+CREATE INDEX IF NOT EXISTS customers_store_phone_idx ON customers(store_id, phone);
 CREATE UNIQUE INDEX IF NOT EXISTS orders_idempotency_idx ON orders(store_id, idempotency_key) WHERE idempotency_key IS NOT NULL;
 CREATE INDEX IF NOT EXISTS push_campaigns_pending_idx ON push_campaigns(store_id, status, scheduled_at);
 CREATE INDEX IF NOT EXISTS push_automations_due_idx ON push_automations(store_id, active, next_run_at);

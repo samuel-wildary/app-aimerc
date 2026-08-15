@@ -3,6 +3,7 @@ const API_URL = import.meta.env.VITE_API_URL || (typeof window !== 'undefined' &
 export class ApiClient {
   constructor() {
     this.token = localStorage.getItem('aimerc.store.token') || '';
+    this.inFlight = new Map();
   }
 
   setToken(token) {
@@ -12,21 +13,39 @@ export class ApiClient {
   }
 
   async request(path, options = {}) {
-    const response = await fetch(`${API_URL}${path}`, {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}),
-        ...options.headers
-      }
-    });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      const error = new Error(data.error || 'Nao foi possivel concluir a operacao');
-      error.status = response.status;
-      throw error;
+    const isGet = !options.method || options.method === 'GET';
+    const key = `${this.token}:${path}`;
+
+    if (isGet && this.inFlight.has(key)) {
+      return this.inFlight.get(key);
     }
-    return data;
+
+    const promise = (async () => {
+      const response = await fetch(`${API_URL}${path}`, {
+        ...options,
+        headers: {
+          'Content-Type': 'application/json',
+          ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}),
+          ...options.headers
+        }
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const error = new Error(data.error || 'Nao foi possivel concluir a operacao');
+        error.status = response.status;
+        throw error;
+      }
+      return data;
+    })();
+
+    if (isGet) {
+      this.inFlight.set(key, promise);
+      promise.finally(() => {
+        this.inFlight.delete(key);
+      });
+    }
+
+    return promise;
   }
 
   login(email, password) {
