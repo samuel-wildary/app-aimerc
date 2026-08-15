@@ -74,47 +74,58 @@ function playOrderChime() {
     const ctx = getAudioContext();
     if (!ctx) return;
 
-    // Classic iFood / Vintage rotary telephone double-ring: "TRRRRIIIM... TRRRRIIIM!"
+    // High-power audio compressor to maximize loudness without clipping
+    const compressor = ctx.createDynamicsCompressor();
+    compressor.threshold.setValueAtTime(-6, ctx.currentTime);
+    compressor.knee.setValueAtTime(4, ctx.currentTime);
+    compressor.ratio.setValueAtTime(16, ctx.currentTime);
+    compressor.attack.setValueAtTime(0.002, ctx.currentTime);
+    compressor.release.setValueAtTime(0.08, ctx.currentTime);
+    compressor.connect(ctx.destination);
+
+    // Loud, unmistakable 3-ring vintage rotary bell: "TRRRIM... TRRRIM... TRRRIIIM!"
     const bursts = [
       { start: 0.0, duration: 0.45 },
-      { start: 0.58, duration: 0.52 }
+      { start: 0.56, duration: 0.45 },
+      { start: 1.12, duration: 0.58 }
     ];
 
     bursts.forEach(({ start, duration }) => {
       const t0 = ctx.currentTime + start;
       const t1 = t0 + duration;
 
-      // 1. Master Envelope Gain for the burst
+      // 1. Master Envelope Gain for the burst at max volume (0.95)
       const masterGain = ctx.createGain();
       masterGain.gain.setValueAtTime(0.0001, t0);
-      masterGain.gain.linearRampToValueAtTime(0.42, t0 + 0.02);
-      masterGain.gain.setValueAtTime(0.42, t1 - 0.04);
+      masterGain.gain.linearRampToValueAtTime(0.95, t0 + 0.015);
+      masterGain.gain.setValueAtTime(0.95, t1 - 0.03);
       masterGain.gain.exponentialRampToValueAtTime(0.0001, t1);
-      masterGain.connect(ctx.destination);
+      masterGain.connect(compressor);
 
-      // 2. Tremolo Gain (controlled by 22Hz clapper LFO)
+      // 2. Tremolo Gain (controlled by fast 22Hz clapper LFO)
       const tremolo = ctx.createGain();
       tremolo.gain.setValueAtTime(0.5, t0);
       tremolo.connect(masterGain);
 
-      // LFO for 22Hz hammer vibration
+      // LFO for 22Hz mechanical clapper hammer vibration
       const lfo = ctx.createOscillator();
       lfo.type = 'square';
       lfo.frequency.setValueAtTime(22, t0);
 
       const lfoAmp = ctx.createGain();
-      lfoAmp.gain.setValueAtTime(0.48, t0);
+      lfoAmp.gain.setValueAtTime(0.5, t0);
       lfo.connect(lfoAmp);
       lfoAmp.connect(tremolo.gain);
 
       lfo.start(t0);
       lfo.stop(t1);
 
-      // 3. Dual brass bells: 753Hz + 852Hz (Classic European/Brazilian rotary phone) + harmonic 1605Hz
+      // 3. Resonant dual brass bells (753Hz + 852Hz) with piercing overtones (1605Hz + 2280Hz)
       const tones = [
-        { freq: 753, gain: 0.45 },
-        { freq: 852, gain: 0.45 },
-        { freq: 1605, gain: 0.12 }
+        { freq: 753, gain: 0.65 },
+        { freq: 852, gain: 0.65 },
+        { freq: 1605, gain: 0.28 },
+        { freq: 2280, gain: 0.18 }
       ];
 
       tones.forEach(({ freq, gain }) => {
