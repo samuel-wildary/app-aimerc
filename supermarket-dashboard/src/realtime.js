@@ -1,7 +1,10 @@
 const API_URL = import.meta.env.VITE_API_URL || 'https://wildhub-aimerc-backend-app.5mos1l.easypanel.host/api';
 
 function realtimeUrl() {
-  const base = API_URL.replace(/\/$/, '');
+  if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+    return `ws://${window.location.host}/realtime`;
+  }
+  const base = (import.meta.env.VITE_API_URL || 'https://wildhub-aimerc-backend-app.5mos1l.easypanel.host/api').replace(/\/$/, '');
   if (base.startsWith('https://')) return `${base.replace(/^https/, 'wss')}/realtime`;
   if (base.startsWith('http://')) return `${base.replace(/^http/, 'ws')}/realtime`;
   return `${base}/realtime`;

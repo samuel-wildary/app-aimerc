@@ -1,4 +1,4 @@
-const API_URL = import.meta.env.VITE_API_URL || 'https://wildhub-aimerc-backend-app.5mos1l.easypanel.host/api';
+const API_URL = import.meta.env.VITE_API_URL || (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? '/api' : 'https://wildhub-aimerc-backend-app.5mos1l.easypanel.host/api');
 
 export class ApiClient {
   constructor() {
