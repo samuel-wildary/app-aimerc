@@ -500,6 +500,23 @@ h1, h2, h3, h4, p { margin-top: 0; }
   background: var(--brand-success);
 }
 
+.sound-btn {
+  position: relative;
+  transition: all 0.15s ease;
+}
+.sound-btn.active {
+  color: var(--brand-success);
+  border-color: var(--green-border);
+  background: var(--green-bg);
+}
+.sound-btn.active:hover {
+  background: #d1fae5;
+}
+.sound-btn.muted {
+  color: var(--text-muted);
+  opacity: 0.7;
+}
+
 .notification-btn {
   position: relative;
 }

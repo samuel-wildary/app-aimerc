@@ -47,11 +47,61 @@ import {
   Upload,
   UserRound,
   UsersRound,
+  Volume2,
+  VolumeX,
   Zap,
   X
 } from 'lucide-react';
 import { api } from './api.js';
 import { realtime } from './realtime.js';
+
+let audioCtx = null;
+
+function getAudioContext() {
+  if (typeof window === 'undefined') return null;
+  if (!audioCtx) {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (AudioContextClass) audioCtx = new AudioContextClass();
+  }
+  if (audioCtx && audioCtx.state === 'suspended') {
+    audioCtx.resume();
+  }
+  return audioCtx;
+}
+
+function playOrderChime() {
+  try {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+
+    // Harmonious 3-tone notification chime (D5 -> A5 -> D6)
+    const notes = [
+      { freq: 587.33, start: 0.0, duration: 0.35, gainVal: 0.35 },
+      { freq: 880.00, start: 0.12, duration: 0.50, gainVal: 0.40 },
+      { freq: 1174.66, start: 0.28, duration: 0.85, gainVal: 0.45 }
+    ];
+
+    notes.forEach(({ freq, start, duration, gainVal }) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, ctx.currentTime + start);
+
+      gain.gain.setValueAtTime(0, ctx.currentTime + start);
+      gain.gain.linearRampToValueAtTime(gainVal, ctx.currentTime + start + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + start + duration);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start(ctx.currentTime + start);
+      osc.stop(ctx.currentTime + start + duration);
+    });
+  } catch (err) {
+    console.warn('Audio chime error:', err);
+  }
+}
 
 const STATUS = {
   RECEIVED: { label: 'Novo', tone: 'blue', next: 'PICKING', action: 'Iniciar separacao' },
@@ -227,13 +277,22 @@ function Sidebar({ active, setActive, store, user, onLogout, open, onClose }) {
   );
 }
 
-function Header({ title, subtitle, onRefresh, refreshing, onMenu }) {
+function Header({ title, subtitle, onRefresh, refreshing, onMenu, soundEnabled, onToggleSound }) {
   return (
     <header className="topbar">
       <button className="icon-button menu-button" onClick={onMenu} aria-label="Abrir menu"><Menu size={22} /></button>
       <div className="page-title"><h1>{title}</h1><p>{subtitle}</p></div>
       <div className="top-actions">
         <span className="live-pill"><i /> Operação online</span>
+        <button
+          type="button"
+          className={`icon-button sound-btn ${soundEnabled ? 'active' : 'muted'}`}
+          onClick={onToggleSound}
+          title={soundEnabled ? 'Alerta sonoro ativado (clique para testar ou desativar)' : 'Alerta sonoro desativado (clique para ativar)'}
+          aria-label="Alerta sonoro de pedidos"
+        >
+          {soundEnabled ? <Volume2 size={18} /> : <VolumeX size={18} />}
+        </button>
         <button className="icon-button notification-btn" aria-label="Notificações">
           <Bell size={18} />
           <span className="notification-badge-dot" />
@@ -2878,6 +2937,31 @@ export default function App() {
     }
   }, [query, category]);
 
+  const [soundEnabled, setSoundEnabled] = useState(() => {
+    return localStorage.getItem('aimerc.sound.enabled') !== 'false';
+  });
+
+  const toggleSound = useCallback(() => {
+    setSoundEnabled(current => {
+      const next = !current;
+      localStorage.setItem('aimerc.sound.enabled', String(next));
+      if (next) playOrderChime();
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    const unlock = () => {
+      getAudioContext();
+    };
+    window.addEventListener('click', unlock, { once: true });
+    window.addEventListener('keydown', unlock, { once: true });
+    return () => {
+      window.removeEventListener('click', unlock);
+      window.removeEventListener('keydown', unlock);
+    };
+  }, []);
+
   useEffect(() => {
     if (!api.token) return;
     load();
@@ -2885,6 +2969,9 @@ export default function App() {
     const unsubscribe = realtime.onEvent((event) => {
       if (!event?.type) return;
       if (event.type === 'order.created' || event.type === 'order.updated') {
+        if (event.type === 'order.created' && soundEnabled) {
+          playOrderChime();
+        }
         if (ordersRefreshTimer.current) window.clearTimeout(ordersRefreshTimer.current);
         ordersRefreshTimer.current = window.setTimeout(() => {
           refreshOrdersLive();
@@ -2907,7 +2994,7 @@ export default function App() {
       if (catalogRefreshTimer.current) window.clearTimeout(catalogRefreshTimer.current);
       if (ordersRefreshTimer.current) window.clearTimeout(ordersRefreshTimer.current);
     };
-  }, [load, refreshOrdersLive, refreshCatalogLive]);
+  }, [load, refreshOrdersLive, refreshCatalogLive, soundEnabled]);
 
   useEffect(() => {
     if (!session) return;
@@ -3058,7 +3145,15 @@ export default function App() {
       <Sidebar active={active} setActive={setActive} store={summary?.store || session.store} user={session.user} onLogout={logout} open={menuOpen} onClose={() => setMenuOpen(false)} />
       {menuOpen && <button className="menu-overlay" onClick={() => setMenuOpen(false)} aria-label="Fechar menu" />}
       <main className="workspace">
-        <Header title={pageMeta[0]} subtitle={pageMeta[1]} onRefresh={load} refreshing={refreshing} onMenu={() => setMenuOpen(true)} />
+        <Header
+          title={pageMeta[0]}
+          subtitle={pageMeta[1]}
+          onRefresh={load}
+          refreshing={refreshing}
+          onMenu={() => setMenuOpen(true)}
+          soundEnabled={soundEnabled}
+          onToggleSound={toggleSound}
+        />
         {error && <div className="global-error"><span>{error}</span><button onClick={() => setError('')}><X size={17} /></button></div>}
         <div className="page-content">
           {active === 'overview' && <Overview summary={summary} orders={orders} products={products} selected={selected} setSelected={setSelected} createDemo={createDemo} creatingDemo={creatingDemo} />}
