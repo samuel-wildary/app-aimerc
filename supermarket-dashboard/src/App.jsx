@@ -147,25 +147,22 @@ function playOrderChime() {
   try {
     if (typeof window !== 'undefined') {
       if (!orderAudioElement) {
-        orderAudioElement = new Audio('/sounds/order-notification.mp3');
+        orderAudioElement = new Audio('/sounds/order-notification.wav');
       }
       orderAudioElement.currentTime = 0;
       orderAudioElement.volume = 1.0;
       const playPromise = orderAudioElement.play();
       if (playPromise !== undefined) {
         playPromise
-          .then(() => {
-            if (orderAudioElement._stopTimer) window.clearTimeout(orderAudioElement._stopTimer);
-            orderAudioElement._stopTimer = window.setTimeout(() => {
-              try {
-                orderAudioElement.pause();
-                orderAudioElement.currentTime = 0;
-              } catch (_) {}
-            }, 7500);
-          })
           .catch((err) => {
-            console.warn('MP3 playback blocked, using synthesized bell:', err);
-            playSynthesizedBell();
+            console.warn('WAV playback blocked, trying m4a fallback:', err);
+            try {
+              const m4a = new Audio('/sounds/order-notification.m4a');
+              m4a.volume = 1.0;
+              m4a.play().catch(() => playSynthesizedBell());
+            } catch (_) {
+              playSynthesizedBell();
+            }
           });
         return;
       }
