@@ -10,13 +10,20 @@ export default defineConfig({
       '/api': {
         target: 'https://wildhub-aimerc-backend-app.5mos1l.easypanel.host',
         changeOrigin: true,
-        secure: false
+        secure: false,
+        headers: {
+          Origin: 'https://wildhub-aimerc-backend-app.5mos1l.easypanel.host',
+          Referer: 'https://wildhub-aimerc-backend-app.5mos1l.easypanel.host/'
+        }
       },
       '/realtime': {
         target: 'https://wildhub-aimerc-backend-app.5mos1l.easypanel.host',
         changeOrigin: true,
         secure: false,
-        ws: true
+        ws: true,
+        headers: {
+          Origin: 'https://wildhub-aimerc-backend-app.5mos1l.easypanel.host'
+        }
       }
     }
   }

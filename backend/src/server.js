@@ -109,9 +109,11 @@ const catalogAuditJobs = new Map();
 
 const app = express();
 const PORT = Number(process.env.PORT || 4100);
-const localOrigins = process.env.NODE_ENV === 'production'
-  ? []
-  : ['http://127.0.0.1:4201', 'http://localhost:4201', 'http://127.0.0.1:4202', 'http://localhost:4202'];
+const localOrigins = [
+  'http://127.0.0.1:4201', 'http://localhost:4201',
+  'http://127.0.0.1:4202', 'http://localhost:4202',
+  'http://127.0.0.1:5173', 'http://localhost:5173'
+];
 const allowedOrigins = new Set((process.env.AIMERC_ALLOWED_ORIGINS || '')
   .split(',').map(value => value.trim()).filter(Boolean).concat(localOrigins));
 const requestBuckets = new Map();
