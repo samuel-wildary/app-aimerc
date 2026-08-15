@@ -1751,8 +1751,10 @@ function Storefront({ store, categories = [], deliveryZones = [], banners, campa
     enablePickupScheduling: store?.enablePickupScheduling ?? true,
     pickupSlots: store?.pickupSlots ?? '08:00 - 10:00, 10:00 - 12:00, 12:00 - 14:00, 14:00 - 16:00, 16:00 - 18:00, 18:00 - 20:00',
     disabledCategories: store?.disabledCategories ?? '',
+    categoryAliases: store?.categoryAliases ?? {},
     disablePromotions: store?.disablePromotions ?? false
   });
+  const [categorySearch, setCategorySearch] = useState('');
   const [bannerForm, setBannerForm] = useState(emptyBanner);
   const [editingId, setEditingId] = useState(null);
   const [savingSettings, setSavingSettings] = useState(false);
@@ -1777,9 +1779,10 @@ function Storefront({ store, categories = [], deliveryZones = [], banners, campa
       enablePickupScheduling: store?.enablePickupScheduling ?? true,
       pickupSlots: store?.pickupSlots ?? '08:00 - 10:00, 10:00 - 12:00, 12:00 - 14:00, 14:00 - 16:00, 16:00 - 18:00, 18:00 - 20:00',
       disabledCategories: store?.disabledCategories ?? '',
+      categoryAliases: store?.categoryAliases ?? {},
       disablePromotions: store?.disablePromotions ?? false
     });
-  }, [store?.minimumOrder, store?.deliveryFee, store?.freeDeliveryAbove, store?.supportPhone, store?.cancellationWindowMinutes, store?.businessHoursStart, store?.businessHoursEnd, store?.businessDays, store?.acceptAfterHours, store?.open, store?.enablePickupScheduling, store?.pickupSlots, store?.disabledCategories, store?.disablePromotions]);
+  }, [store?.minimumOrder, store?.deliveryFee, store?.freeDeliveryAbove, store?.supportPhone, store?.cancellationWindowMinutes, store?.businessHoursStart, store?.businessHoursEnd, store?.businessDays, store?.acceptAfterHours, store?.open, store?.enablePickupScheduling, store?.pickupSlots, store?.disabledCategories, store?.categoryAliases, store?.disablePromotions]);
 
   useEffect(() => {
     setZones(deliveryZones);
@@ -1856,6 +1859,33 @@ function Storefront({ store, categories = [], deliveryZones = [], banners, campa
     setSettings({ ...settings, disabledCategories: list.join(', ') });
   };
 
+  const updateCategoryAlias = (catName, customName) => {
+    const nextAliases = { ...(settings.categoryAliases || {}) };
+    if (customName && customName.trim()) {
+      nextAliases[catName] = customName.trim();
+    } else {
+      delete nextAliases[catName];
+    }
+    setSettings({ ...settings, categoryAliases: nextAliases });
+  };
+
+  const clearCategoryAlias = (catName) => {
+    const nextAliases = { ...(settings.categoryAliases || {}) };
+    delete nextAliases[catName];
+    setSettings({ ...settings, categoryAliases: nextAliases });
+  };
+
+  const filteredCategories = categories.filter(cat => {
+    if (!categorySearch.trim()) return true;
+    const q = categorySearch.toLowerCase();
+    const original = (cat.name || '').toLowerCase();
+    const alias = (settings.categoryAliases?.[cat.name] || '').toLowerCase();
+    return original.includes(q) || alias.includes(q);
+  });
+
+  const totalCustomized = Object.keys(settings.categoryAliases || {}).filter(k => settings.categoryAliases[k]).length;
+  const totalHidden = categories.filter(cat => disabledSet.has(cat.name.toLowerCase())).length;
+
   const businessDayOptions = [
     { value: 0, label: 'Dom' }, { value: 1, label: 'Seg' }, { value: 2, label: 'Ter' },
     { value: 3, label: 'Qua' }, { value: 4, label: 'Qui' }, { value: 5, label: 'Sex' },
@@ -1876,7 +1906,14 @@ function Storefront({ store, categories = [], deliveryZones = [], banners, campa
     setSavingSettings(true);
     try {
       await onSaveSettings(
-        { ...settings, minimumOrder: Number(settings.minimumOrder), deliveryFee: Number(settings.deliveryFee), freeDeliveryAbove: Number(settings.freeDeliveryAbove), cancellationWindowMinutes: Number(settings.cancellationWindowMinutes) },
+        {
+          ...settings,
+          minimumOrder: Number(settings.minimumOrder),
+          deliveryFee: Number(settings.deliveryFee),
+          freeDeliveryAbove: Number(settings.freeDeliveryAbove),
+          cancellationWindowMinutes: Number(settings.cancellationWindowMinutes),
+          categoryAliases: settings.categoryAliases || {}
+        },
         zones.map(zone => ({ neighborhood: zone.neighborhood.trim(), city: zone.city.trim(), state: zone.state.trim().toUpperCase(), fee: Number(zone.fee), active: zone.active !== false }))
       );
     }
@@ -1942,47 +1979,112 @@ function Storefront({ store, categories = [], deliveryZones = [], banners, campa
             <label>Faixas de horário para retirada<span>Separe as opções por vírgula.</span><input value={settings.pickupSlots} onChange={event => setSettings({ ...settings, pickupSlots: event.target.value })} placeholder="08:00 - 10:00, 10:00 - 12:00, 12:00 - 14:00, 14:00 - 16:00, 16:00 - 18:00, 18:00 - 20:00" required={settings.enablePickupScheduling} /></label>
           )}
           <label className="open-toggle"><span><strong>Desativar ofertas / promoções no aplicativo</strong><small>Ao marcar, a vitrine de ofertas é ocultada no aplicativo.</small></span><input type="checkbox" checked={settings.disablePromotions} onChange={event => setSettings({ ...settings, disablePromotions: event.target.checked })} /></label>
-          <label>Categorias ocultadas no aplicativo<span>Marque quais categorias você deseja ocultar para os clientes no aplicativo.</span>
-            <div className="categories-select-grid" style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
-              gap: '10px',
-              marginTop: '12px',
-              padding: '14px',
-              border: '1px solid #e2e8f0',
-              borderRadius: '12px',
-              backgroundColor: '#f8fafc',
-              maxHeight: '220px',
-              overflowY: 'auto'
-            }}>
-              {categories.map(cat => {
-                const isChecked = disabledSet.has(cat.name.toLowerCase());
+          <div className="categories-customizer-panel">
+            <div className="categories-customizer-header">
+              <div>
+                <strong>Categorias & Nomes de Exibição no App</strong>
+                <span>Defina um nome amigável para aparecer no Android sem alterar os códigos ou dados originais do ERP.</span>
+              </div>
+              <div className="categories-badges-summary">
+                <span className="cat-badge-pill total">{categories.length} categorias</span>
+                {totalCustomized > 0 && <span className="cat-badge-pill customized">✏️ {totalCustomized} ajustada{totalCustomized > 1 ? 's' : ''}</span>}
+                {totalHidden > 0 && <span className="cat-badge-pill hidden">🚫 {totalHidden} oculta{totalHidden > 1 ? 's' : ''}</span>}
+              </div>
+            </div>
+
+            <div className="category-search-bar">
+              <Search size={15} />
+              <input
+                type="text"
+                value={categorySearch}
+                onChange={e => setCategorySearch(e.target.value)}
+                placeholder="Pesquisar categoria por nome original ou nome ajustado..."
+              />
+              {categorySearch && (
+                <button type="button" onClick={() => setCategorySearch('')} className="cat-search-clear" aria-label="Limpar busca">
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+
+            <div className="categories-list-container">
+              {filteredCategories.map(cat => {
+                const isHidden = disabledSet.has(cat.name.toLowerCase());
+                const currentAlias = settings.categoryAliases?.[cat.name] || '';
+                const isCustomized = Boolean(currentAlias);
+
                 return (
-                  <label key={cat.name} style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '10px',
-                    cursor: 'pointer',
-                    fontSize: '13.5px',
-                    fontWeight: '500',
-                    margin: 0,
-                    padding: '6px 8px',
-                    borderRadius: '6px',
-                    transition: 'background-color 0.2s',
-                    userSelect: 'none'
-                  }} className="category-checkbox-item">
-                    <input type="checkbox" checked={isChecked} onChange={() => toggleCategory(cat.name)} style={{
-                      width: '17px',
-                      height: '17px',
-                      accentColor: '#12C98A',
-                      cursor: 'pointer'
-                    }} />
-                    <span>{cat.name} <small style={{ color: '#64748b', fontSize: '11px' }}>({cat.total})</small></span>
-                  </label>
+                  <div key={cat.name} className={`category-item-card ${isCustomized ? 'is-customized' : ''} ${isHidden ? 'is-hidden' : ''}`}>
+                    <div className="category-item-top">
+                      <div className="category-origin-info">
+                        <span className="category-erp-label">Origem do ERP / Agente:</span>
+                        <strong className="category-erp-name">{cat.name}</strong>
+                        <span className="category-count-tag">{cat.total} produtos</span>
+                      </div>
+                      <div className="category-item-status-badges">
+                        {isCustomized && <span className="cat-status-badge modified">✏️ Nome ajustado</span>}
+                        {isHidden && <span className="cat-status-badge disabled">🚫 Oculto no app</span>}
+                      </div>
+                    </div>
+
+                    <div className="category-item-body">
+                      <div className="category-alias-input-group">
+                        <label htmlFor={`cat-alias-${cat.name}`}>
+                          Nome de exibição no Android (opcional):
+                        </label>
+                        <div className="category-alias-input-wrapper">
+                          <input
+                            id={`cat-alias-${cat.name}`}
+                            type="text"
+                            value={currentAlias}
+                            onChange={e => updateCategoryAlias(cat.name, e.target.value)}
+                            placeholder={`Ex.: ${cat.name}`}
+                          />
+                          {isCustomized && (
+                            <button
+                              type="button"
+                              className="cat-reset-btn"
+                              onClick={() => clearCategoryAlias(cat.name)}
+                              title="Restaurar nome original do ERP"
+                            >
+                              Restaurar original
+                            </button>
+                          )}
+                        </div>
+                        {isCustomized ? (
+                          <p className="cat-preview-hint">
+                            Aparece no Android como: <strong>{currentAlias}</strong>
+                          </p>
+                        ) : (
+                          <p className="cat-preview-hint default">
+                            Exibindo nome original do ERP no aplicativo
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="category-visibility-control">
+                        <label className="cat-visibility-toggle">
+                          <input
+                            type="checkbox"
+                            checked={isHidden}
+                            onChange={() => toggleCategory(cat.name)}
+                          />
+                          <span>Ocultar categoria no app</span>
+                        </label>
+                      </div>
+                    </div>
+                  </div>
                 );
               })}
+
+              {!filteredCategories.length && (
+                <div className="category-empty-search">
+                  <Tags size={22} />
+                  <p>Nenhuma categoria encontrada para "<strong>{categorySearch}</strong>"</p>
+                </div>
+              )}
             </div>
-          </label>
+          </div>
           <label className="open-toggle"><span><strong>Receber novos pedidos</strong><small>Ao fechar, o aplicativo bloqueia novos checkouts.</small></span><input type="checkbox" checked={settings.open} onChange={event => setSettings({ ...settings, open: event.target.checked })} /></label>
           <button className="primary large" disabled={savingSettings}>{savingSettings ? 'Salvando...' : 'Salvar configuracoes'}</button>
         </form>

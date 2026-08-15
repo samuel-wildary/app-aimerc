@@ -20,6 +20,16 @@ function tokenHash(token) {
   return crypto.createHash('sha256').update(String(token)).digest('hex');
 }
 
+function safeJsonParse(value, fallback = {}) {
+  if (!value) return fallback;
+  if (typeof value === 'object') return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return fallback;
+  }
+}
+
 function mapStore(row) {
   if (!row) return null;
   return {
@@ -52,6 +62,7 @@ function mapStore(row) {
     enablePickupScheduling: row.enable_pickup_scheduling != null ? Boolean(row.enable_pickup_scheduling) : true,
     pickupSlots: row.pickup_slots || '08:00 - 10:00, 10:00 - 12:00, 12:00 - 14:00, 14:00 - 16:00, 16:00 - 18:00, 18:00 - 20:00',
     disabledCategories: row.disabled_categories || '',
+    categoryAliases: safeJsonParse(row.category_aliases, {}),
     disablePromotions: Boolean(row.disable_promotions),
     createdAt: row.created_at
   };
@@ -267,10 +278,14 @@ export async function getStoreBySlug(slug) {
 }
 
 export async function updateStoreSettings(id, input) {
+  const categoryAliasesJson = typeof input.categoryAliases === 'object' && input.categoryAliases !== null
+    ? JSON.stringify(input.categoryAliases)
+    : (typeof input.categoryAliases === 'string' ? input.categoryAliases : '{}');
+
   await query(`UPDATE stores SET minimum_order=$1, delivery_fee=$2, free_delivery_above=$3,
     support_phone=$4, cancellation_window_minutes=$5, is_open=$6, enable_pickup_scheduling=$7, pickup_slots=$8,
     disabled_categories=$9, disable_promotions=$10, business_hours_start=$11, business_hours_end=$12,
-    business_days=$13, accept_after_hours=$14 WHERE id=$15`,
+    business_days=$13, accept_after_hours=$14, category_aliases=$15 WHERE id=$16`,
   [
     input.minimumOrder,
     input.deliveryFee,
@@ -286,6 +301,7 @@ export async function updateStoreSettings(id, input) {
     input.businessHoursEnd || '20:00',
     input.businessDays || '1,2,3,4,5,6',
     input.acceptAfterHours !== false ? 1 : 0,
+    categoryAliasesJson,
     id
   ]);
   return getStore(id);
@@ -793,6 +809,7 @@ export async function listProductCategories(storeId, includeDisabled = false) {
   const disabledCats = new Set(
     String(store?.disabledCategories || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
   );
+  const aliases = store?.categoryAliases || {};
 
   const result = await query(`SELECT COALESCE(NULLIF(catalog_category,''),source_category,category) AS name,
     COUNT(*)::int AS total FROM products WHERE store_id=$1 GROUP BY 1 ORDER BY 1`, [storeId]);
@@ -802,7 +819,17 @@ export async function listProductCategories(storeId, includeDisabled = false) {
     if (!includeDisabled && disabledCats.has(name.toLowerCase())) continue;
     totals.set(name, (totals.get(name) || 0) + Number(row.total));
   }
-  return [...totals].map(([name, total]) => ({ name, total })).sort((left, right) => left.name.localeCompare(right.name, 'pt-BR'));
+  return [...totals].map(([name, total]) => {
+    const alias = aliases[name] || '';
+    return {
+      name,
+      displayName: alias || name,
+      alias,
+      isAliased: Boolean(alias),
+      isHidden: disabledCats.has(name.toLowerCase()),
+      total
+    };
+  }).sort((left, right) => left.displayName.localeCompare(right.displayName, 'pt-BR'));
 }
 
 function mapStoreIntegration(row) {

@@ -785,6 +785,7 @@ export function initializePostgres() {
       await pool.query(schema);
       try {
         await pool.query(`ALTER TABLE stores ADD COLUMN IF NOT EXISTS disabled_categories TEXT NOT NULL DEFAULT ''`);
+        await pool.query(`ALTER TABLE stores ADD COLUMN IF NOT EXISTS category_aliases TEXT NOT NULL DEFAULT '{}'`);
         await pool.query(`ALTER TABLE stores ADD COLUMN IF NOT EXISTS disable_promotions INTEGER NOT NULL DEFAULT 0`);
         await pool.query(`ALTER TABLE stores ADD COLUMN IF NOT EXISTS business_hours_start TEXT NOT NULL DEFAULT '08:00'`);
         await pool.query(`ALTER TABLE stores ADD COLUMN IF NOT EXISTS business_hours_end TEXT NOT NULL DEFAULT '20:00'`);

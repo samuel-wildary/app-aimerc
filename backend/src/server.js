@@ -264,11 +264,20 @@ function publicApiBase(req) {
 function publicProduct(req, store, product) {
   const { hasStoredImage, hasCatalogImage, ...publicFields } = product;
   const hasImage = Boolean(hasStoredImage || hasCatalogImage);
-  if (!product.image && !hasImage) return { ...publicFields, hasImage };
+  const alias = store?.categoryAliases?.[product.category] || store?.categoryAliases?.[product.sourceCategory];
+  const displayCategory = alias || product.category;
+
+  const baseResult = {
+    ...publicFields,
+    category: displayCategory,
+    rawCategory: product.category,
+    hasImage
+  };
+
+  if (!product.image && !hasImage) return baseResult;
   const version = encodeURIComponent(product.updatedAt || '1');
   return {
-    ...publicFields,
-    hasImage,
+    ...baseResult,
     image: `${publicApiBase(req)}/public/stores/${encodeURIComponent(store.slug)}/products/${encodeURIComponent(product.id)}/image?v=${version}`
   };
 }
