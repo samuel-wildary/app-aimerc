@@ -74,32 +74,66 @@ function playOrderChime() {
     const ctx = getAudioContext();
     if (!ctx) return;
 
-    // Harmonious 3-tone notification chime (D5 -> A5 -> D6)
-    const notes = [
-      { freq: 587.33, start: 0.0, duration: 0.35, gainVal: 0.35 },
-      { freq: 880.00, start: 0.12, duration: 0.50, gainVal: 0.40 },
-      { freq: 1174.66, start: 0.28, duration: 0.85, gainVal: 0.45 }
+    // Classic iFood / Vintage rotary telephone double-ring: "TRRRRIIIM... TRRRRIIIM!"
+    const bursts = [
+      { start: 0.0, duration: 0.45 },
+      { start: 0.58, duration: 0.52 }
     ];
 
-    notes.forEach(({ freq, start, duration, gainVal }) => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
+    bursts.forEach(({ start, duration }) => {
+      const t0 = ctx.currentTime + start;
+      const t1 = t0 + duration;
 
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(freq, ctx.currentTime + start);
+      // 1. Master Envelope Gain for the burst
+      const masterGain = ctx.createGain();
+      masterGain.gain.setValueAtTime(0.0001, t0);
+      masterGain.gain.linearRampToValueAtTime(0.42, t0 + 0.02);
+      masterGain.gain.setValueAtTime(0.42, t1 - 0.04);
+      masterGain.gain.exponentialRampToValueAtTime(0.0001, t1);
+      masterGain.connect(ctx.destination);
 
-      gain.gain.setValueAtTime(0, ctx.currentTime + start);
-      gain.gain.linearRampToValueAtTime(gainVal, ctx.currentTime + start + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + start + duration);
+      // 2. Tremolo Gain (controlled by 22Hz clapper LFO)
+      const tremolo = ctx.createGain();
+      tremolo.gain.setValueAtTime(0.5, t0);
+      tremolo.connect(masterGain);
 
-      osc.connect(gain);
-      gain.connect(ctx.destination);
+      // LFO for 22Hz hammer vibration
+      const lfo = ctx.createOscillator();
+      lfo.type = 'square';
+      lfo.frequency.setValueAtTime(22, t0);
 
-      osc.start(ctx.currentTime + start);
-      osc.stop(ctx.currentTime + start + duration);
+      const lfoAmp = ctx.createGain();
+      lfoAmp.gain.setValueAtTime(0.48, t0);
+      lfo.connect(lfoAmp);
+      lfoAmp.connect(tremolo.gain);
+
+      lfo.start(t0);
+      lfo.stop(t1);
+
+      // 3. Dual brass bells: 753Hz + 852Hz (Classic European/Brazilian rotary phone) + harmonic 1605Hz
+      const tones = [
+        { freq: 753, gain: 0.45 },
+        { freq: 852, gain: 0.45 },
+        { freq: 1605, gain: 0.12 }
+      ];
+
+      tones.forEach(({ freq, gain }) => {
+        const osc = ctx.createOscillator();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, t0);
+
+        const oscGain = ctx.createGain();
+        oscGain.gain.setValueAtTime(gain, t0);
+
+        osc.connect(oscGain);
+        oscGain.connect(tremolo);
+
+        osc.start(t0);
+        osc.stop(t1);
+      });
     });
   } catch (err) {
-    console.warn('Audio chime error:', err);
+    console.warn('Rotary phone chime error:', err);
   }
 }
 
