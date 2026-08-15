@@ -10,6 +10,7 @@ import {
   Check,
   CheckSquare,
   ChevronRight,
+  ChevronDown,
   Download,
   CircleDollarSign,
   Clock3,
@@ -1626,7 +1627,7 @@ function PushCampaigns({ campaigns, onCreate, onSend, onDelete }) {
             <option value="RECENT_CUSTOMERS">Clientes recentes</option>
             <option value="INACTIVE_CUSTOMERS">Clientes inativos</option>
           </select>
-          <ChevronRight size={15} className="select-chevron" />
+          <ChevronDown size={15} className="select-chevron" />
         </div>
       </label>
       <label className="mockup-field">
@@ -1636,7 +1637,7 @@ function PushCampaigns({ campaigns, onCreate, onSend, onDelete }) {
             <option value="DRAFT">Salvar para revisar</option>
             <option value="SCHEDULED">Agendar envio</option>
           </select>
-          <ChevronRight size={15} className="select-chevron" />
+          <ChevronDown size={15} className="select-chevron" />
         </div>
       </label>
     </div>
@@ -1684,9 +1685,9 @@ function PushAutomations({ automations, onCreate, onToggle, onRun, onDelete }) {
     <p className="panel-description">Monte uma regra uma vez. O sistema acompanha o horario, cria as proximas campanhas e mantem o relacionamento funcionando sozinho.</p>
     <div className="automation-layout">
       <form className="settings-form automation-form" onSubmit={submit}>
-        <div className="template-picker" style={{ display: 'flex', gap: '8px', marginBottom: '24px' }}>
+        <div className="template-picker">
           {Object.keys(automationTemplates).map(type => (
-            <button type="button" className={`desktop-tab-btn ${form.triggerType === type ? 'active' : ''}`} onClick={() => applyTemplate(type)} key={type}>
+            <button type="button" className={`template-pill ${form.triggerType === type ? 'active' : ''}`} onClick={() => applyTemplate(type)} key={type}>
               {triggerLabels[type]}
             </button>
           ))}
@@ -1723,7 +1724,7 @@ function PushAutomations({ automations, onCreate, onToggle, onRun, onDelete }) {
                 <select value={form.weekday} onChange={event => setForm({ ...form, weekday: Number(event.target.value) })}>
                   {weekdays.map((day, index) => <option value={index} key={day}>{day}</option>)}
                 </select>
-                <ChevronRight size={15} className="select-chevron" />
+                <ChevronDown size={15} className="select-chevron" />
               </div>
             </label>
           )}
@@ -1744,7 +1745,7 @@ function PushAutomations({ automations, onCreate, onToggle, onRun, onDelete }) {
                   <option value="RECENT_CUSTOMERS">Clientes recentes</option>
                   <option value="INACTIVE_CUSTOMERS">Clientes inativos</option>
                 </select>
-                <ChevronRight size={15} className="select-chevron" />
+                <ChevronDown size={15} className="select-chevron" />
               </div>
             </label>
           )}
@@ -2210,7 +2211,7 @@ function Storefront({
                         <option value={30}>30 minutos</option>
                         <option value={60}>60 minutos</option>
                       </select>
-                      <ChevronRight size={15} className="select-chevron" />
+                      <ChevronDown size={15} className="select-chevron" />
                     </div>
                   </label>
                 </div>
