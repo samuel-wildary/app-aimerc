@@ -325,27 +325,42 @@ function OrderCard({ order, selected, onSelect }) {
 
 function KanbanCard({ order, selected, onSelect, onAdvance, busy }) {
   const { next, action } = nextStatusFor(order);
-  const nextMeta = next ? STATUS[next] : null;
   const scheduled = order.scheduledTo && new Date(order.scheduledTo).getTime() > Date.now();
+  const toneClass = order.status === 'RECEIVED' ? 'tone-blue' : order.status === 'PICKING' ? 'tone-amber' : order.status === 'READY' ? 'tone-green' : 'tone-violet';
   return (
-    <article className={`kanban-card ${selected ? 'selected' : ''}`}>
+    <article className={`kanban-card ${selected ? 'selected' : ''} ${toneClass}`}>
       <button type="button" className="kanban-card-body" onClick={() => onSelect(order)}>
         <div className="kanban-card-top">
-          <span className="order-id">#{order.id}</span>
-          <small>{shortTime(order.createdAt)}</small>
+          <span className="kanban-order-badge">#{order.id}</span>
+          <span className="kanban-order-time"><Clock3 size={12} />{shortTime(order.createdAt)}</span>
         </div>
-        <strong>{order.customer.name}</strong>
-        <small>{order.items.length} itens · {order.fulfillmentType === 'DELIVERY' ? 'Entrega' : 'Retirada'}</small>
+        <div className="kanban-customer-row">
+          <strong className="kanban-customer-name">{order.customer.name}</strong>
+          {order.fulfillmentType === 'DELIVERY' ? (
+            <span className="kanban-tag delivery"><Truck size={12} /> Entrega</span>
+          ) : (
+            <span className="kanban-tag pickup"><Store size={12} /> Retirada</span>
+          )}
+        </div>
+        <div className="kanban-items-summary">
+          <span>{order.items.length} {order.items.length === 1 ? 'item' : 'itens'}</span>
+          {order.customer.address && order.fulfillmentType === 'DELIVERY' && (
+            <small className="kanban-address-snippet" title={order.customer.address}> · {order.customer.address.split(',')[0]}</small>
+          )}
+        </div>
         {scheduled && <span className="scheduled-order">Separar em {new Date(order.scheduledTo).toLocaleString('pt-BR', { weekday: 'short', hour: '2-digit', minute: '2-digit' })}</span>}
         <div className="kanban-card-foot">
-          <strong>{money(order.total)}</strong>
+          <div className="kanban-price-wrap">
+            <span className="kanban-price-label">Total</span>
+            <strong className="kanban-price-value">{money(order.total)}</strong>
+          </div>
           <StatusBadge status={order.status} />
         </div>
       </button>
       {next && (
         <button
           type="button"
-          className="kanban-advance"
+          className={`kanban-advance-btn ${toneClass}`}
           disabled={busy}
           onClick={event => {
             event.stopPropagation();
@@ -355,8 +370,7 @@ function KanbanCard({ order, selected, onSelect, onAdvance, busy }) {
           {busy ? 'Atualizando...' : (
             <>
               <span>{action}</span>
-              {nextMeta && nextMeta.label !== 'Concluido' ? <em>→ {nextMeta.label}</em> : null}
-              <ArrowRight size={15} />
+              <ArrowRight size={14} />
             </>
           )}
         </button>
@@ -722,14 +736,18 @@ function OrdersPanel({ orders, selected, setSelected, title = 'Painel de pedidos
           {KANBAN_COLUMNS.map(column => {
             const meta = STATUS[column.status];
             const columnOrders = activeOrders.filter(order => order.status === column.status);
+            const ColumnIcon = column.status === 'RECEIVED' ? Bell : column.status === 'PICKING' ? Clock3 : column.status === 'READY' ? CheckSquare : Truck;
             return (
               <div key={column.status} className={`kanban-column ${meta.tone}`}>
                 <header className="kanban-column-head">
-                  <div>
-                    <strong>{meta.label}</strong>
-                    <span>{column.hint}</span>
+                  <div className="kanban-head-title">
+                    <ColumnIcon size={16} />
+                    <div>
+                      <strong>{meta.label}</strong>
+                      <span>{column.hint}</span>
+                    </div>
                   </div>
-                  <em>{columnOrders.length}</em>
+                  <span className="kanban-count-pill">{columnOrders.length}</span>
                 </header>
                 <div className="kanban-column-body">
                   {columnOrders.length ? columnOrders.map(order => (
@@ -741,7 +759,12 @@ function OrdersPanel({ orders, selected, setSelected, title = 'Painel de pedidos
                       onAdvance={onAdvance}
                       busy={busy}
                     />
-                  )) : <div className="kanban-empty">Sem pedidos nesta etapa</div>}
+                  )) : (
+                    <div className="kanban-empty">
+                      <Package size={22} />
+                      <span>Sem pedidos nesta etapa</span>
+                    </div>
+                  )}
                 </div>
               </div>
             );
