@@ -1601,7 +1601,56 @@ function PushCampaigns({ campaigns, onCreate, onSend, onDelete }) {
   async function submit(event) { event.preventDefault(); setSaving(true); try { await onCreate({ ...form, scheduledAt: form.status === 'SCHEDULED' ? form.scheduledAt : null }); setForm({ title: '', body: '', audience: 'ALL_CUSTOMERS', status: 'DRAFT', scheduledAt: '' }); } finally { setSaving(false); } }
   async function send(id) { setSendingId(id); try { await onSend(id); } finally { setSendingId(null); } }
   const statusText = campaign => campaign.status === 'SENT' ? `Enviada para ${campaign.successCount} aparelho(s)` : campaign.status === 'PARTIAL' ? `${campaign.successCount} enviada(s), ${campaign.failureCount} falha(s)` : campaign.status === 'FAILED' ? `Falhou: ${campaign.sendError || 'verifique o Firebase'}` : campaign.status === 'SCHEDULED' ? `Agendada ${new Date(campaign.scheduledAt).toLocaleString('pt-BR')}` : 'Rascunho';
-  return <section className="panel push-panel"><div className="panel-heading"><div><p className="overline">Relacionamento</p><h2>Campanhas de push</h2></div><Bell size={19} /></div><p className="panel-description">Salve para revisar, dispare imediatamente ou programe o horario. O Firebase entrega a notificacao aos celulares habilitados.</p><form className="banner-form" onSubmit={submit}><label>Titulo da notificacao<input required maxLength="80" value={form.title} onChange={event => setForm({ ...form, title: event.target.value })} placeholder="Ex.: Oferta relampago hoje" /></label><label>Mensagem<input required maxLength="180" value={form.body} onChange={event => setForm({ ...form, body: event.target.value })} placeholder="Ex.: Frete gratis acima de R$ 80 ate as 18h." /></label><div className="banner-form-row"><label>Publico<select value={form.audience} onChange={event => setForm({ ...form, audience: event.target.value })}><option value="ALL_CUSTOMERS">Todos os clientes</option><option value="RECENT_CUSTOMERS">Clientes recentes</option><option value="INACTIVE_CUSTOMERS">Clientes inativos</option></select></label><label>Status<select value={form.status} onChange={event => setForm({ ...form, status: event.target.value })}><option value="DRAFT">Salvar para revisar</option><option value="SCHEDULED">Agendar envio</option></select></label></div>{form.status === 'SCHEDULED' && <label>Data e hora<input type="datetime-local" value={form.scheduledAt} onChange={event => setForm({ ...form, scheduledAt: event.target.value })} required /></label>}<button className="primary large" disabled={saving}><Bell size={17} />{saving ? 'Salvando...' : 'Salvar campanha'}</button></form><div className="push-list">{campaigns.map(campaign => <div className={`push-row push-${campaign.status.toLowerCase()}`} key={campaign.id}><div><strong>{campaign.title}</strong><span>{campaign.body}</span><small>{campaign.audience === 'ALL_CUSTOMERS' ? 'Todos os clientes' : campaign.audience === 'RECENT_CUSTOMERS' ? 'Clientes recentes' : 'Clientes inativos'} · {statusText(campaign)}</small></div><div className="push-actions">{campaign.status !== 'SENT' && <button className="send-button" disabled={sendingId === campaign.id} onClick={() => send(campaign.id)}><Bell size={15} />{sendingId === campaign.id ? 'Enviando...' : 'Disparar agora'}</button>}<button className="danger-button" onClick={() => onDelete(campaign.id)}><Trash2 size={15} /> Excluir</button></div></div>)}{!campaigns.length && <p className="empty-push">Nenhuma campanha criada ainda.</p>}</div></section>;
+  return <section className="panel push-panel"><div className="panel-heading"><div><p className="overline">Relacionamento</p><h2>Campanhas de push</h2></div><Bell size={19} /></div><p className="panel-description">Salve para revisar, dispare imediatamente ou programe o horario. O Firebase entrega a notificacao aos celulares habilitados.</p>
+  <form className="settings-form" onSubmit={submit}>
+    <div className="settings-form-row">
+      <label className="mockup-field">
+        <span className="mockup-label">Título da notificação</span>
+        <div className="mockup-input-box">
+          <input required maxLength="80" value={form.title} onChange={event => setForm({ ...form, title: event.target.value })} placeholder="Ex.: Oferta relâmpago hoje" />
+        </div>
+      </label>
+      <label className="mockup-field">
+        <span className="mockup-label">Mensagem</span>
+        <div className="mockup-input-box">
+          <input required maxLength="180" value={form.body} onChange={event => setForm({ ...form, body: event.target.value })} placeholder="Ex.: Frete grátis acima de R$ 80 até as 18h." />
+        </div>
+      </label>
+    </div>
+    <div className="settings-form-row">
+      <label className="mockup-field">
+        <span className="mockup-label">Público alvo</span>
+        <div className="mockup-select-box">
+          <select value={form.audience} onChange={event => setForm({ ...form, audience: event.target.value })}>
+            <option value="ALL_CUSTOMERS">Todos os clientes</option>
+            <option value="RECENT_CUSTOMERS">Clientes recentes</option>
+            <option value="INACTIVE_CUSTOMERS">Clientes inativos</option>
+          </select>
+          <ChevronRight size={15} className="select-chevron" />
+        </div>
+      </label>
+      <label className="mockup-field">
+        <span className="mockup-label">Ação / Status</span>
+        <div className="mockup-select-box">
+          <select value={form.status} onChange={event => setForm({ ...form, status: event.target.value })}>
+            <option value="DRAFT">Salvar para revisar</option>
+            <option value="SCHEDULED">Agendar envio</option>
+          </select>
+          <ChevronRight size={15} className="select-chevron" />
+        </div>
+      </label>
+    </div>
+    {form.status === 'SCHEDULED' && (
+      <label className="mockup-field">
+        <span className="mockup-label">Data e hora do envio</span>
+        <div className="mockup-input-box" style={{ width: '220px' }}>
+          <input type="datetime-local" value={form.scheduledAt} onChange={event => setForm({ ...form, scheduledAt: event.target.value })} required />
+        </div>
+      </label>
+    )}
+    <button className="primary large btn-forest-submit" disabled={saving} style={{ marginTop: '16px' }}><Bell size={17} />{saving ? 'Salvando...' : 'Salvar campanha'}</button>
+  </form>
+  <div className="push-list">{campaigns.map(campaign => <div className={`push-row push-${campaign.status.toLowerCase()}`} key={campaign.id}><div><strong>{campaign.title}</strong><span>{campaign.body}</span><small>{campaign.audience === 'ALL_CUSTOMERS' ? 'Todos os clientes' : campaign.audience === 'RECENT_CUSTOMERS' ? 'Clientes recentes' : 'Clientes inativos'} · {statusText(campaign)}</small></div><div className="push-actions">{campaign.status !== 'SENT' && <button className="send-button" disabled={sendingId === campaign.id} onClick={() => send(campaign.id)}><Bell size={15} />{sendingId === campaign.id ? 'Enviando...' : 'Disparar agora'}</button>}<button className="danger-button" onClick={() => onDelete(campaign.id)}><Trash2 size={15} /> Excluir</button></div></div>)}{!campaigns.length && <p className="empty-push">Nenhuma campanha criada ainda.</p>}</div></section>;
 }
 
 const automationTemplates = {
@@ -1634,20 +1683,73 @@ function PushAutomations({ automations, onCreate, onToggle, onRun, onDelete }) {
     <div className="panel-heading"><div><p className="overline">Piloto automatico</p><h2>Programas de push</h2></div><Zap size={20} /></div>
     <p className="panel-description">Monte uma regra uma vez. O sistema acompanha o horario, cria as proximas campanhas e mantem o relacionamento funcionando sozinho.</p>
     <div className="automation-layout">
-      <form className="banner-form automation-form" onSubmit={submit}>
-        <div className="template-picker">
-          {Object.keys(automationTemplates).map(type => <button type="button" className={form.triggerType === type ? 'selected' : ''} onClick={() => applyTemplate(type)} key={type}>{triggerLabels[type]}</button>)}
+      <form className="settings-form automation-form" onSubmit={submit}>
+        <div className="template-picker" style={{ display: 'flex', gap: '8px', marginBottom: '24px' }}>
+          {Object.keys(automationTemplates).map(type => (
+            <button type="button" className={`desktop-tab-btn ${form.triggerType === type ? 'active' : ''}`} onClick={() => applyTemplate(type)} key={type}>
+              {triggerLabels[type]}
+            </button>
+          ))}
         </div>
-        <label>Nome do programa<input required maxLength="80" value={form.name} onChange={event => setForm({ ...form, name: event.target.value })} /></label>
-        <label>Titulo da notificacao<input required maxLength="80" value={form.title} onChange={event => setForm({ ...form, title: event.target.value })} /></label>
-        <label>Mensagem<textarea required maxLength="180" value={form.body} onChange={event => setForm({ ...form, body: event.target.value })} /></label>
-        <div className="automation-fields">
-          <label>Horario<input type="time" required value={form.sendTime} onChange={event => setForm({ ...form, sendTime: event.target.value })} /></label>
-          {form.triggerType === 'WEEKLY' && <label>Dia da semana<select value={form.weekday} onChange={event => setForm({ ...form, weekday: Number(event.target.value) })}>{weekdays.map((day, index) => <option value={index} key={day}>{day}</option>)}</select></label>}
-          {form.triggerType === 'INACTIVE_CUSTOMERS' && <label>Sem comprar ha<input type="number" min="1" max="365" value={form.inactiveDays} onChange={event => setForm({ ...form, inactiveDays: Number(event.target.value) })} /></label>}
-          {form.triggerType !== 'INACTIVE_CUSTOMERS' && <label>Publico<select value={form.audience} onChange={event => setForm({ ...form, audience: event.target.value })}><option value="ALL_CUSTOMERS">Todos os clientes</option><option value="RECENT_CUSTOMERS">Clientes recentes</option><option value="INACTIVE_CUSTOMERS">Clientes inativos</option></select></label>}
+        <div className="settings-form-row">
+          <label className="mockup-field">
+            <span className="mockup-label">Nome do programa (interno)</span>
+            <div className="mockup-input-box">
+              <input required maxLength="80" value={form.name} onChange={event => setForm({ ...form, name: event.target.value })} />
+            </div>
+          </label>
+          <label className="mockup-field">
+            <span className="mockup-label">Título da notificação</span>
+            <div className="mockup-input-box">
+              <input required maxLength="80" value={form.title} onChange={event => setForm({ ...form, title: event.target.value })} />
+            </div>
+          </label>
         </div>
-        <button className="primary large" disabled={saving}><Zap size={17} />{saving ? 'Criando programa...' : 'Ativar automacao'}</button>
+        <label className="mockup-field">
+          <span className="mockup-label">Mensagem da notificação</span>
+          <textarea className="mockup-textarea" rows="2" required maxLength="180" value={form.body} onChange={event => setForm({ ...form, body: event.target.value })} />
+        </label>
+        <div className="settings-form-row">
+          <label className="mockup-field">
+            <span className="mockup-label">Horário de disparo</span>
+            <div className="mockup-input-box">
+              <input type="time" required value={form.sendTime} onChange={event => setForm({ ...form, sendTime: event.target.value })} />
+            </div>
+          </label>
+          {form.triggerType === 'WEEKLY' && (
+            <label className="mockup-field">
+              <span className="mockup-label">Dia da semana</span>
+              <div className="mockup-select-box">
+                <select value={form.weekday} onChange={event => setForm({ ...form, weekday: Number(event.target.value) })}>
+                  {weekdays.map((day, index) => <option value={index} key={day}>{day}</option>)}
+                </select>
+                <ChevronRight size={15} className="select-chevron" />
+              </div>
+            </label>
+          )}
+          {form.triggerType === 'INACTIVE_CUSTOMERS' && (
+            <label className="mockup-field">
+              <span className="mockup-label">Sem comprar há (dias)</span>
+              <div className="mockup-input-box">
+                <input type="number" min="1" max="365" value={form.inactiveDays} onChange={event => setForm({ ...form, inactiveDays: Number(event.target.value) })} />
+              </div>
+            </label>
+          )}
+          {form.triggerType !== 'INACTIVE_CUSTOMERS' && (
+            <label className="mockup-field">
+              <span className="mockup-label">Público alvo</span>
+              <div className="mockup-select-box">
+                <select value={form.audience} onChange={event => setForm({ ...form, audience: event.target.value })}>
+                  <option value="ALL_CUSTOMERS">Todos os clientes</option>
+                  <option value="RECENT_CUSTOMERS">Clientes recentes</option>
+                  <option value="INACTIVE_CUSTOMERS">Clientes inativos</option>
+                </select>
+                <ChevronRight size={15} className="select-chevron" />
+              </div>
+            </label>
+          )}
+        </div>
+        <button className="primary large btn-forest-submit" disabled={saving} style={{ marginTop: '16px' }}><Zap size={17} />{saving ? 'Criando programa...' : 'Ativar automacão'}</button>
       </form>
       <div className="automation-list">
         {automations.map(automation => <article className={`automation-card ${automation.active ? '' : 'paused'}`} key={automation.id}>
@@ -2254,9 +2356,19 @@ function Storefront({
               <div className="settings-form">
                 <div className="business-hours-editor">
                   <div><strong>Horário comercial de abertura</strong><span>Pedidos fora desse período entram na fila para a próxima abertura.</span></div>
-                  <div className="business-hours-fields">
-                    <label>Abre às<input type="time" required value={settings.businessHoursStart} onChange={event => setSettings({ ...settings, businessHoursStart: event.target.value })} /></label>
-                    <label>Fecha às<input type="time" required value={settings.businessHoursEnd} onChange={event => setSettings({ ...settings, businessHoursEnd: event.target.value })} /></label>
+                  <div className="settings-form-row">
+                    <label className="mockup-field">
+                      <span className="mockup-label">Abre às</span>
+                      <div className="mockup-input-box">
+                        <input type="time" required value={settings.businessHoursStart} onChange={event => setSettings({ ...settings, businessHoursStart: event.target.value })} />
+                      </div>
+                    </label>
+                    <label className="mockup-field">
+                      <span className="mockup-label">Fecha às</span>
+                      <div className="mockup-input-box">
+                        <input type="time" required value={settings.businessHoursEnd} onChange={event => setSettings({ ...settings, businessHoursEnd: event.target.value })} />
+                      </div>
+                    </label>
                   </div>
                   <div className="business-days" aria-label="Dias de funcionamento">
                     {businessDayOptions.map(day => <button type="button" className={selectedBusinessDays.has(day.value) ? 'selected' : ''} onClick={() => toggleBusinessDay(day.value)} key={day.value}>{day.label}</button>)}
@@ -2277,7 +2389,11 @@ function Storefront({
               <div className="settings-form">
                 <label className="open-toggle"><span><strong>Agendamento de horário na retirada</strong><small>Permitir que o cliente escolha a faixa de horário para buscar o pedido na loja.</small></span><input type="checkbox" checked={settings.enablePickupScheduling} onChange={event => setSettings({ ...settings, enablePickupScheduling: event.target.checked })} /></label>
                 {settings.enablePickupScheduling && (
-                  <label>Faixas de horário disponíveis para retirada<span>Separe as opções por vírgula.</span><textarea rows="3" value={settings.pickupSlots} onChange={event => setSettings({ ...settings, pickupSlots: event.target.value })} placeholder="08:00 - 10:00, 10:00 - 12:00, 12:00 - 14:00, 14:00 - 16:00, 16:00 - 18:00, 18:00 - 20:00" required={settings.enablePickupScheduling} /></label>
+                  <label className="mockup-field" style={{ marginTop: '16px' }}>
+                    <span className="mockup-label">Faixas de horário disponíveis para retirada</span>
+                    <span className="mockup-hint">Separe as opções por vírgula.</span>
+                    <textarea rows="3" className="mockup-textarea" value={settings.pickupSlots} onChange={event => setSettings({ ...settings, pickupSlots: event.target.value })} placeholder="08:00 - 10:00, 10:00 - 12:00, 12:00 - 14:00, 14:00 - 16:00, 16:00 - 18:00, 18:00 - 20:00" required={settings.enablePickupScheduling} />
+                  </label>
                 )}
                 <div style={{ marginTop: 'auto', paddingTop: '16px' }}>
                   <button className="primary large" disabled={savingSettings}>{savingSettings ? 'Salvando...' : 'Salvar agendamento'}</button>
@@ -2400,15 +2516,46 @@ function Storefront({
           <div className="storefront-grid">
             <section className="panel banner-editor">
               <div className="panel-heading"><div><p className="overline">Vitrine do aplicativo</p><h2>{editingId ? 'Editar banner' : 'Novo banner'}</h2></div>{editingId && <button className="text-button" onClick={resetBanner}>Cancelar edição</button>}</div>
-              <form className="banner-form" onSubmit={submitBanner}>
-                <label>Chamada curta (opcional)<input value={bannerForm.eyebrow} onChange={event => setBannerForm({ ...bannerForm, eyebrow: event.target.value })} placeholder="Ex.: Feira da semana" /></label>
-                <label>Título principal (opcional)<input maxLength="120" value={bannerForm.title} onChange={event => setBannerForm({ ...bannerForm, title: event.target.value })} placeholder="Ex.: Frescor que cabe no carrinho" /></label>
-                <label>Descrição (opcional)<textarea value={bannerForm.subtitle} onChange={event => setBannerForm({ ...bannerForm, subtitle: event.target.value })} placeholder="Explique a promoção em uma frase." /></label>
-                <label>Imagem do banner<span>Imagem horizontal (ajustada para 1200 x 600 px em WebP).</span><input className="banner-file-input" type="file" accept="image/jpeg,image/png,image/webp" onChange={chooseBannerImage} required={!bannerForm.image} /></label>
+              <form className="settings-form" onSubmit={submitBanner}>
+                <div className="settings-form-row">
+                  <label className="mockup-field">
+                    <span className="mockup-label">Chamada curta (opcional)</span>
+                    <div className="mockup-input-box">
+                      <input value={bannerForm.eyebrow} onChange={event => setBannerForm({ ...bannerForm, eyebrow: event.target.value })} placeholder="Ex.: Feira da semana" />
+                    </div>
+                  </label>
+                  <label className="mockup-field">
+                    <span className="mockup-label">Título principal (opcional)</span>
+                    <div className="mockup-input-box">
+                      <input maxLength="120" value={bannerForm.title} onChange={event => setBannerForm({ ...bannerForm, title: event.target.value })} placeholder="Ex.: Frescor que cabe no carrinho" />
+                    </div>
+                  </label>
+                </div>
+                <label className="mockup-field">
+                  <span className="mockup-label">Descrição (opcional)</span>
+                  <textarea className="mockup-textarea" rows="2" value={bannerForm.subtitle} onChange={event => setBannerForm({ ...bannerForm, subtitle: event.target.value })} placeholder="Explique a promoção em uma frase." />
+                </label>
+                <label className="mockup-field">
+                  <span className="mockup-label">Imagem do banner</span>
+                  <span className="mockup-hint">Imagem horizontal (ajustada para 1200 x 600 px em WebP).</span>
+                  <input className="banner-file-input" type="file" accept="image/jpeg,image/png,image/webp" onChange={chooseBannerImage} required={!bannerForm.image} />
+                </label>
                 {bannerFileError && <p className="field-error">{bannerFileError}</p>}
                 {bannerPreview && <div className="banner-upload-preview" style={{ backgroundImage: `url(${bannerPreview})` }}><span>Prévia 1200 x 600</span></div>}
-                <div className="banner-form-row"><label>Ordem<input type="number" min="0" max="99" value={bannerForm.position} onChange={event => setBannerForm({ ...bannerForm, position: event.target.value })} /></label><label className="active-checkbox"><input type="checkbox" checked={bannerForm.active} onChange={event => setBannerForm({ ...bannerForm, active: event.target.checked })} /> Exibir no app</label></div>
-                <button className="primary large" disabled={savingBanner}>{editingId ? <Pencil size={17} /> : <Plus size={17} />}{savingBanner ? 'Salvando...' : editingId ? 'Atualizar banner' : 'Adicionar banner'}</button>
+                
+                <div className="settings-form-row" style={{ marginTop: '16px', alignItems: 'center' }}>
+                  <label className="mockup-field" style={{ marginBottom: 0 }}>
+                    <span className="mockup-label">Ordem</span>
+                    <div className="mockup-input-box" style={{ width: '80px' }}>
+                      <input type="number" min="0" max="99" value={bannerForm.position} onChange={event => setBannerForm({ ...bannerForm, position: event.target.value })} />
+                    </div>
+                  </label>
+                  <label className="cat-visibility-toggle" style={{ marginTop: '16px' }}>
+                    <input type="checkbox" checked={bannerForm.active} onChange={event => setBannerForm({ ...bannerForm, active: event.target.checked })} /> 
+                    <span>Exibir no app</span>
+                  </label>
+                </div>
+                <button className="primary large btn-forest-submit" disabled={savingBanner} style={{ marginTop: '24px' }}>{editingId ? <Pencil size={17} /> : <Plus size={17} />}{savingBanner ? 'Salvando...' : editingId ? 'Atualizar banner' : 'Adicionar banner'}</button>
               </form>
             </section>
 

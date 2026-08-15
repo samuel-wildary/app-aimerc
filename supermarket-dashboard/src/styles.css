@@ -2182,6 +2182,8 @@ tbody tr:last-child td {
   background: #fafafa;
 }
 .input-table {
+  width: 100%;
+  min-width: 0;
   background: transparent;
   border: 1px solid transparent;
   border-radius: var(--radius-xs);
