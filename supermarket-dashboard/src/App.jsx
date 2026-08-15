@@ -70,13 +70,13 @@ const KANBAN_COLUMNS = [
 ];
 
 const navItems = [
-  { id: 'overview', label: 'Visao geral', icon: LayoutDashboard },
+  { id: 'overview', label: 'Visão geral', icon: LayoutDashboard },
   { id: 'orders', label: 'Pedidos', icon: ShoppingBasket },
-  { id: 'catalog', label: 'Catalogo', icon: Boxes },
-  { id: 'integracao', label: 'Integracao', icon: Plug },
+  { id: 'catalog', label: 'Catálogo', icon: Boxes },
+  { id: 'integracao', label: 'Integração', icon: Plug },
   { id: 'delivery', label: 'Entregas', icon: Truck },
   { id: 'customers', label: 'Clientes', icon: UsersRound },
-  { id: 'reports', label: 'Relatorios', icon: BarChart3 },
+  { id: 'reports', label: 'Relatórios', icon: BarChart3 },
   { id: 'storefront', label: 'Loja & App', icon: Images }
 ];
 
