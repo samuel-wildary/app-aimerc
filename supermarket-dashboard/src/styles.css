@@ -1,11 +1,12 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 /* ==========================================================================
    AiMerc Design System - Enterprise B2B SaaS (Stripe / Linear / Vercel Grade)
    ========================================================================== */
 
 :root {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
   color: #18181b;
   background-color: #fafafa;
   font-synthesis: none;
@@ -955,7 +956,7 @@ h1, h2, h3, h4, p { margin-top: 0; }
   align-items: center;
   gap: 12px;
   padding: 12px 14px;
-  border-left: 3px solid var(--green-dot);
+  border: 1px solid var(--green-border);
   border-radius: var(--radius-sm);
   background: var(--green-bg);
   color: var(--green-text);
@@ -1359,7 +1360,7 @@ h1, h2, h3, h4, p { margin-top: 0; }
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
-  border-left: 3px solid var(--brand-success);
+  border: 1px solid var(--green-border);
   border-radius: var(--radius-sm);
   background: var(--green-bg);
   color: var(--green-text);
