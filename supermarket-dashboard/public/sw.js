@@ -1,29 +1,31 @@
-const CACHE_NAME = 'aimerc-dashboard-v2';
+const CACHE_NAME = 'aimerc-dashboard-v3';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
+});
+
+self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(['/', '/index.html']);
+    caches.keys().then((keys) => {
+      return Promise.all(
+        keys.map((key) => {
+          if (key !== CACHE_NAME) {
+            return caches.delete(key);
+          }
+        })
+      );
+    }).then(() => clients.claim())
+  );
+});
+
+self.addEventListener('fetch', (event) => {
+  event.respondWith(
+    fetch(event.request).catch(() => {
+      if (event.request.mode === 'navigate') {
+        return caches.match('/') || caches.match('/index.html');
+      }
+      return caches.match(event.request);
     })
   );
 });
 
-self.addEventListener('activate', (event) => {
-  event.waitUntil(clients.claim());
-});
-
-self.addEventListener('fetch', (event) => {
-  if (event.request.mode === 'navigate') {
-    event.respondWith(
-      fetch(event.request).catch(() => {
-        return caches.match('/');
-      })
-    );
-    return;
-  }
-  
-  event.respondWith(
-    fetch(event.request).catch(() => new Response('Offline'))
-  );
-});
