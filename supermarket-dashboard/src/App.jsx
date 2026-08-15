@@ -845,14 +845,17 @@ function OrdersPanel({ orders, selected, setSelected, title = 'Painel de pedidos
   );
 }
 
-function Overview({ summary, orders, products, selected, setSelected, createDemo, creatingDemo }) {
+function Overview({ summary, orders, products, selected, setSelected }) {
   const statuses = summary?.statuses || {};
   const activeOrders = orders.filter(order => !['DONE', 'CANCELLED'].includes(order.status));
   return (
     <>
       <section className="welcome-strip">
-        <div><p className="overline">Resumo do turno</p><h2>Sua operacao em um relance.</h2><p>Acompanhe o que precisa de atencao sem perder tempo procurando.</p></div>
-        <button className="secondary" onClick={createDemo} disabled={creatingDemo}><Sparkles size={17} />{creatingDemo ? 'Criando...' : 'Gerar pedido teste'}</button>
+        <div>
+          <p className="overline">Resumo do turno</p>
+          <h2>Sua operação em um relance.</h2>
+          <p>Acompanhe o que precisa de atenção sem perder tempo procurando.</p>
+        </div>
       </section>
       <section className="stats-grid">
         <StatCard icon={Clock3} label="Novos pedidos" value={statuses.RECEIVED || 0} detail="aguardando separacao" tone="blue" />
@@ -3249,7 +3252,7 @@ export default function App() {
         />
         {error && <div className="global-error"><span>{error}</span><button onClick={() => setError('')}><X size={17} /></button></div>}
         <div className="page-content">
-          {active === 'overview' && <Overview summary={summary} orders={orders} products={products} selected={selected} setSelected={setSelected} createDemo={createDemo} creatingDemo={creatingDemo} />}
+          {active === 'overview' && <Overview summary={summary} orders={orders} products={products} selected={selected} setSelected={setSelected} />}
           {active === 'orders' && <OrdersPanel orders={orders} selected={selected} setSelected={setSelected} onAdvance={advance} busy={busy} />}
           {active === 'catalog' && <Catalog products={products} categories={categories} query={query} setQuery={setQuery} category={category} setCategory={setCategory} onChanged={load} />}
           {active === 'delivery' && <Delivery orders={orders} selected={selected} setSelected={setSelected} onAdvance={advance} busy={busy} />}
