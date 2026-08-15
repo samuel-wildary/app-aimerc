@@ -56,6 +56,7 @@ import { api } from './api.js';
 import { realtime } from './realtime.js';
 
 let audioCtx = null;
+let orderAudioElement = null;
 
 function getAudioContext() {
   if (typeof window === 'undefined') return null;
@@ -69,12 +70,11 @@ function getAudioContext() {
   return audioCtx;
 }
 
-function playOrderChime() {
+function playSynthesizedBell() {
   try {
     const ctx = getAudioContext();
     if (!ctx) return;
 
-    // High-power audio compressor to maximize loudness without clipping
     const compressor = ctx.createDynamicsCompressor();
     compressor.threshold.setValueAtTime(-6, ctx.currentTime);
     compressor.knee.setValueAtTime(4, ctx.currentTime);
@@ -83,7 +83,6 @@ function playOrderChime() {
     compressor.release.setValueAtTime(0.08, ctx.currentTime);
     compressor.connect(ctx.destination);
 
-    // Loud, unmistakable 3-ring vintage rotary bell: "TRRRIM... TRRRIM... TRRRIIIM!"
     const bursts = [
       { start: 0.0, duration: 0.45 },
       { start: 0.56, duration: 0.45 },
@@ -94,7 +93,6 @@ function playOrderChime() {
       const t0 = ctx.currentTime + start;
       const t1 = t0 + duration;
 
-      // 1. Master Envelope Gain for the burst at max volume (0.95)
       const masterGain = ctx.createGain();
       masterGain.gain.setValueAtTime(0.0001, t0);
       masterGain.gain.linearRampToValueAtTime(0.95, t0 + 0.015);
@@ -102,12 +100,10 @@ function playOrderChime() {
       masterGain.gain.exponentialRampToValueAtTime(0.0001, t1);
       masterGain.connect(compressor);
 
-      // 2. Tremolo Gain (controlled by fast 22Hz clapper LFO)
       const tremolo = ctx.createGain();
       tremolo.gain.setValueAtTime(0.5, t0);
       tremolo.connect(masterGain);
 
-      // LFO for 22Hz mechanical clapper hammer vibration
       const lfo = ctx.createOscillator();
       lfo.type = 'square';
       lfo.frequency.setValueAtTime(22, t0);
@@ -120,7 +116,6 @@ function playOrderChime() {
       lfo.start(t0);
       lfo.stop(t1);
 
-      // 3. Resonant dual brass bells (753Hz + 852Hz) with piercing overtones (1605Hz + 2280Hz)
       const tones = [
         { freq: 753, gain: 0.65 },
         { freq: 852, gain: 0.65 },
@@ -144,8 +139,41 @@ function playOrderChime() {
       });
     });
   } catch (err) {
-    console.warn('Rotary phone chime error:', err);
+    console.warn('Audio fallback error:', err);
   }
+}
+
+function playOrderChime() {
+  try {
+    if (typeof window !== 'undefined') {
+      if (!orderAudioElement) {
+        orderAudioElement = new Audio('/sounds/order-notification.mp3');
+      }
+      orderAudioElement.currentTime = 0;
+      orderAudioElement.volume = 1.0;
+      const playPromise = orderAudioElement.play();
+      if (playPromise !== undefined) {
+        playPromise
+          .then(() => {
+            if (orderAudioElement._stopTimer) window.clearTimeout(orderAudioElement._stopTimer);
+            orderAudioElement._stopTimer = window.setTimeout(() => {
+              try {
+                orderAudioElement.pause();
+                orderAudioElement.currentTime = 0;
+              } catch (_) {}
+            }, 7500);
+          })
+          .catch((err) => {
+            console.warn('MP3 playback blocked, using synthesized bell:', err);
+            playSynthesizedBell();
+          });
+        return;
+      }
+    }
+  } catch (e) {
+    console.warn('Audio error, using fallback:', e);
+  }
+  playSynthesizedBell();
 }
 
 const STATUS = {
