@@ -186,7 +186,7 @@ function Login({ onSuccess }) {
   );
 }
 
-function Sidebar({ active, setActive, storefrontTab, setStorefrontTab, store, user, onLogout, open, onClose }) {
+function Sidebar({ active, setActive, store, user, onLogout, open, onClose }) {
   return (
     <aside className={`sidebar ${open ? 'is-open' : ''}`}>
       <div className="side-top">
@@ -202,44 +202,15 @@ function Sidebar({ active, setActive, storefrontTab, setStorefrontTab, store, us
         <p>Operacao</p>
         {navItems.map(item => {
           const Icon = item.icon;
-          const isStorefront = item.id === 'storefront';
-          const isActive = active === item.id;
           return (
-            <div key={item.id} className="nav-item-group">
-              <button
-                className={isActive ? 'active' : ''}
-                onClick={() => {
-                  setActive(item.id);
-                  if (!isStorefront) onClose();
-                }}
-              >
-                <Icon size={19} />
-                <span>{item.label}</span>
-              </button>
-              {isStorefront && isActive && (
-                <div className="sidebar-subnav">
-                  {storefrontSubTabs.map(sub => {
-                    const SubIcon = sub.icon;
-                    const isSubActive = storefrontTab === sub.id;
-                    return (
-                      <button
-                        key={sub.id}
-                        type="button"
-                        className={`sidebar-subitem ${isSubActive ? 'active' : ''}`}
-                        onClick={() => {
-                          setActive('storefront');
-                          setStorefrontTab(sub.id);
-                          onClose();
-                        }}
-                      >
-                        <SubIcon size={13} />
-                        <span>{sub.label}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+            <button
+              key={item.id}
+              className={active === item.id ? 'active' : ''}
+              onClick={() => { setActive(item.id); onClose(); }}
+            >
+              <Icon size={19} />
+              <span>{item.label}</span>
+            </button>
           );
         })}
       </nav>
@@ -2009,9 +1980,9 @@ function Storefront({
 
   return (
     <div className="storefront-container">
-      {/* Horizontal Sub-Tabs Header */}
-      <div className="storefront-tabs-header">
-        <div className="storefront-tabs-bar">
+      {/* Enterprise Desktop Tabs Header */}
+      <div className="desktop-tabs-header">
+        <div className="desktop-tabs-bar">
           {storefrontSubTabs.map(tab => {
             const Icon = tab.icon;
             const isSelected = activeTab === tab.id;
@@ -2025,12 +1996,12 @@ function Storefront({
               <button
                 key={tab.id}
                 type="button"
-                className={`storefront-tab-button ${isSelected ? 'active' : ''}`}
+                className={`desktop-tab-btn ${isSelected ? 'active' : ''}`}
                 onClick={() => changeTab(tab.id)}
               >
                 <Icon size={16} />
                 <span>{tab.label}</span>
-                {badgeCount != null && <span className="tab-pill-badge">{badgeCount}</span>}
+                {badgeCount != null && <span className="tab-counter">{badgeCount}</span>}
               </button>
             );
           })}
@@ -2040,82 +2011,105 @@ function Storefront({
       {/* TAB 1: TAXAS & ENTREGAS */}
       {activeTab === 'fees' && (
         <div className="storefront-tab-content">
-          <section className="panel settings-panel">
-            <div className="panel-heading">
-              <div>
-                <p className="overline">Operação Comercial</p>
-                <h2>Taxas & Valores de Pedido</h2>
-              </div>
-              <span className={`store-state ${settings.open ? 'open' : 'closed'}`}>{settings.open ? 'Loja aberta' : 'Loja fechada'}</span>
-            </div>
-            <form className="settings-form" onSubmit={submitSettings}>
-              <div className="settings-form-row">
-                <label>Pedido mínimo<span>Valor mínimo que o cliente precisa comprar no app.</span><div className="money-input"><b>R$</b><input type="number" min="0" step="0.01" value={settings.minimumOrder} onChange={event => setSettings({ ...settings, minimumOrder: event.target.value })} /></div></label>
-                <label>Taxa padrão de entrega<span>Usada caso nenhum bairro cadastrado atenda o cliente.</span><div className="money-input"><b>R$</b><input type="number" min="0" step="0.01" value={settings.deliveryFee} onChange={event => setSettings({ ...settings, deliveryFee: event.target.value })} /></div></label>
-              </div>
-              <label>Frete grátis acima de<span>Use R$ 0 para manter taxa fixa em todos os pedidos.</span><div className="money-input"><b>R$</b><input type="number" min="0" step="0.01" value={settings.freeDeliveryAbove} onChange={event => setSettings({ ...settings, freeDeliveryAbove: event.target.value })} /></div></label>
-
-              <div className="delivery-zone-editor">
-                <div className="delivery-zone-heading">
-                  <div><strong>Taxas personalizadas por bairro</strong><span>Esta lista define a área atendida. Um CEP de bairro não cadastrado será bloqueado no aplicativo.</span></div>
-                  <button type="button" onClick={addDeliveryZone}><Plus size={15} /> Adicionar bairro</button>
+          <form className="storefront-two-cols" onSubmit={submitSettings}>
+            <section className="panel settings-panel">
+              <div className="panel-heading">
+                <div>
+                  <p className="overline">Regras Comerciais</p>
+                  <h2>Taxas de Entrega & Loja</h2>
                 </div>
-                <div className="delivery-zone-columns" aria-hidden="true"><span>Bairro</span><span>Cidade</span><span>UF</span><span>Taxa</span><span /></div>
-                <div className="delivery-zone-list">
-                  {zones.map((zone, index) => <div className="delivery-zone-row" key={zone.id || index}>
-                    <input required maxLength="100" value={zone.neighborhood} onChange={event => updateDeliveryZone(index, 'neighborhood', event.target.value)} placeholder="Ex.: Centro" aria-label="Bairro" />
-                    <input required maxLength="100" value={zone.city} onChange={event => updateDeliveryZone(index, 'city', event.target.value)} placeholder="Cidade" aria-label="Cidade" />
-                    <input required maxLength="2" value={zone.state} onChange={event => updateDeliveryZone(index, 'state', event.target.value.toUpperCase().slice(0, 2))} placeholder="UF" aria-label="UF" />
-                    <div className="delivery-zone-money"><b>R$</b><input required type="number" min="0" step="0.01" value={zone.fee} onChange={event => updateDeliveryZone(index, 'fee', event.target.value)} aria-label="Taxa do bairro" /></div>
-                    <button className="delivery-zone-delete" type="button" onClick={() => removeDeliveryZone(index)} aria-label={`Excluir ${zone.neighborhood || 'bairro'}`}><Trash2 size={16} /></button>
-                  </div>)}
-                  {!zones.length && <div className="delivery-zone-empty">Nenhum bairro cadastrado. A taxa padrão será usada para todas as entregas.</div>}
+                <span className={`store-state ${settings.open ? 'open' : 'closed'}`}>{settings.open ? 'Loja aberta' : 'Loja fechada'}</span>
+              </div>
+              <div className="settings-form">
+                <div className="settings-form-row">
+                  <label>Pedido mínimo<span>Valor mínimo para comprar no app.</span><div className="money-input"><b>R$</b><input type="number" min="0" step="0.01" value={settings.minimumOrder} onChange={event => setSettings({ ...settings, minimumOrder: event.target.value })} /></div></label>
+                  <label>Taxa padrão de entrega<span>Usada caso nenhum bairro atenda.</span><div className="money-input"><b>R$</b><input type="number" min="0" step="0.01" value={settings.deliveryFee} onChange={event => setSettings({ ...settings, deliveryFee: event.target.value })} /></div></label>
                 </div>
-              </div>
+                <label>Frete grátis acima de<span>Use R$ 0 para manter taxa fixa em todos os pedidos.</span><div className="money-input"><b>R$</b><input type="number" min="0" step="0.01" value={settings.freeDeliveryAbove} onChange={event => setSettings({ ...settings, freeDeliveryAbove: event.target.value })} /></div></label>
 
-              <div className="settings-form-row">
-                <label>Central de atendimento<span>Telefone exibido quando o cancelamento precisar ser resolvido pela loja.</span><input type="tel" value={settings.supportPhone} onChange={event => setSettings({ ...settings, supportPhone: event.target.value })} placeholder="(85) 99999-0000" required /></label>
-                <label>Cancelamento pelo app<span>Minutos em que o cliente pode cancelar antes da separação.</span><input type="number" min="1" max="60" value={settings.cancellationWindowMinutes} onChange={event => setSettings({ ...settings, cancellationWindowMinutes: event.target.value })} /></label>
-              </div>
+                <div className="settings-form-row">
+                  <label>Central de atendimento<span>Telefone para suporte da loja.</span><input type="tel" value={settings.supportPhone} onChange={event => setSettings({ ...settings, supportPhone: event.target.value })} placeholder="(85) 99999-0000" required /></label>
+                  <label>Janela de cancelamento<span>Minutos antes da separação.</span><input type="number" min="1" max="60" value={settings.cancellationWindowMinutes} onChange={event => setSettings({ ...settings, cancellationWindowMinutes: event.target.value })} /></label>
+                </div>
 
-              <label className="open-toggle"><span><strong>Receber novos pedidos</strong><small>Ao fechar, o aplicativo bloqueia novos checkouts.</small></span><input type="checkbox" checked={settings.open} onChange={event => setSettings({ ...settings, open: event.target.checked })} /></label>
-              <button className="primary large" disabled={savingSettings}>{savingSettings ? 'Salvando...' : 'Salvar configurações de entrega'}</button>
-            </form>
-          </section>
+                <label className="open-toggle"><span><strong>Receber novos pedidos</strong><small>Ao fechar, o aplicativo bloqueia novos checkouts.</small></span><input type="checkbox" checked={settings.open} onChange={event => setSettings({ ...settings, open: event.target.checked })} /></label>
+                <button className="primary large" disabled={savingSettings}>{savingSettings ? 'Salvando...' : 'Salvar configurações de entrega'}</button>
+              </div>
+            </section>
+
+            <section className="panel settings-panel">
+              <div className="panel-heading">
+                <div>
+                  <p className="overline">Abrangência</p>
+                  <h2>Taxas por Bairro</h2>
+                </div>
+                <button type="button" className="action-button-clean" onClick={addDeliveryZone}><Plus size={15} /> Adicionar bairro</button>
+              </div>
+              <p className="panel-description">Defina os bairros atendidos e o valor de entrega para cada localidade.</p>
+              <div className="delivery-zone-columns" aria-hidden="true"><span>Bairro</span><span>Cidade</span><span>UF</span><span>Taxa</span><span /></div>
+              <div className="delivery-zone-list">
+                {zones.map((zone, index) => <div className="delivery-zone-row" key={zone.id || index}>
+                  <input required maxLength="100" value={zone.neighborhood} onChange={event => updateDeliveryZone(index, 'neighborhood', event.target.value)} placeholder="Ex.: Centro" aria-label="Bairro" />
+                  <input required maxLength="100" value={zone.city} onChange={event => updateDeliveryZone(index, 'city', event.target.value)} placeholder="Cidade" aria-label="Cidade" />
+                  <input required maxLength="2" value={zone.state} onChange={event => updateDeliveryZone(index, 'state', event.target.value.toUpperCase().slice(0, 2))} placeholder="UF" aria-label="UF" />
+                  <div className="delivery-zone-money"><b>R$</b><input required type="number" min="0" step="0.01" value={zone.fee} onChange={event => updateDeliveryZone(index, 'fee', event.target.value)} aria-label="Taxa do bairro" /></div>
+                  <button className="delivery-zone-delete" type="button" onClick={() => removeDeliveryZone(index)} aria-label={`Excluir ${zone.neighborhood || 'bairro'}`}><Trash2 size={16} /></button>
+                </div>)}
+                {!zones.length && <div className="delivery-zone-empty">Nenhum bairro cadastrado. A taxa padrão será usada para todas as entregas.</div>}
+              </div>
+              <div style={{ marginTop: '16px' }}>
+                <button className="primary large" disabled={savingSettings}>{savingSettings ? 'Salvando...' : 'Salvar taxas de entrega'}</button>
+              </div>
+            </section>
+          </form>
         </div>
       )}
 
       {/* TAB 2: HORÁRIOS & RETIRADA */}
       {activeTab === 'hours' && (
         <div className="storefront-tab-content">
-          <section className="panel settings-panel">
-            <div className="panel-heading">
-              <div>
-                <p className="overline">Expediente & Agendamento</p>
-                <h2>Horários de Funcionamento</h2>
-              </div>
-            </div>
-            <form className="settings-form" onSubmit={submitSettings}>
-              <div className="business-hours-editor">
-                <div><strong>Horário de funcionamento comercial</strong><span>Pedidos feitos fora desse período podem entrar na fila para a próxima abertura.</span></div>
-                <div className="business-hours-fields">
-                  <label>Abre às<input type="time" required value={settings.businessHoursStart} onChange={event => setSettings({ ...settings, businessHoursStart: event.target.value })} /></label>
-                  <label>Fecha às<input type="time" required value={settings.businessHoursEnd} onChange={event => setSettings({ ...settings, businessHoursEnd: event.target.value })} /></label>
+          <form className="storefront-two-cols" onSubmit={submitSettings}>
+            <section className="panel settings-panel">
+              <div className="panel-heading">
+                <div>
+                  <p className="overline">Expediente</p>
+                  <h2>Horário de Funcionamento</h2>
                 </div>
-                <div className="business-days" aria-label="Dias de funcionamento">
-                  {businessDayOptions.map(day => <button type="button" className={selectedBusinessDays.has(day.value) ? 'selected' : ''} onClick={() => toggleBusinessDay(day.value)} key={day.value}>{day.label}</button>)}
-                </div>
-                <label className="open-toggle"><span><strong>Receber pedidos fora do horário</strong><small>O cliente pode comprar normalmente e o pedido fica agendado para a próxima abertura da loja.</small></span><input type="checkbox" checked={settings.acceptAfterHours} onChange={event => setSettings({ ...settings, acceptAfterHours: event.target.checked })} /></label>
               </div>
+              <div className="settings-form">
+                <div className="business-hours-editor">
+                  <div><strong>Horário comercial de abertura</strong><span>Pedidos fora desse período entram na fila para a próxima abertura.</span></div>
+                  <div className="business-hours-fields">
+                    <label>Abre às<input type="time" required value={settings.businessHoursStart} onChange={event => setSettings({ ...settings, businessHoursStart: event.target.value })} /></label>
+                    <label>Fecha às<input type="time" required value={settings.businessHoursEnd} onChange={event => setSettings({ ...settings, businessHoursEnd: event.target.value })} /></label>
+                  </div>
+                  <div className="business-days" aria-label="Dias de funcionamento">
+                    {businessDayOptions.map(day => <button type="button" className={selectedBusinessDays.has(day.value) ? 'selected' : ''} onClick={() => toggleBusinessDay(day.value)} key={day.value}>{day.label}</button>)}
+                  </div>
+                  <label className="open-toggle"><span><strong>Receber pedidos fora do horário</strong><small>O cliente compra normalmente e o pedido fica agendado para a próxima abertura.</small></span><input type="checkbox" checked={settings.acceptAfterHours} onChange={event => setSettings({ ...settings, acceptAfterHours: event.target.checked })} /></label>
+                </div>
+                <button className="primary large" disabled={savingSettings}>{savingSettings ? 'Salvando...' : 'Salvar horários'}</button>
+              </div>
+            </section>
 
-              <label className="open-toggle"><span><strong>Agendamento de horário na retirada</strong><small>Permitir que o cliente escolha a faixa de horário para buscar o pedido na loja.</small></span><input type="checkbox" checked={settings.enablePickupScheduling} onChange={event => setSettings({ ...settings, enablePickupScheduling: event.target.checked })} /></label>
-              {settings.enablePickupScheduling && (
-                <label>Faixas de horário para retirada<span>Separe as opções por vírgula.</span><input value={settings.pickupSlots} onChange={event => setSettings({ ...settings, pickupSlots: event.target.value })} placeholder="08:00 - 10:00, 10:00 - 12:00, 12:00 - 14:00, 14:00 - 16:00, 16:00 - 18:00, 18:00 - 20:00" required={settings.enablePickupScheduling} /></label>
-              )}
-
-              <button className="primary large" disabled={savingSettings}>{savingSettings ? 'Salvando...' : 'Salvar horários e retirada'}</button>
-            </form>
-          </section>
+            <section className="panel settings-panel">
+              <div className="panel-heading">
+                <div>
+                  <p className="overline">Retirada na Loja</p>
+                  <h2>Agendamento de Retirada</h2>
+                </div>
+              </div>
+              <div className="settings-form">
+                <label className="open-toggle"><span><strong>Agendamento de horário na retirada</strong><small>Permitir que o cliente escolha a faixa de horário para buscar o pedido na loja.</small></span><input type="checkbox" checked={settings.enablePickupScheduling} onChange={event => setSettings({ ...settings, enablePickupScheduling: event.target.checked })} /></label>
+                {settings.enablePickupScheduling && (
+                  <label>Faixas de horário disponíveis para retirada<span>Separe as opções por vírgula.</span><textarea rows="3" value={settings.pickupSlots} onChange={event => setSettings({ ...settings, pickupSlots: event.target.value })} placeholder="08:00 - 10:00, 10:00 - 12:00, 12:00 - 14:00, 14:00 - 16:00, 16:00 - 18:00, 18:00 - 20:00" required={settings.enablePickupScheduling} /></label>
+                )}
+                <div style={{ marginTop: 'auto', paddingTop: '16px' }}>
+                  <button className="primary large" disabled={savingSettings}>{savingSettings ? 'Salvando...' : 'Salvar agendamento'}</button>
+                </div>
+              </div>
+            </section>
+          </form>
         </div>
       )}
 
@@ -2128,23 +2122,14 @@ function Storefront({
                 <p className="overline">Vitrine & Categorias</p>
                 <h2>Organização de Categorias no Aplicativo</h2>
               </div>
+              <div className="categories-badges-summary">
+                <span className="cat-badge-pill total">{categories.length} categorias</span>
+                {totalCustomized > 0 && <span className="cat-badge-pill customized">✏️ {totalCustomized} ajustada{totalCustomized > 1 ? 's' : ''}</span>}
+                {totalHidden > 0 && <span className="cat-badge-pill hidden">🚫 {totalHidden} oculta{totalHidden > 1 ? 's' : ''}</span>}
+              </div>
             </div>
             <form className="settings-form" onSubmit={submitSettings}>
-              <label className="open-toggle"><span><strong>Desativar ofertas / promoções no aplicativo</strong><small>Ao marcar, a vitrine de ofertas é ocultada temporariamente no aplicativo.</small></span><input type="checkbox" checked={settings.disablePromotions} onChange={event => setSettings({ ...settings, disablePromotions: event.target.checked })} /></label>
-
-              <div className="categories-customizer-panel">
-                <div className="categories-customizer-header">
-                  <div>
-                    <strong>Categorias & Nomes de Exibição no App</strong>
-                    <span>Defina um nome amigável para aparecer no Android sem alterar os códigos ou dados originais do ERP.</span>
-                  </div>
-                  <div className="categories-badges-summary">
-                    <span className="cat-badge-pill total">{categories.length} categorias</span>
-                    {totalCustomized > 0 && <span className="cat-badge-pill customized">✏️ {totalCustomized} ajustada{totalCustomized > 1 ? 's' : ''}</span>}
-                    {totalHidden > 0 && <span className="cat-badge-pill hidden">🚫 {totalHidden} oculta{totalHidden > 1 ? 's' : ''}</span>}
-                  </div>
-                </div>
-
+              <div className="categories-desktop-toolbar">
                 <div className="category-search-bar">
                   <Search size={15} />
                   <input
@@ -2159,87 +2144,76 @@ function Storefront({
                     </button>
                   )}
                 </div>
-
-                <div className="categories-list-container">
-                  {filteredCategories.map(cat => {
-                    const isHidden = disabledSet.has(cat.name.toLowerCase());
-                    const currentAlias = settings.categoryAliases?.[cat.name] || '';
-                    const isCustomized = Boolean(currentAlias);
-
-                    return (
-                      <div key={cat.name} className={`category-item-card ${isCustomized ? 'is-customized' : ''} ${isHidden ? 'is-hidden' : ''}`}>
-                        <div className="category-item-top">
-                          <div className="category-origin-info">
-                            <span className="category-erp-label">Origem do ERP / Agente:</span>
-                            <strong className="category-erp-name">{cat.name}</strong>
-                            <span className="category-count-tag">{cat.total} produtos</span>
-                          </div>
-                          <div className="category-item-status-badges">
-                            {isCustomized && <span className="cat-status-badge modified">✏️ Nome ajustado</span>}
-                            {isHidden && <span className="cat-status-badge disabled">🚫 Oculto no app</span>}
-                          </div>
-                        </div>
-
-                        <div className="category-item-body">
-                          <div className="category-alias-input-group">
-                            <label htmlFor={`cat-alias-${cat.name}`}>
-                              Nome de exibição no Android (opcional):
-                            </label>
-                            <div className="category-alias-input-wrapper">
-                              <input
-                                id={`cat-alias-${cat.name}`}
-                                type="text"
-                                value={currentAlias}
-                                onChange={e => updateCategoryAlias(cat.name, e.target.value)}
-                                placeholder={`Ex.: ${cat.name}`}
-                              />
-                              {isCustomized && (
-                                <button
-                                  type="button"
-                                  className="cat-reset-btn"
-                                  onClick={() => clearCategoryAlias(cat.name)}
-                                  title="Restaurar nome original do ERP"
-                                >
-                                  Restaurar original
-                                </button>
-                              )}
-                            </div>
-                            {isCustomized ? (
-                              <p className="cat-preview-hint">
-                                Aparece no Android como: <strong>{currentAlias}</strong>
-                              </p>
-                            ) : (
-                              <p className="cat-preview-hint default">
-                                Exibindo nome original do ERP no aplicativo
-                              </p>
-                            )}
-                          </div>
-
-                          <div className="category-visibility-control">
-                            <label className="cat-visibility-toggle">
-                              <input
-                                type="checkbox"
-                                checked={isHidden}
-                                onChange={() => toggleCategory(cat.name)}
-                              />
-                              <span>Ocultar categoria no app</span>
-                            </label>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-
-                  {!filteredCategories.length && (
-                    <div className="category-empty-search">
-                      <Tags size={22} />
-                      <p>Nenhuma categoria encontrada para "<strong>{categorySearch}</strong>"</p>
-                    </div>
-                  )}
-                </div>
+                <label className="cat-inline-toggle">
+                  <input type="checkbox" checked={settings.disablePromotions} onChange={event => setSettings({ ...settings, disablePromotions: event.target.checked })} />
+                  <span>Ocultar vitrine de ofertas</span>
+                </label>
               </div>
 
-              <button className="primary large" disabled={savingSettings}>{savingSettings ? 'Salvando...' : 'Salvar categorias do app'}</button>
+              <div className="categories-list-container">
+                {filteredCategories.map(cat => {
+                  const isHidden = disabledSet.has(cat.name.toLowerCase());
+                  const currentAlias = settings.categoryAliases?.[cat.name] || '';
+                  const isCustomized = Boolean(currentAlias);
+
+                  return (
+                    <div key={cat.name} className={`category-item-card ${isCustomized ? 'is-customized' : ''} ${isHidden ? 'is-hidden' : ''}`}>
+                      <div className="category-origin-info">
+                        <span className="category-erp-label">ERP / Agente:</span>
+                        <strong className="category-erp-name">{cat.name}</strong>
+                        <span className="category-count-tag">{cat.total} produtos</span>
+                      </div>
+
+                      <div className="category-alias-input-wrapper">
+                        <input
+                          id={`cat-alias-${cat.name}`}
+                          type="text"
+                          value={currentAlias}
+                          onChange={e => updateCategoryAlias(cat.name, e.target.value)}
+                          placeholder={`Nome no app (padrão: ${cat.name})`}
+                        />
+                        {isCustomized && (
+                          <button
+                            type="button"
+                            className="cat-reset-btn"
+                            onClick={() => clearCategoryAlias(cat.name)}
+                            title="Restaurar nome original do ERP"
+                          >
+                            Restaurar
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="category-item-status-badges">
+                        {isCustomized && <span className="cat-status-badge modified">✏️ Ajustado</span>}
+                        {isHidden && <span className="cat-status-badge disabled">🚫 Oculto</span>}
+                      </div>
+
+                      <div className="category-visibility-control">
+                        <label className="cat-visibility-toggle">
+                          <input
+                            type="checkbox"
+                            checked={isHidden}
+                            onChange={() => toggleCategory(cat.name)}
+                          />
+                          <span>Ocultar no app</span>
+                        </label>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {!filteredCategories.length && (
+                  <div className="category-empty-search">
+                    <Tags size={22} />
+                    <p>Nenhuma categoria encontrada para "<strong>{categorySearch}</strong>"</p>
+                  </div>
+                )}
+              </div>
+
+              <div style={{ marginTop: '8px' }}>
+                <button className="primary large" disabled={savingSettings}>{savingSettings ? 'Salvando...' : 'Salvar categorias do app'}</button>
+              </div>
             </form>
           </section>
         </div>
@@ -2255,7 +2229,7 @@ function Storefront({
                 <label>Chamada curta (opcional)<input value={bannerForm.eyebrow} onChange={event => setBannerForm({ ...bannerForm, eyebrow: event.target.value })} placeholder="Ex.: Feira da semana" /></label>
                 <label>Título principal (opcional)<input maxLength="120" value={bannerForm.title} onChange={event => setBannerForm({ ...bannerForm, title: event.target.value })} placeholder="Ex.: Frescor que cabe no carrinho" /></label>
                 <label>Descrição (opcional)<textarea value={bannerForm.subtitle} onChange={event => setBannerForm({ ...bannerForm, subtitle: event.target.value })} placeholder="Explique a promoção em uma frase." /></label>
-                <label>Imagem do banner<span>Use uma imagem horizontal. Ela será ajustada automaticamente para 1200 x 600 px em WebP.</span><input className="banner-file-input" type="file" accept="image/jpeg,image/png,image/webp" onChange={chooseBannerImage} required={!bannerForm.image} /></label>
+                <label>Imagem do banner<span>Imagem horizontal (ajustada para 1200 x 600 px em WebP).</span><input className="banner-file-input" type="file" accept="image/jpeg,image/png,image/webp" onChange={chooseBannerImage} required={!bannerForm.image} /></label>
                 {bannerFileError && <p className="field-error">{bannerFileError}</p>}
                 {bannerPreview && <div className="banner-upload-preview" style={{ backgroundImage: `url(${bannerPreview})` }}><span>Prévia 1200 x 600</span></div>}
                 <div className="banner-form-row"><label>Ordem<input type="number" min="0" max="99" value={bannerForm.position} onChange={event => setBannerForm({ ...bannerForm, position: event.target.value })} /></label><label className="active-checkbox"><input type="checkbox" checked={bannerForm.active} onChange={event => setBannerForm({ ...bannerForm, active: event.target.checked })} /> Exibir no app</label></div>
@@ -2264,8 +2238,8 @@ function Storefront({
             </section>
 
             <section className="panel banners-panel">
-              <div className="panel-heading"><div><p className="overline">Carrossel automático</p><h2>Banners publicados</h2></div><span className="counter">{banners?.filter(banner => banner.active).length || 0}</span></div>
-              <p className="panel-description">No aplicativo eles deslizam automaticamente da direita para a esquerda. A ordem menor aparece primeiro.</p>
+              <div className="panel-heading"><div><p className="overline">Carrossel no aplicativo</p><h2>Banners publicados</h2></div><span className="counter">{banners?.filter(banner => banner.active).length || 0}</span></div>
+              <p className="panel-description">Banners ativos exibidos na home do aplicativo. A ordem menor aparece primeiro.</p>
               <div className="banner-list">
                 {banners?.map(banner => <article className={`banner-admin-card ${banner.active ? '' : 'inactive'}`} key={banner.id}>
                   <div className="banner-preview" style={{ backgroundImage: `linear-gradient(90deg, rgba(5,36,26,.86), rgba(5,36,26,.15)), url(${banner.image})` }}><span>{banner.eyebrow}</span><strong>{banner.title}</strong><small>{banner.subtitle}</small></div>
@@ -2557,7 +2531,7 @@ export default function App() {
 
   return (
     <div className="app-shell" style={storeTheme(summary?.store || session.store)}>
-      <Sidebar active={active} setActive={setActive} storefrontTab={storefrontTab} setStorefrontTab={setStorefrontTab} store={summary?.store || session.store} user={session.user} onLogout={logout} open={menuOpen} onClose={() => setMenuOpen(false)} />
+      <Sidebar active={active} setActive={setActive} store={summary?.store || session.store} user={session.user} onLogout={logout} open={menuOpen} onClose={() => setMenuOpen(false)} />
       {menuOpen && <button className="menu-overlay" onClick={() => setMenuOpen(false)} aria-label="Fechar menu" />}
       <main className="workspace">
         <Header title={pageMeta[0]} subtitle={pageMeta[1]} onRefresh={load} refreshing={refreshing} onMenu={() => setMenuOpen(true)} />
