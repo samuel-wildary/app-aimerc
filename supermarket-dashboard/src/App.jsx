@@ -1541,23 +1541,137 @@ function Reports({ report, devices }) {
   const periodCards = [
     ['Hoje', periods.today],
     ['Esta semana', periods.week],
-    ['Este mes', periods.month],
+    ['Este mês', periods.month],
     ['Este ano', periods.year]
   ];
   const quantity = value => new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 3 }).format(Number(value || 0));
-  return <div className="reports-grid">
-    <section className="report-hero"><div><p className="overline">Inteligencia da loja</p><h2>O que vende, quanto rende e quando acontece.</h2><p>Acompanhe faturamento, ticket medio, produtos mais vendidos e uso do aplicativo em um unico painel.</p></div><div className="report-hero-value"><span>Faturamento hoje</span><strong>{money(periods.today?.revenue)}</strong><small>{periods.today?.orders || 0} pedidos validos</small></div></section>
-    <section className="period-grid">{periodCards.map(([label, value]) => <article className="period-card" key={label}><span>{label}</span><strong>{money(value?.revenue)}</strong><div><small>{value?.orders || 0} pedidos</small><small>Ticket {money(value?.averageTicket)}</small><small>Media/dia {money(value?.averagePerDay)}</small></div></article>)}</section>
-    <section className="report-device-grid">
-      <StatCard icon={Smartphone} label="Aparelhos instalados" value={devices?.installedDevices || 0} detail={`${devices?.seenToday || 0} vistos nas ultimas 24h`} tone="blue" />
-      <StatCard icon={Zap} label="Aparelhos online" value={devices?.onlineDevices || 0} detail={`ativos nos ultimos ${devices?.onlineWindowMinutes || 15} min`} tone="green" />
-      <StatCard icon={X} label="Cancelamentos hoje" value={today.cancellations || 0} detail="pedidos cancelados no dia" tone="red" />
-    </section>
-    <section className="panel sales-chart"><div className="panel-heading"><div><p className="overline">Ultimos 7 dias</p><h2>Faturamento diario</h2></div><span className="sync-time">Pedidos nao cancelados</span></div><div className="bar-chart">{days.map(day => <div className="bar-column" key={day.date}><strong>{day.revenue ? money(day.revenue) : '-'}</strong><div className="bar-track"><i style={{ height: `${Math.max(5, (Number(day.revenue) / maxRevenue) * 100)}%` }} /></div><span>{day.label}</span></div>)}</div></section>
-    <section className="panel top-products"><div className="panel-heading"><div><p className="overline">Ultimos 30 dias</p><h2>Produtos que mais vendem</h2></div></div><div className="product-ranking">{(report?.topProducts || []).map((product, index) => <div className="product-ranking-row" key={product.productId}><span className="ranking">{String(index + 1).padStart(2, '0')}</span><div><strong>{product.name}</strong><small>{quantity(product.quantity)} {product.unit} · {product.orders} pedidos</small></div><strong>{money(product.revenue)}</strong></div>)}</div>{!report?.topProducts?.length && <EmptyState title="Ainda sem vendas" text="Os produtos mais vendidos aparecerao aqui." />}</section>
-    <section className="panel annual-chart"><div className="panel-heading"><div><p className="overline">Ultimos 12 meses</p><h2>Evolucao mensal</h2></div></div><div className="month-chart">{months.map(item => <div className="month-row" key={item.month}><span>{new Date(`${item.month}T12:00:00Z`).toLocaleDateString('pt-BR', { month: 'short', year: '2-digit', timeZone: 'UTC' })}</span><div><i style={{ width: `${Math.max(item.revenue ? 4 : 0, (Number(item.revenue) / maxMonthRevenue) * 100)}%` }} /></div><strong>{money(item.revenue)}</strong></div>)}</div></section>
-    <section className="panel top-customers"><div className="panel-heading"><div><p className="overline">Recorrencia</p><h2>Melhores clientes</h2></div></div>{(report?.topCustomers || []).map((customer, index) => <div className="report-customer-row" key={customer.phone}><span className="ranking">{String(index + 1).padStart(2, '0')}</span><div className="customer-cell"><div>{customer.name.slice(0, 1)}</div><strong>{customer.name}</strong></div><span>{customer.orders} compras</span><strong>{money(customer.totalSpent)}</strong></div>)}{!report?.topCustomers?.length && <EmptyState title="Ainda sem dados" text="O relatorio sera preenchido conforme os pedidos chegarem." />}</section>
-  </div>;
+  return (
+    <div className="reports-grid">
+      <section className="report-hero">
+        <div>
+          <p className="overline">Inteligência da loja</p>
+          <h2>O que vende, quanto rende e quando acontece.</h2>
+          <p>Acompanhe faturamento, ticket médio, produtos mais vendidos e uso do aplicativo em tempo real.</p>
+        </div>
+        <div className="report-hero-value">
+          <span>Faturamento hoje</span>
+          <strong>{money(periods.today?.revenue)}</strong>
+          <small>{periods.today?.orders || 0} pedidos válidos</small>
+        </div>
+      </section>
+
+      <section className="period-grid">
+        {periodCards.map(([label, value]) => (
+          <article className="period-card" key={label}>
+            <span>{label}</span>
+            <strong>{money(value?.revenue)}</strong>
+            <div>
+              <small>{value?.orders || 0} pedidos</small>
+              <small>Ticket {money(value?.averageTicket)}</small>
+              <small>Média/dia {money(value?.averagePerDay)}</small>
+            </div>
+          </article>
+        ))}
+      </section>
+
+      <section className="report-device-grid">
+        <StatCard icon={Smartphone} label="Aparelhos instalados" value={devices?.installedDevices || 0} detail={`${devices?.seenToday || 0} vistos nas últimas 24h`} tone="blue" />
+        <StatCard icon={Zap} label="Aparelhos online" value={devices?.onlineDevices || 0} detail={`ativos nos últimos ${devices?.onlineWindowMinutes || 15} min`} tone="green" />
+        <StatCard icon={X} label="Cancelamentos hoje" value={today.cancellations || 0} detail="pedidos cancelados no dia" tone="red" />
+      </section>
+
+      {/* Row 1: Charts Row (Daily Bar Chart + Monthly Progress Chart) */}
+      <section className="panel sales-chart">
+        <div className="panel-heading">
+          <div>
+            <p className="overline">Últimos 7 dias</p>
+            <h2>Faturamento diário</h2>
+          </div>
+          <span className="sync-time">Pedidos não cancelados</span>
+        </div>
+        <div className="bar-chart">
+          {days.map(day => (
+            <div className="bar-column" key={day.date}>
+              <strong>{day.revenue ? money(day.revenue) : '-'}</strong>
+              <div className="bar-track">
+                <i style={{ height: `${Math.max(6, (Number(day.revenue) / maxRevenue) * 100)}%` }} />
+              </div>
+              <span>{day.label}</span>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="panel annual-chart">
+        <div className="panel-heading">
+          <div>
+            <p className="overline">Últimos 12 meses</p>
+            <h2>Evolução mensal</h2>
+          </div>
+          <span className="sync-time">Histórico anual</span>
+        </div>
+        <div className="month-chart">
+          {months.map(item => (
+            <div className="month-row" key={item.month}>
+              <span>{new Date(`${item.month}T12:00:00Z`).toLocaleDateString('pt-BR', { month: 'short', year: '2-digit', timeZone: 'UTC' })}</span>
+              <div>
+                <i style={{ width: `${Math.max(item.revenue ? 4 : 0, (Number(item.revenue) / maxMonthRevenue) * 100)}%` }} />
+              </div>
+              <strong>{money(item.revenue)}</strong>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Row 2: Rankings Row (Top Selling Products + Top Customers) */}
+      <section className="panel top-products">
+        <div className="panel-heading">
+          <div>
+            <p className="overline">Últimos 30 dias</p>
+            <h2>Produtos que mais vendem</h2>
+          </div>
+          <span className="counter">{(report?.topProducts || []).length}</span>
+        </div>
+        <div className="product-ranking">
+          {(report?.topProducts || []).map((product, index) => (
+            <div className="product-ranking-row" key={product.productId}>
+              <span className="ranking">{String(index + 1).padStart(2, '0')}</span>
+              <div>
+                <strong>{product.name}</strong>
+                <small>{quantity(product.quantity)} {product.unit} · {product.orders} pedidos</small>
+              </div>
+              <strong>{money(product.revenue)}</strong>
+            </div>
+          ))}
+        </div>
+        {!report?.topProducts?.length && <EmptyState title="Ainda sem vendas" text="Os produtos mais vendidos aparecerão aqui." />}
+      </section>
+
+      <section className="panel top-customers">
+        <div className="panel-heading">
+          <div>
+            <p className="overline">Recorrência</p>
+            <h2>Melhores clientes</h2>
+          </div>
+          <span className="counter">{(report?.topCustomers || []).length}</span>
+        </div>
+        <div className="top-customers-list">
+          {(report?.topCustomers || []).map((customer, index) => (
+            <div className="report-customer-row" key={customer.phone}>
+              <span className="ranking">{String(index + 1).padStart(2, '0')}</span>
+              <div className="customer-cell">
+                <div>{customer.name.slice(0, 1)}</div>
+                <strong>{customer.name}</strong>
+              </div>
+              <span>{customer.orders} compras</span>
+              <strong>{money(customer.totalSpent)}</strong>
+            </div>
+          ))}
+        </div>
+        {!report?.topCustomers?.length && <EmptyState title="Ainda sem dados" text="O relatório será preenchido conforme os pedidos chegarem." />}
+      </section>
+    </div>
+  );
 }
 
 function escapePrint(value) {
