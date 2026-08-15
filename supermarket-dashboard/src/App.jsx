@@ -203,7 +203,7 @@ function Sidebar({ active, setActive, store, user, onLogout, open, onClose }) {
         <ChevronRight size={16} />
       </div>
       <nav>
-        <p>Operacao</p>
+        <p className="group-label">OPERAÇÃO</p>
         {navItems.map(item => {
           const Icon = item.icon;
           return (
