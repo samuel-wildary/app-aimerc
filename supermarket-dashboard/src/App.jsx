@@ -1,8 +1,8 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowRight,
   BarChart3,
   Bell,
+  Bookmark,
   CalendarClock,
   Boxes,
   Camera,
@@ -14,6 +14,8 @@ import {
   Clock3,
   Eye,
   EyeOff,
+  FileText,
+  HelpCircle,
   ImagePlus,
   ImageOff,
   LayoutDashboard,
@@ -22,6 +24,7 @@ import {
   LogOut,
   MapPin,
   Menu,
+  Package,
   PackageCheck,
   Pencil,
   Phone,
@@ -76,11 +79,11 @@ const navItems = [
 ];
 
 const storefrontSubTabs = [
-  { id: 'fees', label: 'Taxas & Entregas', icon: Truck },
+  { id: 'fees', label: 'Taxas & Entregas', icon: FileText },
   { id: 'hours', label: 'Horários & Retirada', icon: Clock3 },
   { id: 'categories', label: 'Categorias no App', icon: Tags },
   { id: 'banners', label: 'Banners & Vitrine', icon: Images },
-  { id: 'campaigns', label: 'Notificações Push', icon: Smartphone },
+  { id: 'campaigns', label: 'Notificações Push', icon: Bookmark },
   { id: 'automations', label: 'Automações', icon: Zap }
 ];
 
@@ -228,9 +231,12 @@ function Header({ title, subtitle, onRefresh, refreshing, onMenu }) {
       <button className="icon-button menu-button" onClick={onMenu} aria-label="Abrir menu"><Menu size={22} /></button>
       <div className="page-title"><h1>{title}</h1><p>{subtitle}</p></div>
       <div className="top-actions">
-        <span className="live-pill"><i /> Operacao online</span>
-        <button className="icon-button" aria-label="Notificacoes"><Bell size={19} /></button>
-        <button className="refresh-button" onClick={onRefresh} disabled={refreshing}><RefreshCw size={17} className={refreshing ? 'spin' : ''} /><span>Atualizar</span></button>
+        <span className="live-pill"><i /> Operação online</span>
+        <button className="icon-button notification-btn" aria-label="Notificações">
+          <Bell size={18} />
+          <span className="notification-badge-dot" />
+        </button>
+        <button className="refresh-button" onClick={onRefresh} disabled={refreshing}><RefreshCw size={15} className={refreshing ? 'spin' : ''} /><span>Atualizar dados</span></button>
       </div>
     </header>
   );
@@ -2011,57 +2017,225 @@ function Storefront({
       {/* TAB 1: TAXAS & ENTREGAS */}
       {activeTab === 'fees' && (
         <div className="storefront-tab-content">
-          <form className="storefront-two-cols" onSubmit={submitSettings}>
+          <div className="storefront-two-cols">
+            {/* Left Card: Regras Comerciais */}
             <section className="panel settings-panel">
               <div className="panel-heading">
                 <div>
-                  <p className="overline">Regras Comerciais</p>
+                  <p className="overline">REGRAS COMERCIAIS</p>
                   <h2>Taxas de Entrega & Loja</h2>
+                  <p className="panel-subtitle">Defina valores mínimos, taxa padrão e regras gerais para entrega.</p>
                 </div>
-                <span className={`store-state ${settings.open ? 'open' : 'closed'}`}>{settings.open ? 'Loja aberta' : 'Loja fechada'}</span>
+                <span className={`store-state-badge ${settings.open ? 'open' : 'closed'}`}>
+                  <span className="state-badge-dot" /> {settings.open ? 'Loja aberta' : 'Loja fechada'}
+                </span>
               </div>
-              <div className="settings-form">
+              <form className="settings-form" onSubmit={submitSettings}>
                 <div className="settings-form-row">
-                  <label>Pedido mínimo<span>Valor mínimo para comprar no app.</span><div className="money-input"><b>R$</b><input type="number" min="0" step="0.01" value={settings.minimumOrder} onChange={event => setSettings({ ...settings, minimumOrder: event.target.value })} /></div></label>
-                  <label>Taxa padrão de entrega<span>Usada caso nenhum bairro atenda.</span><div className="money-input"><b>R$</b><input type="number" min="0" step="0.01" value={settings.deliveryFee} onChange={event => setSettings({ ...settings, deliveryFee: event.target.value })} /></div></label>
+                  <label className="mockup-field">
+                    <span className="mockup-label">Pedido mínimo</span>
+                    <span className="mockup-hint">Valor mínimo para comprar no app</span>
+                    <div className="mockup-input-box">
+                      <b className="mockup-currency">R$</b>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={settings.minimumOrder}
+                        onChange={event => setSettings({ ...settings, minimumOrder: event.target.value })}
+                      />
+                    </div>
+                  </label>
+                  <label className="mockup-field">
+                    <span className="mockup-label">Taxa padrão de entrega</span>
+                    <span className="mockup-hint">Usada quando o bairro não possui taxa definida</span>
+                    <div className="mockup-input-box">
+                      <b className="mockup-currency">R$</b>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={settings.deliveryFee}
+                        onChange={event => setSettings({ ...settings, deliveryFee: event.target.value })}
+                      />
+                      <HelpCircle size={16} className="input-info-icon" />
+                    </div>
+                  </label>
                 </div>
-                <label>Frete grátis acima de<span>Use R$ 0 para manter taxa fixa em todos os pedidos.</span><div className="money-input"><b>R$</b><input type="number" min="0" step="0.01" value={settings.freeDeliveryAbove} onChange={event => setSettings({ ...settings, freeDeliveryAbove: event.target.value })} /></div></label>
+
+                <label className="mockup-field">
+                  <span className="mockup-label">Frete grátis acima de</span>
+                  <span className="mockup-hint">Use R$ 0 para manter taxa fixa em todos os pedidos.</span>
+                  <div className="mockup-input-box">
+                    <b className="mockup-currency">R$</b>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={settings.freeDeliveryAbove}
+                      onChange={event => setSettings({ ...settings, freeDeliveryAbove: event.target.value })}
+                    />
+                  </div>
+                </label>
 
                 <div className="settings-form-row">
-                  <label>Central de atendimento<span>Telefone para suporte da loja.</span><input type="tel" value={settings.supportPhone} onChange={event => setSettings({ ...settings, supportPhone: event.target.value })} placeholder="(85) 99999-0000" required /></label>
-                  <label>Janela de cancelamento<span>Minutos antes da separação.</span><input type="number" min="1" max="60" value={settings.cancellationWindowMinutes} onChange={event => setSettings({ ...settings, cancellationWindowMinutes: event.target.value })} /></label>
+                  <label className="mockup-field">
+                    <span className="mockup-label">Central de atendimento (WhatsApp)</span>
+                    <span className="mockup-hint">Telefone para suporte da loja</span>
+                    <div className="mockup-input-box">
+                      <input
+                        type="tel"
+                        value={settings.supportPhone}
+                        onChange={event => setSettings({ ...settings, supportPhone: event.target.value })}
+                        placeholder="85 90000-0000"
+                        required
+                      />
+                      <Phone size={16} className="input-phone-icon" />
+                    </div>
+                  </label>
+                  <label className="mockup-field">
+                    <span className="mockup-label">Janela de cancelamento</span>
+                    <span className="mockup-hint">Minutos antes da separação</span>
+                    <div className="mockup-select-box">
+                      <select
+                        value={settings.cancellationWindowMinutes}
+                        onChange={event => setSettings({ ...settings, cancellationWindowMinutes: Number(event.target.value) })}
+                      >
+                        <option value={5}>5 minutos</option>
+                        <option value={10}>10 minutos</option>
+                        <option value={15}>15 minutos</option>
+                        <option value={30}>30 minutos</option>
+                        <option value={60}>60 minutos</option>
+                      </select>
+                      <ChevronRight size={15} className="select-chevron" />
+                    </div>
+                  </label>
                 </div>
 
-                <label className="open-toggle"><span><strong>Receber novos pedidos</strong><small>Ao fechar, o aplicativo bloqueia novos checkouts.</small></span><input type="checkbox" checked={settings.open} onChange={event => setSettings({ ...settings, open: event.target.checked })} /></label>
-                <button className="primary large" disabled={savingSettings}>{savingSettings ? 'Salvando...' : 'Salvar configurações de entrega'}</button>
-              </div>
+                <div className="toggle-switch-card">
+                  <div className="toggle-switch-info">
+                    <div className="toggle-switch-icon"><Package size={18} /></div>
+                    <div>
+                      <strong>Receber novos pedidos</strong>
+                      <small>Ao fechar, o aplicativo bloqueia novos checkouts.</small>
+                    </div>
+                  </div>
+                  <label className="ios-switch">
+                    <input
+                      type="checkbox"
+                      checked={settings.open}
+                      onChange={event => setSettings({ ...settings, open: event.target.checked })}
+                    />
+                    <span className="ios-slider" />
+                  </label>
+                </div>
+
+                <button className="primary large btn-forest-submit" disabled={savingSettings}>
+                  <Save size={16} />
+                  <span>{savingSettings ? 'Salvando...' : 'Salvar configurações de entrega'}</span>
+                </button>
+              </form>
             </section>
 
+            {/* Right Card: Taxas por Bairro */}
             <section className="panel settings-panel">
               <div className="panel-heading">
                 <div>
-                  <p className="overline">Abrangência</p>
+                  <p className="overline">ABRANGÊNCIA</p>
                   <h2>Taxas por Bairro</h2>
+                  <p className="panel-subtitle">Defina os bairros atendidos e o valor de entrega para cada localidade.</p>
                 </div>
-                <button type="button" className="action-button-clean" onClick={addDeliveryZone}><Plus size={15} /> Adicionar bairro</button>
+                <button type="button" className="btn-add-neighborhood" onClick={addDeliveryZone}>
+                  <Plus size={15} /> Adicionar bairro
+                </button>
               </div>
-              <p className="panel-description">Defina os bairros atendidos e o valor de entrega para cada localidade.</p>
-              <div className="delivery-zone-columns" aria-hidden="true"><span>Bairro</span><span>Cidade</span><span>UF</span><span>Taxa</span><span /></div>
-              <div className="delivery-zone-list">
-                {zones.map((zone, index) => <div className="delivery-zone-row" key={zone.id || index}>
-                  <input required maxLength="100" value={zone.neighborhood} onChange={event => updateDeliveryZone(index, 'neighborhood', event.target.value)} placeholder="Ex.: Centro" aria-label="Bairro" />
-                  <input required maxLength="100" value={zone.city} onChange={event => updateDeliveryZone(index, 'city', event.target.value)} placeholder="Cidade" aria-label="Cidade" />
-                  <input required maxLength="2" value={zone.state} onChange={event => updateDeliveryZone(index, 'state', event.target.value.toUpperCase().slice(0, 2))} placeholder="UF" aria-label="UF" />
-                  <div className="delivery-zone-money"><b>R$</b><input required type="number" min="0" step="0.01" value={zone.fee} onChange={event => updateDeliveryZone(index, 'fee', event.target.value)} aria-label="Taxa do bairro" /></div>
-                  <button className="delivery-zone-delete" type="button" onClick={() => removeDeliveryZone(index)} aria-label={`Excluir ${zone.neighborhood || 'bairro'}`}><Trash2 size={16} /></button>
-                </div>)}
-                {!zones.length && <div className="delivery-zone-empty">Nenhum bairro cadastrado. A taxa padrão será usada para todas as entregas.</div>}
-              </div>
-              <div style={{ marginTop: '16px' }}>
-                <button className="primary large" disabled={savingSettings}>{savingSettings ? 'Salvando...' : 'Salvar taxas de entrega'}</button>
-              </div>
+
+              <form onSubmit={submitSettings}>
+                <div className="delivery-zone-table-header">
+                  <span className="col-bairro">BAIRRO</span>
+                  <span className="col-cidade">CIDADE</span>
+                  <span className="col-uf">UF</span>
+                  <span className="col-taxa">TAXA DE ENTREGA</span>
+                  <span className="col-action" />
+                </div>
+
+                <div className="delivery-zone-table-body">
+                  {zones.map((zone, index) => (
+                    <div className="delivery-zone-table-row" key={zone.id || index}>
+                      <input
+                        required
+                        maxLength="100"
+                        className="input-table col-bairro"
+                        value={zone.neighborhood}
+                        onChange={event => updateDeliveryZone(index, 'neighborhood', event.target.value)}
+                        placeholder="Ex.: Centro"
+                        aria-label="Bairro"
+                      />
+                      <input
+                        required
+                        maxLength="100"
+                        className="input-table col-cidade"
+                        value={zone.city}
+                        onChange={event => updateDeliveryZone(index, 'city', event.target.value)}
+                        placeholder="Cidade"
+                        aria-label="Cidade"
+                      />
+                      <input
+                        required
+                        maxLength="2"
+                        className="input-table col-uf text-center"
+                        value={zone.state}
+                        onChange={event => updateDeliveryZone(index, 'state', event.target.value.toUpperCase().slice(0, 2))}
+                        placeholder="UF"
+                        aria-label="UF"
+                      />
+                      <div className="money-input-table col-taxa">
+                        <b>R$</b>
+                        <input
+                          required
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={zone.fee}
+                          onChange={event => updateDeliveryZone(index, 'fee', event.target.value)}
+                          aria-label="Taxa do bairro"
+                        />
+                      </div>
+                      <button
+                        className="btn-delete-row col-action"
+                        type="button"
+                        onClick={() => removeDeliveryZone(index)}
+                        aria-label={`Excluir ${zone.neighborhood || 'bairro'}`}
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  ))}
+
+                  {!zones.length && (
+                    <div className="delivery-zone-empty">
+                      Nenhum bairro cadastrado. A taxa padrão será usada para todas as entregas.
+                    </div>
+                  )}
+                </div>
+
+                <div className="neighborhood-callout-box">
+                  <div className="neighborhood-callout-icon">
+                    <MapPin size={16} />
+                  </div>
+                  <div>
+                    <strong>Não encontrou seu bairro?</strong>
+                    <p>Adicione o bairro e defina a taxa de entrega para atender seus clientes.</p>
+                  </div>
+                </div>
+
+                <button className="primary large btn-forest-submit" disabled={savingSettings}>
+                  <Save size={16} />
+                  <span>{savingSettings ? 'Salvando...' : 'Salvar taxas de entrega'}</span>
+                </button>
+              </form>
             </section>
-          </form>
+          </div>
         </div>
       )}
 
@@ -2526,7 +2700,7 @@ export default function App() {
     customers: ['Clientes', 'Historico, recorrencia e endereco de cada comprador'],
     reports: ['Relatorios', 'Vendas, ticket medio e clientes recorrentes'],
     integracao: ['Integracao', 'Pedidos Agent Windows e impressao automatica na loja'],
-    storefront: ['Loja & App', storefrontSubtitles[storefrontTab] || 'Taxas, funcionamento e vitrine do aplicativo']
+    storefront: ['Loja & App', 'Gerencie taxas de entrega, bairros atendidos e configurações do seu aplicativo.']
   }[active];
 
   return (
