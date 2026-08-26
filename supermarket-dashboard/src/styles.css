@@ -1041,6 +1041,38 @@ h1, h2, h3, h4, p { margin-top: 0; }
   margin-top: 14px;
   font-size: 12px;
 }
+
+.login-install-strip {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-subtle);
+  display: flex;
+}
+.login-install-btn {
+  width: 100%;
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  background: rgba(16, 185, 129, 0.08);
+  color: #065f46;
+  min-height: 42px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 0 14px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.login-install-btn:hover {
+  background: rgba(16, 185, 129, 0.18);
+  border-color: var(--brand-success);
+}
+.login-install-btn .pwa-badge {
+  margin-left: 6px;
+}
+
 .mobile-brand {
   display: none;
   margin-bottom: 28px;

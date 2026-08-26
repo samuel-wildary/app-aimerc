@@ -266,7 +266,7 @@ function storeTheme(store) {
   };
 }
 
-function Login({ onSuccess }) {
+function Login({ onSuccess, onInstallApp, isStandalone }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -312,6 +312,20 @@ function Login({ onSuccess }) {
           <label>Senha<input type="password" value={password} onChange={event => setPassword(event.target.value)} autoComplete="current-password" required /></label>
           {error && <div className="form-error">{error}</div>}
           <button className="primary large" disabled={loading}>{loading ? 'Entrando...' : <>Entrar no painel <ArrowRight size={18} /></>}</button>
+          {!isStandalone && (
+            <div className="login-install-strip">
+              <button
+                type="button"
+                className="login-install-btn"
+                onClick={onInstallApp}
+                title="Instalar AiMerc como aplicativo fixo no seu computador (sem abas do navegador)"
+              >
+                <Download size={16} />
+                <span>Instalar aplicativo neste computador</span>
+                <span className="pwa-badge">Desktop</span>
+              </button>
+            </div>
+          )}
         </form>
       </section>
     </main>
@@ -3580,7 +3594,24 @@ export default function App() {
     catch (requestError) { setError(requestError.message); }
   }
 
-  if (!session) return <Login onSuccess={value => { setSession(value); load(); }} />;
+  if (!session) {
+    return (
+      <>
+        <Login
+          onSuccess={value => { setSession(value); load(); }}
+          onInstallApp={handleInstallApp}
+          isStandalone={isStandalone}
+        />
+        {showInstallGuide && (
+          <InstallGuideModal
+            onClose={() => setShowInstallGuide(false)}
+            onPromptInstall={handleInstallApp}
+            canDirectInstall={!!deferredInstallPrompt}
+          />
+        )}
+      </>
+    );
+  }
 
   const storefrontSubtitles = {
     fees: 'Taxas de entrega, pedido mínimo e bairros atendidos',
