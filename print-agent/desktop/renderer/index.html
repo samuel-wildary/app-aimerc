@@ -28,17 +28,17 @@
 
     <section class="card">
       <div class="row-head">
-        <strong>Impressora termica</strong>
-        <button id="scanBtn" type="button" class="ghost">Buscar na rede</button>
+        <strong>Impressora termica (USB ou Rede)</strong>
+        <button id="scanBtn" type="button" class="ghost">Buscar impressoras</button>
       </div>
-      <p id="scanStatus" class="hint">Clique em buscar para listar impressoras com porta 9100 na sua rede.</p>
-      <label>Impressoras encontradas
+      <p id="scanStatus" class="hint">Clique em buscar para listar impressoras USB do Windows e impressoras na rede local.</p>
+      <label>Impressoras encontradas (USB / Rede)
         <select id="printerSelect">
           <option value="">Selecione uma impressora</option>
         </select>
       </label>
-      <label>Ou digite o IP manualmente
-        <input id="printerHost" type="text" placeholder="192.168.1.50" />
+      <label>Ou digite manualmente (USB, IP, COM ou \\localhost\Nome)
+        <input id="printerHost" type="text" placeholder="Ex: win:EPSON TM-T20X, 192.168.1.50, COM3 ou \\localhost\Impressora" />
       </label>
       <button id="testBtn" type="button" class="secondary">Testar impressao</button>
     </section>

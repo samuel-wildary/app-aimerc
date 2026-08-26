@@ -2345,8 +2345,8 @@ function AutoPrintPanel() {
         </span>
       </div>
       <p className="panel-description">
-        Baixe o app no computador da loja, entre com o mesmo e-mail/senha deste painel, escolha a termica e deixe rodando.
-        Pedidos novos imprimem sozinhos na guia de separacao.
+        Baixe o app no computador da loja, entre com o mesmo e-mail/senha deste painel, selecione sua impressora (USB do Windows ou Rede IP) e deixe rodando.
+        Pedidos novos imprimem sozinhos na guia de separação do caixa ou balcão.
       </p>
       <div className="print-agent-meta">
         <div><span>Status realtime</span><strong>{status.detail?.connected ? 'Conectado ao AiMerc' : status.online ? 'Aguardando conexao' : 'Offline'}</strong></div>
@@ -2361,8 +2361,8 @@ function AutoPrintPanel() {
       </div>
       <ol className="print-agent-steps">
         <li>Baixe o zip, extraia no PC da loja e abra <code>AiMerc Pedidos Agent.exe</code>.</li>
-        <li>Entre com o e-mail e senha deste painel, busque a termica (porta 9100) e conecte.</li>
-        <li>Pode fechar a janela: ele continua na bandeja e sobe com o Windows.</li>
+        <li>Entre com o e-mail e senha deste painel, selecione a impressora (USB ou Rede) e conecte.</li>
+        <li>Pode fechar a janela: ele continua na bandeja do Windows e sobe sozinho ao ligar o PC.</li>
       </ol>
     </section>
   );

@@ -48,9 +48,54 @@ function localSubnets() {
   return [...prefixes];
 }
 
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+
+const execFileAsync = promisify(execFile);
+
+export async function discoverWindowsPrinters() {
+  if (process.platform !== 'win32') return [];
+  try {
+    const { stdout } = await execFileAsync('powershell', [
+      '-NoProfile',
+      '-ExecutionPolicy', 'Bypass',
+      '-Command',
+      'Get-CimInstance Win32_Printer | Select-Object Name,PortName,Default | ConvertTo-Json -Compress'
+    ], { timeout: 4000 });
+    
+    if (!stdout.trim()) return [];
+    let parsed = JSON.parse(stdout.trim());
+    if (!Array.isArray(parsed)) parsed = [parsed];
+    
+    return parsed.map(item => ({
+      host: `win:${item.Name}`,
+      port: 0,
+      label: `USB · ${item.Name} (${item.PortName || 'Local'})${item.Default ? ' [Padrao]' : ''}`,
+      name: item.Name,
+      portName: item.PortName,
+      isDefault: item.Default,
+      type: 'usb'
+    }));
+  } catch {
+    return [];
+  }
+}
+
 export async function discoverThermalPrinters({ onProgress } = {}) {
   const found = [];
   const seen = new Set();
+
+  // 1. Descobre impressoras USB instaladas no Windows
+  const usbPrinters = await discoverWindowsPrinters();
+  for (const p of usbPrinters) {
+    seen.add(p.host);
+    found.push(p);
+  }
+  if (usbPrinters.length) {
+    onProgress?.({ found: found.length, host: 'USB / Windows', printers: [...found] });
+  }
+
+  // 2. Descobre impressoras de rede na porta 9100
   const prefixes = localSubnets();
   if (!prefixes.length) prefixes.push('192.168.0', '192.168.1');
 
@@ -62,7 +107,7 @@ export async function discoverThermalPrinters({ onProgress } = {}) {
         const open = await probePort(host, 9100);
         if (!open || seen.has(host)) return;
         seen.add(host);
-        const printer = { host, port: 9100, label: `Termica ${host}` };
+        const printer = { host, port: 9100, label: `Rede · ${host}:9100`, type: 'network' };
         found.push(printer);
         onProgress?.({ found: found.length, host, printers: [...found] });
       })());
@@ -74,7 +119,7 @@ export async function discoverThermalPrinters({ onProgress } = {}) {
     if (batch.length) await Promise.all(batch);
   }
 
-  return found.sort((a, b) => a.host.localeCompare(b.host, undefined, { numeric: true }));
+  return found;
 }
 
 export async function loginToStore({ apiUrl, email, password }) {

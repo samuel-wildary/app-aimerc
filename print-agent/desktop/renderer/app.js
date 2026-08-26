@@ -75,14 +75,14 @@ printerSelect.addEventListener('change', () => {
 
 scanBtn.addEventListener('click', async () => {
   scanBtn.disabled = true;
-  scanStatus.textContent = 'Buscando impressoras na rede (porta 9100)...';
+  scanStatus.textContent = 'Buscando impressoras USB e na rede local...';
   setMessage('');
   try {
     const printers = await window.aimercAgent.discoverPrinters();
     fillPrinters(printers, printerHost.value.trim());
     scanStatus.textContent = printers.length
-      ? `${printers.length} impressora(s) encontrada(s).`
-      : 'Nenhuma termica encontrada. Confira se ela esta ligada na mesma rede e digite o IP.';
+      ? `${printers.length} impressora(s) detectada(s) (USB / Rede).`
+      : 'Nenhuma impressora encontrada. Conecte o cabo USB ou digite o nome/IP.';
   } catch (error) {
     scanStatus.textContent = 'Falha na busca.';
     setMessage(error.message || 'Falha ao buscar impressoras', 'error');
@@ -92,7 +92,7 @@ scanBtn.addEventListener('click', async () => {
 });
 
 window.aimercAgent.onPrinterProgress(progress => {
-  scanStatus.textContent = `Buscando... ${progress.found || 0} encontrada(s). Ultimo IP testado: ${progress.host}`;
+  scanStatus.textContent = `Buscando... ${progress.found || 0} impressora(s) detectada(s). (${progress.host})`;
   if (progress.printers?.length) fillPrinters(progress.printers, printerHost.value.trim());
 });
 
