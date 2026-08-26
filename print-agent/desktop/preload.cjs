@@ -3,6 +3,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('aimercAgent', {
   loadConfig: () => ipcRenderer.invoke('config:load'),
   saveConfig: config => ipcRenderer.invoke('config:save', config),
+  getInstalledPrinters: () => ipcRenderer.invoke('printers:installed'),
   discoverPrinters: () => ipcRenderer.invoke('printers:discover'),
   testPrinter: config => ipcRenderer.invoke('printers:test', config),
   connect: config => ipcRenderer.invoke('agent:connect', config),

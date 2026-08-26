@@ -172,7 +172,23 @@ window.aimercAgent.onStatus(renderStatus);
   password.value = config.password || '';
   apiUrl.value = config.apiUrl || '';
   printerHost.value = config.printerHost || '';
-  fillPrinters(config.printerHost ? [{ host: config.printerHost, label: `Termica ${config.printerHost}` }] : [], config.printerHost || '');
+
+  // 1. Detecta instantaneamente as impressoras ja instaladas no computador (USB / Windows)
+  try {
+    const installed = await window.aimercAgent.getInstalledPrinters();
+    let selected = config.printerHost || '';
+    if (!selected && installed.length) {
+      const defaultPrinter = installed.find(p => p.isDefault) || installed[0];
+      selected = defaultPrinter.host;
+    }
+    fillPrinters(installed, selected);
+    if (installed.length) {
+      scanStatus.textContent = `${installed.length} impressora(s) detectada(s) no seu computador.`;
+    }
+  } catch {
+    fillPrinters(config.printerHost ? [{ host: config.printerHost, label: `Impressora ${config.printerHost}` }] : [], config.printerHost || '');
+  }
+
   renderService(Boolean(config.autoStartInstalled));
   renderStatus(await window.aimercAgent.status());
 })();

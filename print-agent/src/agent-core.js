@@ -134,7 +134,7 @@ export async function loginToStore({ apiUrl, email, password }) {
 }
 
 export async function testPrinterConnection({ host, port = 9100, storeName = 'AiMerc' }) {
-  if (!host) throw new Error('Selecione ou informe o IP da impressora');
+  if (!host) throw new Error('Selecione uma impressora instalada ou informe o destino');
   await sendRawToPrinter(host, port, buildTestReceipt(storeName));
 }
 

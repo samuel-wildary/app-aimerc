@@ -369,6 +369,29 @@ ipcMain.handle('service:uninstall', async () => {
   return { autoStartInstalled: false, ...(agent ? agent.getStatus() : {}) };
 });
 
+ipcMain.handle('printers:installed', async () => {
+  let list = [];
+  try {
+    if (mainWindow && mainWindow.webContents && mainWindow.webContents.getPrintersAsync) {
+      const electronPrinters = await mainWindow.webContents.getPrintersAsync();
+      list = (electronPrinters || []).map(p => ({
+        host: `win:${p.name}`,
+        port: 0,
+        label: `USB · ${p.displayName || p.name}${p.isDefault ? ' [Padrao do Windows]' : ''}`,
+        name: p.name,
+        isDefault: Boolean(p.isDefault),
+        type: 'usb'
+      }));
+    }
+  } catch {}
+
+  if (!list.length) {
+    const mod = await loadAgentModule();
+    list = await mod.discoverWindowsPrinters();
+  }
+  return list;
+});
+
 ipcMain.handle('printers:discover', async () => {
   const mod = await loadAgentModule();
   return mod.discoverThermalPrinters({
