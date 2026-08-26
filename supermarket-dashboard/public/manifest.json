@@ -1,11 +1,13 @@
 {
-  "name": "Aimerc Dashboard",
-  "short_name": "Aimerc",
+  "name": "AiMerc Gestor de Pedidos",
+  "short_name": "AiMerc",
   "start_url": "/",
+  "id": "/",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#0f9f70",
-  "description": "Painel de controle para supermercados Aimerc",
+  "orientation": "any",
+  "background_color": "#061d15",
+  "theme_color": "#061d15",
+  "description": "Painel de controle e expedição de pedidos para supermercados AiMerc",
   "icons": [
     {
       "src": "/icon-192.png",

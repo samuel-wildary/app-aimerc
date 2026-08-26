@@ -50,6 +50,13 @@ import {
   Volume2,
   VolumeX,
   Zap,
+  Maximize2,
+  Minimize2,
+  Monitor,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Tv,
+  Info,
   X
 } from 'lucide-react';
 import { api } from './api.js';
@@ -311,20 +318,39 @@ function Login({ onSuccess }) {
   );
 }
 
-function Sidebar({ active, setActive, store, user, onLogout, open, onClose }) {
+function Sidebar({ active, setActive, store, user, onLogout, open, onClose, collapsed, onToggleCollapse, onInstallApp, isStandalone, canInstall }) {
   return (
-    <aside className={`sidebar ${open ? 'is-open' : ''}`}>
+    <aside className={`sidebar ${open ? 'is-open' : ''} ${collapsed ? 'is-collapsed' : ''}`}>
       <div className="side-top">
-        <div className="platform-signature"><span>gestao por</span><strong><i>Ai</i>Merc</strong></div>
-        <button className="icon-button close-menu" onClick={onClose} aria-label="Fechar menu"><X size={20} /></button>
+        {!collapsed ? (
+          <div className="platform-signature"><span>gestao por</span><strong><i>Ai</i>Merc</strong></div>
+        ) : (
+          <div className="platform-signature-collapsed" title="AiMerc Gestor"><strong><i>Ai</i></strong></div>
+        )}
+        <div className="side-top-actions">
+          <button
+            type="button"
+            className="icon-button collapse-desktop-btn"
+            onClick={onToggleCollapse}
+            title={collapsed ? 'Expandir menu lateral' : 'Recolher menu lateral (Mais espaço para pedidos)'}
+            aria-label="Recolher menu lateral"
+          >
+            {collapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
+          </button>
+          <button className="icon-button close-menu" onClick={onClose} aria-label="Fechar menu"><X size={20} /></button>
+        </div>
       </div>
-      <div className="store-switcher">
+      <div className="store-switcher" title={`${store?.name || 'Mercado'} - ${store?.city || ''}/${store?.state || ''}`}>
         <div className="store-avatar"><Store size={20} /></div>
-        <div><strong>{store?.name}</strong><span>{store?.city} / {store?.state}</span></div>
-        <ChevronRight size={16} />
+        {!collapsed && (
+          <>
+            <div><strong>{store?.name}</strong><span>{store?.city} / {store?.state}</span></div>
+            <ChevronRight size={16} />
+          </>
+        )}
       </div>
       <nav>
-        <p className="group-label">OPERAÇÃO</p>
+        {!collapsed && <p className="group-label">OPERAÇÃO</p>}
         {navItems.map(item => {
           const Icon = item.icon;
           return (
@@ -332,28 +358,102 @@ function Sidebar({ active, setActive, store, user, onLogout, open, onClose }) {
               key={item.id}
               className={active === item.id ? 'active' : ''}
               onClick={() => { setActive(item.id); onClose(); }}
+              title={collapsed ? item.label : undefined}
             >
               <Icon size={19} />
-              <span>{item.label}</span>
+              {!collapsed && <span>{item.label}</span>}
             </button>
           );
         })}
       </nav>
       <div className="side-footer">
-        <div className="user-card"><UserRound size={18} /><div><strong>{user?.name}</strong><span>Gestor da loja</span></div></div>
-        <button className="logout" onClick={onLogout}><LogOut size={17} /> Sair</button>
+        {!isStandalone && (
+          <button
+            type="button"
+            className="install-pwa-button"
+            onClick={onInstallApp}
+            title="Instalar AiMerc como aplicativo fixo no seu Computador (sem barras de navegação)"
+          >
+            <Download size={17} />
+            {!collapsed && (
+              <>
+                <span>Instalar no PC</span>
+                <span className="pwa-badge">Desktop</span>
+              </>
+            )}
+          </button>
+        )}
+        <div className="user-card" title={user?.name}>
+          <UserRound size={18} />
+          {!collapsed && <div><strong>{user?.name}</strong><span>Gestor da loja</span></div>}
+        </div>
+        <button className="logout" onClick={onLogout} title="Sair do sistema">
+          <LogOut size={17} />
+          {!collapsed && <span>Sair</span>}
+        </button>
       </div>
     </aside>
   );
 }
 
-function Header({ title, subtitle, onRefresh, refreshing, onMenu, soundEnabled, onToggleSound }) {
+function Header({
+  title,
+  subtitle,
+  onRefresh,
+  refreshing,
+  onMenu,
+  soundEnabled,
+  onToggleSound,
+  onToggleMonitor,
+  isMonitorMode,
+  collapsed,
+  onToggleCollapse,
+  onInstallApp,
+  isStandalone,
+  activeView
+}) {
   return (
     <header className="topbar">
-      <button className="icon-button menu-button" onClick={onMenu} aria-label="Abrir menu"><Menu size={22} /></button>
-      <div className="page-title"><h1>{title}</h1><p>{subtitle}</p></div>
+      <div className="topbar-left">
+        <button className="icon-button menu-button" onClick={onMenu} aria-label="Abrir menu"><Menu size={22} /></button>
+        <button
+          type="button"
+          className="icon-button topbar-collapse-btn"
+          onClick={onToggleCollapse}
+          title={collapsed ? 'Expandir menu lateral' : 'Recolher menu lateral (Mais espaço para pedidos)'}
+          aria-label="Alternar menu lateral"
+        >
+          {collapsed ? <PanelLeftOpen size={19} /> : <PanelLeftClose size={19} />}
+        </button>
+        <div className="page-title">
+          <h1>{title}</h1>
+          <p>{subtitle}</p>
+        </div>
+      </div>
       <div className="top-actions">
         <span className="live-pill"><i /> Operação online</span>
+        {activeView === 'orders' && (
+          <button
+            type="button"
+            className={`topbar-monitor-btn ${isMonitorMode ? 'active' : ''}`}
+            onClick={onToggleMonitor}
+            title={isMonitorMode ? 'Sair da visualização monitor' : 'Modo Monitor / Tela Cheia: otimizado para o balcão e monitores de 14"'}
+          >
+            {isMonitorMode ? <Minimize2 size={16} /> : <Monitor size={16} />}
+            <span>{isMonitorMode ? 'Sair do Monitor' : 'Modo Monitor'}</span>
+          </button>
+        )}
+        {!isStandalone && (
+          <button
+            type="button"
+            className="topbar-install-btn"
+            onClick={onInstallApp}
+            title="Instalar AiMerc no computador para rodar fixo fora do navegador"
+          >
+            <Download size={15} />
+            <span>Instalar App</span>
+          </button>
+        )}
         <button
           type="button"
           className={`icon-button sound-btn ${soundEnabled ? 'active' : 'muted'}`}
@@ -367,7 +467,7 @@ function Header({ title, subtitle, onRefresh, refreshing, onMenu, soundEnabled, 
           <Bell size={18} />
           <span className="notification-badge-dot" />
         </button>
-        <button className="refresh-button" onClick={onRefresh} disabled={refreshing}><RefreshCw size={15} className={refreshing ? 'spin' : ''} /><span>Atualizar dados</span></button>
+        <button className="refresh-button" onClick={onRefresh} disabled={refreshing}><RefreshCw size={15} className={refreshing ? 'spin' : ''} /><span>Atualizar</span></button>
       </div>
     </header>
   );
@@ -771,11 +871,101 @@ function OrderDetail({ order, onClose, onAdvance, onPrint, onUpdateItems, busy, 
   );
 }
 
+function InstallGuideModal({ onClose, onPromptInstall, canDirectInstall }) {
+  return (
+    <div className="install-modal-backdrop" onClick={onClose}>
+      <div className="install-modal" onClick={e => e.stopPropagation()}>
+        <header className="install-modal-head">
+          <div className="install-modal-title">
+            <div className="install-icon-wrap"><Download size={22} /></div>
+            <div>
+              <h3>Instalar AiMerc no Computador</h3>
+              <p>Execute como aplicativo fixo, sem abas nem barra de links</p>
+            </div>
+          </div>
+          <button type="button" className="icon-button" onClick={onClose} aria-label="Fechar"><X size={18} /></button>
+        </header>
+
+        <div className="install-modal-body">
+          <div className="install-benefits">
+            <div className="benefit-item">
+              <span className="benefit-dot">✓</span>
+              <span><strong>Mais espaço na tela:</strong> Remove as barras do navegador e aproveita 100% do seu monitor de 14".</span>
+            </div>
+            <div className="benefit-item">
+              <span className="benefit-dot">✓</span>
+              <span><strong>Fixo no computador:</strong> Ícone na área de trabalho e barra de tarefas do Windows/Mac.</span>
+            </div>
+            <div className="benefit-item">
+              <span className="benefit-dot">✓</span>
+              <span><strong>Alertas sonoros contínuos:</strong> Nunca perde um pedido novo que chega no mercado.</span>
+            </div>
+          </div>
+
+          {canDirectInstall ? (
+            <div className="direct-install-action">
+              <button
+                type="button"
+                className="primary large full-width"
+                onClick={() => { onPromptInstall(); onClose(); }}
+              >
+                <Download size={18} />
+                <span>Instalar Agora</span>
+              </button>
+            </div>
+          ) : (
+            <div className="install-steps">
+              <h4>Como instalar pelo seu navegador:</h4>
+              <div className="step-card">
+                <span className="step-num">1</span>
+                <div>
+                  <strong>No Google Chrome / Edge / Brave:</strong>
+                  <p>Olhe para o topo direito da barra de endereços (ao lado da estrelinha) e clique no ícone de <strong>Instalar Aplicativo (🖥️ ou 📥)</strong>.</p>
+                </div>
+              </div>
+              <div className="step-card">
+                <span className="step-num">2</span>
+                <div>
+                  <strong>Ou pelo Menu do Navegador:</strong>
+                  <p>Clique nos <strong>3 pontinhos (⋮)</strong> no canto superior direito &gt; <strong>Transmitir, salvar e compartilhar</strong> &gt; <strong>Instalar AiMerc</strong>.</p>
+                </div>
+              </div>
+              <div className="step-card">
+                <span className="step-num">3</span>
+                <div>
+                  <strong>Pronto!</strong>
+                  <p>Uma janela dedicada será aberta e você poderá fixar o AiMerc na barra de tarefas do seu PC.</p>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <footer className="install-modal-footer">
+          <button type="button" className="secondary" onClick={onClose}>Entendi</button>
+        </footer>
+      </div>
+    </div>
+  );
+}
+
 function EmptyState({ title, text, action }) {
   return <div className="empty-state"><div><ShoppingBasket size={24} /></div><h3>{title}</h3><p>{text}</p>{action}</div>;
 }
 
-function OrdersPanel({ orders, selected, setSelected, title = 'Painel de pedidos', compact = false, onAdvance, busy = false }) {
+function OrdersPanel({
+  orders,
+  selected,
+  setSelected,
+  title = 'Painel de pedidos',
+  compact = false,
+  onAdvance,
+  busy = false,
+  onToggleMonitor,
+  isMonitorMode,
+  density = 'default',
+  onChangeDensity
+}) {
   const activeOrders = orders.filter(order => !['DONE', 'CANCELLED'].includes(order.status));
 
   if (compact) {
@@ -790,19 +980,58 @@ function OrdersPanel({ orders, selected, setSelected, title = 'Painel de pedidos
   }
 
   return (
-    <section className="panel orders-panel kanban-panel">
-      <div className="panel-heading">
-        <div>
+    <section className={`panel orders-panel kanban-panel ${isMonitorMode ? 'is-monitor' : ''}`}>
+      <div className="panel-heading kanban-panel-heading">
+        <div className="kanban-title-area">
           <p className="overline">Fluxo da loja</p>
-          <h2>{title}</h2>
-          <p className="kanban-help">Clique no card para ver os detalhes. Use o botao da etapa para avancar sem abrir o modal. Cupom automatico: rode o Print Agent no PC da loja (Loja & App).</p>
+          <div className="kanban-heading-row">
+            <h2>{title}</h2>
+            <span className="counter">{activeOrders.length}</span>
+          </div>
+          <p className="kanban-help">Clique no card para ver os detalhes. Use o botao da etapa para avancar sem abrir o modal.</p>
         </div>
-        <span className="counter">{activeOrders.length}</span>
+        <div className="kanban-panel-actions">
+          <div className="density-toggle-group" title="Ajuste de densidade e tamanho para o seu monitor">
+            <button
+              type="button"
+              className={`density-btn ${density === 'compact' ? 'active' : ''}`}
+              onClick={() => onChangeDensity?.('compact')}
+              title="Compacto: cabe mais pedidos em telas de 14 polegadas"
+            >
+              Compacto
+            </button>
+            <button
+              type="button"
+              className={`density-btn ${density === 'default' ? 'active' : ''}`}
+              onClick={() => onChangeDensity?.('default')}
+              title="Padrão"
+            >
+              Padrão
+            </button>
+            <button
+              type="button"
+              className={`density-btn ${density === 'large' ? 'active' : ''}`}
+              onClick={() => onChangeDensity?.('large')}
+              title="Ampliado: fontes maiores para visualização à distância"
+            >
+              Ampliado
+            </button>
+          </div>
+          <button
+            type="button"
+            className={`monitor-mode-action-btn ${isMonitorMode ? 'active' : ''}`}
+            onClick={onToggleMonitor}
+            title={isMonitorMode ? 'Sair do Modo Monitor' : 'Modo Monitor / Tela Cheia (Ideal para PDV e Monitores de 14")'}
+          >
+            {isMonitorMode ? <Minimize2 size={16} /> : <Monitor size={16} />}
+            <span>{isMonitorMode ? 'Sair do Monitor' : 'Modo Monitor'}</span>
+          </button>
+        </div>
       </div>
       {!activeOrders.length ? (
         <EmptyState title="Painel limpo" text="Nenhum pedido em andamento. Novos pedidos entram na coluna Novo." />
       ) : (
-        <div className="kanban-board">
+        <div className={`kanban-board density-${density || 'default'}`}>
           {KANBAN_COLUMNS.map(column => {
             const meta = STATUS[column.status];
             const columnOrders = activeOrders.filter(order => order.status === column.status);
@@ -814,7 +1043,7 @@ function OrdersPanel({ orders, selected, setSelected, title = 'Painel de pedidos
                     <ColumnIcon size={16} />
                     <div>
                       <strong>{meta.label}</strong>
-                      <span>{column.hint}</span>
+                      <span className="kanban-column-hint">{column.hint}</span>
                     </div>
                   </div>
                   <span className="kanban-count-pill">{columnOrders.length}</span>
@@ -3065,6 +3294,98 @@ export default function App() {
     return localStorage.getItem('aimerc.sound.enabled') !== 'false';
   });
 
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    return localStorage.getItem('aimerc.sidebar.collapsed') === 'true';
+  });
+  const [monitorMode, setMonitorMode] = useState(false);
+  const [kanbanDensity, setKanbanDensity] = useState(() => {
+    return localStorage.getItem('aimerc.kanban.density') || 'default';
+  });
+  const [deferredInstallPrompt, setDeferredInstallPrompt] = useState(null);
+  const [showInstallGuide, setShowInstallGuide] = useState(false);
+  const [isStandalone, setIsStandalone] = useState(() => {
+    return (
+      (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) ||
+      (typeof window !== 'undefined' && window.navigator && window.navigator.standalone === true)
+    );
+  });
+
+  const toggleSidebarCollapse = useCallback(() => {
+    setSidebarCollapsed(prev => {
+      const next = !prev;
+      localStorage.setItem('aimerc.sidebar.collapsed', String(next));
+      return next;
+    });
+  }, []);
+
+  const changeDensity = useCallback((density) => {
+    setKanbanDensity(density);
+    localStorage.setItem('aimerc.kanban.density', density);
+  }, []);
+
+  const toggleMonitorMode = useCallback(() => {
+    setMonitorMode(prev => {
+      const next = !prev;
+      if (next) {
+        if (document.documentElement.requestFullscreen) {
+          document.documentElement.requestFullscreen().catch(() => {});
+        }
+      } else {
+        if (document.fullscreenElement && document.exitFullscreen) {
+          document.exitFullscreen().catch(() => {});
+        }
+      }
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      if (!document.fullscreenElement) {
+        setMonitorMode(false);
+      }
+    };
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, []);
+
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e) => {
+      e.preventDefault();
+      setDeferredInstallPrompt(e);
+    };
+    const handleAppInstalled = () => {
+      setDeferredInstallPrompt(null);
+      setIsStandalone(true);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    window.addEventListener('appinstalled', handleAppInstalled);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      window.removeEventListener('appinstalled', handleAppInstalled);
+    };
+  }, []);
+
+  const handleInstallApp = useCallback(async () => {
+    if (deferredInstallPrompt) {
+      try {
+        await deferredInstallPrompt.prompt();
+        const choice = await deferredInstallPrompt.userChoice;
+        if (choice.outcome === 'accepted') {
+          setDeferredInstallPrompt(null);
+          setIsStandalone(true);
+        }
+      } catch (err) {
+        console.warn('Install prompt error:', err);
+        setShowInstallGuide(true);
+      }
+    } else {
+      setShowInstallGuide(true);
+    }
+  }, [deferredInstallPrompt]);
+
   const toggleSound = useCallback(() => {
     setSoundEnabled(current => {
       const next = !current;
@@ -3282,23 +3603,120 @@ export default function App() {
   }[active];
 
   return (
-    <div className="app-shell" style={storeTheme(summary?.store || session.store)}>
-      <Sidebar active={active} setActive={setActive} store={summary?.store || session.store} user={session.user} onLogout={logout} open={menuOpen} onClose={() => setMenuOpen(false)} />
+    <div className={`app-shell ${sidebarCollapsed ? 'sidebar-collapsed' : ''} ${monitorMode ? 'monitor-mode' : ''}`} style={storeTheme(summary?.store || session.store)}>
+      {!monitorMode && (
+        <Sidebar
+          active={active}
+          setActive={setActive}
+          store={summary?.store || session.store}
+          user={session.user}
+          onLogout={logout}
+          open={menuOpen}
+          onClose={() => setMenuOpen(false)}
+          collapsed={sidebarCollapsed}
+          onToggleCollapse={toggleSidebarCollapse}
+          onInstallApp={handleInstallApp}
+          isStandalone={isStandalone}
+          canInstall={!!deferredInstallPrompt}
+        />
+      )}
       {menuOpen && <button className="menu-overlay" onClick={() => setMenuOpen(false)} aria-label="Fechar menu" />}
       <main className="workspace">
-        <Header
-          title={pageMeta[0]}
-          subtitle={pageMeta[1]}
-          onRefresh={load}
-          refreshing={refreshing}
-          onMenu={() => setMenuOpen(true)}
-          soundEnabled={soundEnabled}
-          onToggleSound={toggleSound}
-        />
+        {monitorMode ? (
+          <header className="monitor-topbar">
+            <div className="monitor-topbar-left">
+              <div className="monitor-store-badge">
+                <Store size={16} />
+                <strong>{summary?.store?.name || session.store?.name}</strong>
+              </div>
+              <span className="live-pill"><i /> Modo Monitor Ativo</span>
+            </div>
+            <div className="monitor-topbar-right">
+              <div className="density-toggle-group">
+                <button
+                  type="button"
+                  className={`density-btn ${kanbanDensity === 'compact' ? 'active' : ''}`}
+                  onClick={() => changeDensity('compact')}
+                  title="Modo Compacto para telas de 14 polegadas"
+                >
+                  Compacto
+                </button>
+                <button
+                  type="button"
+                  className={`density-btn ${kanbanDensity === 'default' ? 'active' : ''}`}
+                  onClick={() => changeDensity('default')}
+                  title="Modo Padrão"
+                >
+                  Padrão
+                </button>
+                <button
+                  type="button"
+                  className={`density-btn ${kanbanDensity === 'large' ? 'active' : ''}`}
+                  onClick={() => changeDensity('large')}
+                  title="Modo Ampliado"
+                >
+                  Ampliado
+                </button>
+              </div>
+              <button
+                type="button"
+                className={`icon-button sound-btn ${soundEnabled ? 'active' : 'muted'}`}
+                onClick={toggleSound}
+                title={soundEnabled ? 'Alerta sonoro ativado' : 'Alerta sonoro desativado'}
+                aria-label="Alerta sonoro de pedidos"
+              >
+                {soundEnabled ? <Volume2 size={18} /> : <VolumeX size={18} />}
+              </button>
+              <button className="refresh-button" onClick={load} disabled={refreshing}>
+                <RefreshCw size={15} className={refreshing ? 'spin' : ''} />
+                <span>Atualizar</span>
+              </button>
+              <button
+                type="button"
+                className="exit-monitor-btn"
+                onClick={toggleMonitorMode}
+                title="Sair do Modo Monitor / Tela Cheia"
+              >
+                <Minimize2 size={16} />
+                <span>Sair do Monitor</span>
+              </button>
+            </div>
+          </header>
+        ) : (
+          <Header
+            title={pageMeta[0]}
+            subtitle={pageMeta[1]}
+            onRefresh={load}
+            refreshing={refreshing}
+            onMenu={() => setMenuOpen(true)}
+            soundEnabled={soundEnabled}
+            onToggleSound={toggleSound}
+            onToggleMonitor={toggleMonitorMode}
+            isMonitorMode={monitorMode}
+            collapsed={sidebarCollapsed}
+            onToggleCollapse={toggleSidebarCollapse}
+            onInstallApp={handleInstallApp}
+            isStandalone={isStandalone}
+            canInstall={!!deferredInstallPrompt}
+            activeView={active}
+          />
+        )}
         {error && <div className="global-error"><span>{error}</span><button onClick={() => setError('')}><X size={17} /></button></div>}
         <div className="page-content">
           {active === 'overview' && <Overview summary={summary} orders={orders} products={products} selected={selected} setSelected={setSelected} />}
-          {active === 'orders' && <OrdersPanel orders={orders} selected={selected} setSelected={setSelected} onAdvance={advance} busy={busy} />}
+          {active === 'orders' && (
+            <OrdersPanel
+              orders={orders}
+              selected={selected}
+              setSelected={setSelected}
+              onAdvance={advance}
+              busy={busy}
+              onToggleMonitor={toggleMonitorMode}
+              isMonitorMode={monitorMode}
+              density={kanbanDensity}
+              onChangeDensity={changeDensity}
+            />
+          )}
           {active === 'catalog' && <Catalog products={products} categories={categories} query={query} setQuery={setQuery} category={category} setCategory={setCategory} onChanged={load} />}
           {active === 'delivery' && <Delivery orders={orders} selected={selected} setSelected={setSelected} onAdvance={advance} busy={busy} />}
           {active === 'customers' && <Customers customers={customers} query={customerQuery} setQuery={setCustomerQuery} />}
@@ -3308,6 +3726,13 @@ export default function App() {
         </div>
       </main>
       <OrderDetail order={selected} onClose={() => setSelected(null)} onAdvance={advance} onUpdateItems={handleUpdateOrderItems} onPrint={order => printOrderSlip(order, summary?.store || session.store)} busy={busy} products={products} />
+      {showInstallGuide && (
+        <InstallGuideModal
+          onClose={() => setShowInstallGuide(false)}
+          onPromptInstall={handleInstallApp}
+          canDirectInstall={!!deferredInstallPrompt}
+        />
+      )}
     </div>
   );
 }
