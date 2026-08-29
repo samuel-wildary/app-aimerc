@@ -95,10 +95,10 @@ export class ApiClient {
   searchProductWebImages(query = '') {
     return this.request(`/store/products/web-images?q=${encodeURIComponent(query)}`);
   }
-  saveRemoteProductImage(productId, imageUrl) {
+  saveRemoteProductImage(productId, imageUrl, thumbUrl) {
     return this.request(`/store/products/${encodeURIComponent(productId)}/save-web-image`, {
       method: 'POST',
-      body: JSON.stringify({ imageUrl })
+      body: JSON.stringify({ imageUrl, thumbUrl })
     });
   }
   customers(query = '') { return this.request(`/customers${query ? `?q=${encodeURIComponent(query)}` : ''}`); }

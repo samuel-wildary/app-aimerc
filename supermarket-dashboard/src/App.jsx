@@ -1501,7 +1501,7 @@ function CatalogPhotoQueue({
     if (!item?.url || savingImageUrl || busy) return;
     setSavingImageUrl(item.url);
     try {
-      const res = await api.saveRemoteProductImage(current.id, item.url);
+      const res = await api.saveRemoteProductImage(current.id, item.url, item.thumb);
       if (onRemoteSaved) {
         await onRemoteSaved(res);
       }

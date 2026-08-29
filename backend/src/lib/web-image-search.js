@@ -98,55 +98,51 @@ export async function searchWebProductImages(query = '') {
   return results;
 }
 
-export async function downloadRemoteImage(imageUrl) {
-  if (!imageUrl || typeof imageUrl !== 'string' || !imageUrl.startsWith('http')) {
-    throw new Error('URL de imagem invalida');
-  }
-
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 15000);
-
-  try {
-    const response = await fetch(imageUrl, {
-      signal: controller.signal,
-      headers: {
-        'User-Agent': USER_AGENT,
-        'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8'
+export async function downloadRemoteImage(imageUrl, fallbackUrl) {
+  async function fetchBuffer(url) {
+    if (!url || typeof url !== 'string' || !url.startsWith('http')) return null;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+    try {
+      const response = await fetch(url, {
+        signal: controller.signal,
+        headers: {
+          'User-Agent': USER_AGENT,
+          'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8'
+        }
+      });
+      clearTimeout(timeoutId);
+      if (!response.ok) return null;
+      let contentType = String(response.headers.get('content-type') || '').split(';')[0].toLowerCase();
+      if (contentType === 'image/jpg') contentType = 'image/jpeg';
+      const arrayBuffer = await response.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+      if (!buffer.length || buffer.length > 10 * 1024 * 1024) return null;
+      if (!ALLOWED_CONTENT_TYPES.has(contentType)) {
+        if (buffer[0] === 0xff && buffer[1] === 0xd8) contentType = 'image/jpeg';
+        else if (buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47) contentType = 'image/png';
+        else if (buffer[0] === 0x52 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x46) contentType = 'image/webp';
+        else if (buffer[0] === 0x47 && buffer[1] === 0x49 && buffer[2] === 0x46) contentType = 'image/gif';
+        else contentType = 'image/jpeg';
       }
-    });
-
-    clearTimeout(timeoutId);
-
-    if (!response.ok) {
-      throw new Error(`Falha ao baixar imagem remota (HTTP ${response.status})`);
+      return { buffer, contentType };
+    } catch {
+      clearTimeout(timeoutId);
+      return null;
     }
-
-    let contentType = String(response.headers.get('content-type') || '').split(';')[0].toLowerCase();
-    if (contentType === 'image/jpg') contentType = 'image/jpeg';
-
-    const arrayBuffer = await response.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-
-    if (!buffer.length) {
-      throw new Error('Arquivo de imagem vazio');
-    }
-
-    if (buffer.length > 10 * 1024 * 1024) {
-      throw new Error('Imagem excede o limite maximo de 10MB');
-    }
-
-    // Fallback content type se nao vier explicitamente no header
-    if (!ALLOWED_CONTENT_TYPES.has(contentType)) {
-      if (buffer[0] === 0xff && buffer[1] === 0xd8) contentType = 'image/jpeg';
-      else if (buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47) contentType = 'image/png';
-      else if (buffer[0] === 0x52 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x46) contentType = 'image/webp';
-      else if (buffer[0] === 0x47 && buffer[1] === 0x49 && buffer[2] === 0x46) contentType = 'image/gif';
-      else contentType = 'image/jpeg';
-    }
-
-    return { buffer, contentType };
-  } catch (err) {
-    clearTimeout(timeoutId);
-    throw err;
   }
+
+  // 1. Tenta baixar a imagem original em alta resolucao
+  let result = await fetchBuffer(imageUrl);
+
+  // 2. Se a imagem original falhou (site fora do ar, DNS, 403, etc), tenta a thumbnail do CDN
+  if (!result && fallbackUrl && fallbackUrl !== imageUrl) {
+    result = await fetchBuffer(fallbackUrl);
+  }
+
+  if (!result) {
+    throw new Error('Nao foi possivel baixar esta imagem (o site de origem esta inacessivel). Por favor, escolha outra foto da lista.');
+  }
+
+  return result;
 }

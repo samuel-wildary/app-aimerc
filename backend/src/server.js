@@ -1081,16 +1081,21 @@ app.post('/api/store/products/:productId/save-web-image', requireAuth('STORE_MAN
   const product = await getProduct(req.user.storeId, req.params.productId);
   if (!product) throw new ApiError(404, 'Produto nao encontrado');
   const imageUrl = requiredText(req.body?.imageUrl, 'URL da imagem nao informada', 2000);
+  const thumbUrl = typeof req.body?.thumbUrl === 'string' ? req.body.thumbUrl.trim() : null;
   
-  const { buffer, contentType } = await downloadRemoteImage(imageUrl);
-  const stored = await storeProductImage(req.user.storeId, product, buffer, contentType, 'web-search');
-  
-  res.json({
-    success: true,
-    productId: product.id,
-    image: `/api/products/${product.id}/image?t=${Date.now()}`,
-    ...stored
-  });
+  try {
+    const { buffer, contentType } = await downloadRemoteImage(imageUrl, thumbUrl);
+    const stored = await storeProductImage(req.user.storeId, product, buffer, contentType, 'web-search');
+    
+    res.json({
+      success: true,
+      productId: product.id,
+      image: `/api/products/${product.id}/image?t=${Date.now()}`,
+      ...stored
+    });
+  } catch (err) {
+    throw new ApiError(400, err.message || 'Falha ao baixar e salvar a imagem.');
+  }
 }));
 
 app.get('/api/admin/overview', requireAuth('PLATFORM_ADMIN'), asyncRoute(async (req, res) => {
