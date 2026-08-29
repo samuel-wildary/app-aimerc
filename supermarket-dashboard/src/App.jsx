@@ -1558,8 +1558,7 @@ function CatalogPhotoQueue({
             onClick={() => setMode('web')}
           >
             <Globe size={15} />
-            <span>Buscar no Google / Shopping</span>
-            <span className="nav-tag-badge">1 Clique para Salvar</span>
+            <span>Buscar Imagens</span>
           </button>
           <button
             type="button"
@@ -1623,10 +1622,10 @@ function CatalogPhotoQueue({
                           key={item.url + idx}
                           className={`photo-web-card ${isSavingThis ? 'is-saving' : ''}`}
                           onClick={() => handleSelectWebImage(item)}
-                          title={`Clique para salvar: ${item.title}`}
+                          title="Clique para salvar esta imagem no produto"
                         >
                           <div className="photo-web-img-frame">
-                            <img src={item.thumb || item.url} alt={item.title} loading="lazy" />
+                            <img src={item.thumb || item.url} alt="Foto do produto" loading="lazy" />
                             {isSavingThis && (
                               <div className="photo-card-saving-overlay">
                                 <RefreshCw size={20} className="spin-anim" />
@@ -1638,10 +1637,6 @@ function CatalogPhotoQueue({
                                 <Check size={14} /> Usar esta foto
                               </span>
                             </div>
-                          </div>
-                          <div className="photo-web-card-meta">
-                            <span className="photo-web-title" title={item.title}>{item.title}</span>
-                            <span className="photo-web-source">{item.source || 'Web'}</span>
                           </div>
                         </div>
                       );
