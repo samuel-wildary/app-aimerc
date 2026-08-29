@@ -1321,58 +1321,129 @@ function ProductEditor({ product, categories, onClose, onSaved }) {
     }
   }
 
-  return <div className="catalog-editor-backdrop" onMouseDown={event => event.target === event.currentTarget && onClose()}>
-    <form className="catalog-editor" onSubmit={submit}>
-      <header><div><p className="overline">Edicao da vitrine</p><h2>Personalizar produto</h2><span>{sourceIsKg ? 'Preco por kg vem da integracao; fracao e estoque podem ser definidos para este produto.' : 'Preco e estoque continuam vindo da integracao.'}</span></div><button type="button" className="icon-button" onClick={onClose} aria-label="Fechar"><X size={18} /></button></header>
-      <div className="catalog-editor-body">
-        <section className="product-image-editor">
-          <div className="product-image-preview" style={{ backgroundImage: preview ? `url(${preview})` : 'none' }}><ImagePlus size={30} /></div>
-          <label className="image-upload-button"><ImagePlus size={17} /> Trocar imagem<input type="file" accept="image/jpeg,image/png,image/webp,image/avif" onChange={event => setImageFile(event.target.files?.[0] || null)} /></label>
-          <small>A imagem sera otimizada em WebP antes do envio. Recomendado: fundo neutro e produto centralizado.</small>
-        </section>
-        <section className="catalog-fields">
-          <label>Nome exibido no aplicativo<input value={form.catalogName} onChange={event => setForm(current => ({ ...current, catalogName: event.target.value }))} maxLength="160" required /></label>
-          <label>Categoria<input list="catalog-category-options" value={form.catalogCategory} onChange={event => setForm(current => ({ ...current, catalogCategory: event.target.value }))} maxLength="100" placeholder="Ex.: Carnes, Frutas ou Padaria" required /></label>
-          <datalist id="catalog-category-options">{categories.map(category => <option value={category.name} key={category.name} />)}</datalist>
-          <label>Descricao do produto<textarea value={form.description} onChange={event => setForm(current => ({ ...current, description: event.target.value }))} maxLength="1000" placeholder="Detalhes, corte, origem, peso ou observacoes para o cliente." /></label>
-          <div className="sale-rule-grid">
-            <label>Forma de venda<select value={form.saleMode} onChange={event => setForm(current => ({ ...current, saleMode: event.target.value }))}><option value="AUTO">Automatica pela unidade do ERP</option><option value="UNIT">Forcar venda por unidade</option>{sourceIsKg && <option value="WEIGHT">Por peso (kg)</option>}</select></label>
-            <label>Fracao de cada adicao (gramas)<input type="number" min="1" max="100000" step="1" value={form.quantityStepGrams} disabled={!sourceIsKg || form.saleMode === 'UNIT'} onChange={event => setForm(current => ({ ...current, quantityStepGrams: event.target.value }))} required={sourceIsKg && form.saleMode !== 'UNIT'} /></label>
-            {sourceIsKg && form.saleMode !== 'UNIT' && (
-              <label>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                  <span>Estoque manual disponivel</span>
-                  <select value={form.stockUnit} onChange={e => setForm(current => ({ ...current, stockUnit: e.target.value }))} style={{ width: 'auto', padding: '2px 8px', fontSize: 12, height: 24, borderRadius: 4, border: '1px solid var(--border)', background: 'var(--surface-sunken)' }}>
-                    <option value="KG">Quilos (kg)</option>
-                    <option value="G">Gramas (g)</option>
-                  </select>
-                </div>
-                <input 
-                  type="number" 
-                  min="0" 
-                  step={form.stockUnit === 'G' ? "1" : "0.001"} 
-                  value={form.stockOverride === '' ? '' : (form.stockUnit === 'G' ? Number(form.stockOverride) * 1000 : form.stockOverride)} 
-                  onChange={e => {
-                    const val = e.target.value;
-                    const override = val === '' ? '' : (form.stockUnit === 'G' ? Number(val) / 1000 : val);
-                    setForm(current => ({ ...current, stockOverride: override }));
-                  }} 
-                  placeholder={form.stockUnit === 'G' ? `Integracao: ${(product.sourceStock ?? product.stock) * 1000} g` : `Integracao: ${product.sourceStock ?? product.stock} kg`} 
-                />
-                <small>Deixe vazio para voltar a usar o estoque da integracao.</small>
-              </label>
-            )}
+  return (
+    <div className="catalog-editor-backdrop" onMouseDown={event => event.target === event.currentTarget && !saving && onClose()}>
+      <form className="catalog-editor catalog-edit-modal" onSubmit={submit}>
+        <header className="catalog-edit-head">
+          <div>
+            <div className="photo-head-tags">
+              <span className="photo-queue-pill"><Pencil size={12} /> Edicao da Vitrine</span>
+              <span className="photo-cat-badge">{product.category}</span>
+            </div>
+            <h2>Personalizar Produto</h2>
+            <div className="photo-head-sub">
+              <span>Original ERP:</span>
+              <strong>{product.sourceName || product.name}</strong>
+              <span className="bullet">·</span>
+              <span>EAN:</span>
+              <code>{product.barcode || product.sku || 'Sem codigo'}</code>
+            </div>
           </div>
-          <div className="weight-rule-note"><strong>Como funciona</strong><span>{sourceIsKg && form.saleMode !== 'UNIT' ? `Este produto sera vendido de ${Number(form.quantityStepGrams || 0).toLocaleString('pt-BR')} g em ${Number(form.quantityStepGrams || 0).toLocaleString('pt-BR')} g. O aplicativo exibira ${money(product.price * (Number(form.quantityStepGrams || 0) / 1000))} por essa fracao.` : 'Produto recebido como unidade. Mesmo que o nome mencione 1 kg, ele continua sendo vendido como uma unidade fechada.'}</span></div>
-          <div className="source-reference"><span>Informacao recebida da integracao</span><strong>{product.sourceName}</strong><small>{product.sourceCategory} · Unidade original {product.sourceUnit || product.unit} · EAN {product.barcode || 'nao informado'}</small></div>
-          <div className="commercial-lock"><div><span>Preco recebido</span><strong>{money(product.price)} / {product.sourceUnit || product.unit}</strong></div><div><span>Estoque disponivel</span><strong>{product.stock} {product.unit}</strong></div></div>
-          <label className="visibility-toggle"><input type="checkbox" checked={form.catalogVisible} onChange={event => setForm(current => ({ ...current, catalogVisible: event.target.checked }))} />{form.catalogVisible ? <Eye size={18} /> : <EyeOff size={18} />}<span><strong>{form.catalogVisible ? 'Visivel no aplicativo' : 'Oculto no aplicativo'}</strong><small>Voce pode ocultar sem excluir o item da integracao.</small></span></label>
-        </section>
-      </div>
-      {error && <div className="form-error">{error}</div>}
-      <footer><button type="button" className="catalog-cancel" onClick={onClose}>Cancelar</button><button className="primary" disabled={saving}><Save size={17} />{saving ? 'Salvando...' : 'Salvar alteracoes'}</button></footer>
-    </form>
-  </div>;
+          <button type="button" className="icon-button" onClick={onClose} disabled={saving} aria-label="Fechar">
+            <X size={18} />
+          </button>
+        </header>
+
+        <div className="catalog-editor-body">
+          <section className="product-image-editor">
+            <div className="product-image-preview" style={{ backgroundImage: preview ? `url(${preview})` : 'none' }}>
+              {!preview && <ImagePlus size={36} />}
+            </div>
+            <label className="image-upload-button">
+              <ImagePlus size={16} /> Trocar imagem
+              <input type="file" accept="image/jpeg,image/png,image/webp,image/avif" onChange={event => setImageFile(event.target.files?.[0] || null)} />
+            </label>
+            <small>A imagem sera otimizada em WebP antes do envio. Recomendado: fundo neutro e produto centralizado.</small>
+          </section>
+
+          <section className="catalog-fields">
+            <label>
+              <span>Nome exibido no aplicativo</span>
+              <input value={form.catalogName} onChange={event => setForm(current => ({ ...current, catalogName: event.target.value }))} maxLength="160" required />
+            </label>
+            
+            <label>
+              <span>Categoria</span>
+              <input list="catalog-category-options" value={form.catalogCategory} onChange={event => setForm(current => ({ ...current, catalogCategory: event.target.value }))} maxLength="100" placeholder="Ex.: Carnes, Frutas ou Padaria" required />
+            </label>
+            <datalist id="catalog-category-options">
+              {categories.map(category => <option value={category.name} key={category.name} />)}
+            </datalist>
+
+            <label>
+              <span>Descricao do produto</span>
+              <textarea value={form.description} onChange={event => setForm(current => ({ ...current, description: event.target.value }))} maxLength="1000" placeholder="Detalhes, corte, origem, peso ou observacoes para o cliente." rows={3} />
+            </label>
+
+            <div className="sale-rule-grid">
+              <label>
+                <span>Forma de venda</span>
+                <select value={form.saleMode} onChange={event => setForm(current => ({ ...current, saleMode: event.target.value }))}>
+                  <option value="AUTO">Automatica pela unidade do ERP</option>
+                  <option value="UNIT">Forcar venda por unidade</option>
+                  {sourceIsKg && <option value="WEIGHT">Por peso (kg)</option>}
+                </select>
+              </label>
+
+              <label>
+                <span>Fracao de cada adicao (gramas)</span>
+                <input type="number" min="1" max="100000" step="1" value={form.quantityStepGrams} disabled={!sourceIsKg || form.saleMode === 'UNIT'} onChange={event => setForm(current => ({ ...current, quantityStepGrams: event.target.value }))} required={sourceIsKg && form.saleMode !== 'UNIT'} />
+              </label>
+
+              {sourceIsKg && form.saleMode !== 'UNIT' && (
+                <label>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                    <span>Estoque manual disponivel</span>
+                    <select value={form.stockUnit} onChange={e => setForm(current => ({ ...current, stockUnit: e.target.value }))} style={{ width: 'auto', padding: '2px 8px', fontSize: 12, height: 24, borderRadius: 4, border: '1px solid var(--border)', background: 'var(--surface-sunken)' }}>
+                      <option value="KG">Quilos (kg)</option>
+                      <option value="G">Gramas (g)</option>
+                    </select>
+                  </div>
+                  <input 
+                    type="number" 
+                    min="0" 
+                    step={form.stockUnit === 'G' ? "1" : "0.001"} 
+                    value={form.stockOverride === '' ? '' : (form.stockUnit === 'G' ? Number(form.stockOverride) * 1000 : form.stockOverride)} 
+                    onChange={e => {
+                      const val = e.target.value;
+                      const override = val === '' ? '' : (form.stockUnit === 'G' ? Number(val) / 1000 : val);
+                      setForm(current => ({ ...current, stockOverride: override }));
+                    }} 
+                    placeholder={form.stockUnit === 'G' ? `Integracao: ${(product.sourceStock ?? product.stock) * 1000} g` : `Integracao: ${product.sourceStock ?? product.stock} kg`} 
+                  />
+                  <small>Deixe vazio para voltar a usar o estoque da integracao.</small>
+                </label>
+              )}
+            </div>
+
+            <div className="commercial-lock">
+              <div><span>Preco da integracao</span><strong>{money(product.price)} / {product.sourceUnit || product.unit}</strong></div>
+              <div><span>Estoque atual</span><strong>{product.stock} {product.unit}</strong></div>
+            </div>
+
+            <label className="visibility-toggle">
+              <input type="checkbox" checked={form.catalogVisible} onChange={event => setForm(current => ({ ...current, catalogVisible: event.target.checked }))} />
+              {form.catalogVisible ? <Eye size={18} /> : <EyeOff size={18} />}
+              <span>
+                <strong>{form.catalogVisible ? 'Visivel no aplicativo' : 'Oculto no aplicativo'}</strong>
+                <small>Voce pode ocultar este item sem exclui-lo da integracao.</small>
+              </span>
+            </label>
+          </section>
+        </div>
+
+        {error && <div className="form-error" style={{ margin: '0 24px 16px' }}>{error}</div>}
+
+        <footer>
+          <button type="button" className="catalog-cancel" onClick={onClose} disabled={saving}>Cancelar</button>
+          <button className="primary" disabled={saving}>
+            <Save size={16} />
+            {saving ? 'Salvando...' : 'Salvar alteracoes'}
+          </button>
+        </footer>
+      </form>
+    </div>
+  );
 }
 
 function CatalogPhotoQueue({
@@ -1384,51 +1455,158 @@ function CatalogPhotoQueue({
   onSkip,
   onPickFile,
   onCapture,
-  onConfirm
+  onConfirm,
+  onClearPreview
 }) {
   const current = products[index];
   if (!current) return null;
+  const isMulti = products.length > 1;
+
   return (
-    <div className="catalog-editor-backdrop catalog-photo-queue" onMouseDown={event => event.target === event.currentTarget && !busy && onClose()}>
-      <div className="catalog-editor catalog-photo-queue-dialog">
-        <header>
-          <div>
-            <p className="overline">Fila de fotos</p>
-            <h2>{current.name}</h2>
-            <span>Produto {index + 1} de {products.length} · {current.barcode || current.sku || 'sem codigo'}</span>
+    <div className="catalog-editor-backdrop" onMouseDown={event => event.target === event.currentTarget && !busy && onClose()}>
+      <div className="catalog-editor catalog-photo-modal">
+        <header className="catalog-photo-head">
+          <div className="photo-head-meta">
+            <div className="photo-head-tags">
+              <span className="photo-queue-pill">
+                <Camera size={13} />
+                {isMulti ? `Fila de Fotos · ${index + 1} de ${products.length}` : 'Foto do Produto'}
+              </span>
+              {current.category && <span className="photo-cat-badge">{current.category}</span>}
+            </div>
+            <h2 title={current.name}>{current.name}</h2>
+            <div className="photo-head-sub">
+              <span>EAN / Código:</span>
+              <code>{current.barcode || current.sku || 'Sem código'}</code>
+              <span className="bullet">·</span>
+              <span>Preço:</span>
+              <strong>{money(current.price)}</strong>
+              <span className="bullet">·</span>
+              <span>Estoque:</span>
+              <span className={Number(current.stock) > 0 ? 'stock-ok' : 'stock-zero'}>
+                {current.stock} {current.unit || 'un'}
+              </span>
+            </div>
           </div>
-          <button type="button" className="icon-button" onClick={onClose} disabled={busy} aria-label="Fechar"><X size={18} /></button>
+          <button type="button" className="icon-button" onClick={onClose} disabled={busy} aria-label="Fechar">
+            <X size={18} />
+          </button>
         </header>
-        <div className="catalog-photo-queue-progress"><i style={{ width: `${(index / Math.max(products.length, 1)) * 100}%` }} /></div>
-        <div className="catalog-photo-queue-body">
-          <div className="catalog-photo-queue-current">
-            <div className={`product-thumb ${current.hasImage ? '' : 'missing'}`} style={{ backgroundImage: current.hasImage && current.image ? `url(${current.image})` : 'none' }}>
-              {!current.hasImage && <ImageOff size={18} />}
-            </div>
-            <div>
-              <strong>{current.name}</strong>
-              <code>{current.barcode || current.sku || '-'}</code>
-              <small>{current.category || 'Sem categoria'}</small>
-            </div>
+
+        {isMulti && (
+          <div className="photo-queue-progress-bar">
+            <div className="photo-queue-progress-fill" style={{ width: `${((index + 1) / products.length) * 100}%` }} />
           </div>
-          <div className="catalog-photo-queue-preview">
-            {previewUrl
-              ? <img src={previewUrl} alt="Nova foto" />
-              : (
-                <div className="catalog-photo-queue-empty">
-                  <Camera size={28} />
-                  <p>Tire a foto ou envie um arquivo deste produto</p>
-                </div>
-              )}
+        )}
+
+        <div className="catalog-photo-body">
+          {/* Current Photo vs New Upload Comparison */}
+          <div className="photo-compare-grid">
+            {/* Current image card */}
+            <div className="photo-card-side">
+              <div className="photo-card-label">
+                <span>Foto Atual Cadastrada</span>
+                {current.hasImage ? <span className="badge-active">Ativa no App</span> : <span className="badge-missing">Pendente</span>}
+              </div>
+              <div className={`photo-display-frame ${current.hasImage ? '' : 'is-empty'}`}>
+                {current.hasImage && current.image ? (
+                  <img src={current.image} alt={current.name} />
+                ) : (
+                  <div className="no-image-placeholder">
+                    <ImageOff size={32} />
+                    <span>Nenhuma imagem cadastrada</span>
+                    <small>Este item está sem foto no aplicativo</small>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* New upload dropzone / preview card */}
+            <div className="photo-card-side">
+              <div className="photo-card-label">
+                <span>{previewUrl ? 'Nova Foto Selecionada' : 'Enviar Nova Imagem'}</span>
+                {previewUrl && <span className="badge-pending">Pronta para Salvar</span>}
+              </div>
+              <div className={`photo-upload-frame ${previewUrl ? 'has-preview' : ''}`}>
+                {previewUrl ? (
+                  <div className="photo-preview-wrap">
+                    <img src={previewUrl} alt="Prévia da nova foto" />
+                    <div className="photo-preview-overlay">
+                      <button type="button" className="btn-overlay-change" onClick={onPickFile} disabled={busy}>
+                        <Upload size={14} /> Trocar arquivo
+                      </button>
+                      <button type="button" className="btn-overlay-change" onClick={onCapture} disabled={busy}>
+                        <Camera size={14} /> Tirar outra
+                      </button>
+                      {onClearPreview && (
+                        <button type="button" className="btn-overlay-remove" onClick={onClearPreview} disabled={busy} title="Remover prévia">
+                          <Trash2 size={14} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="photo-dropzone-actions">
+                    <div className="dropzone-icon-wrap">
+                      <ImagePlus size={32} />
+                    </div>
+                    <strong>Selecione ou capture uma foto</strong>
+                    <p>Recomendado: produto centralizado, fundo claro ou neutro.</p>
+                    <div className="dropzone-buttons">
+                      <button type="button" className="btn-dropzone-action primary-tint" onClick={onPickFile} disabled={busy}>
+                        <Upload size={15} />
+                        <span>Escolher Arquivo</span>
+                      </button>
+                      <button type="button" className="btn-dropzone-action" onClick={onCapture} disabled={busy}>
+                        <Camera size={15} />
+                        <span>Tirar Foto</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </div>
-        <footer>
-          <button type="button" className="catalog-cancel" disabled={busy} onClick={onSkip}>Pular</button>
-          <button type="button" className="secondary" disabled={busy} onClick={onCapture}><Camera size={16} /> Tirar foto</button>
-          <button type="button" className="secondary" disabled={busy} onClick={onPickFile}><Upload size={16} /> Arquivo</button>
-          <button type="button" className="primary" disabled={busy || !previewUrl} onClick={onConfirm}>
-            {busy ? 'Salvando...' : index === products.length - 1 ? 'Salvar e concluir' : 'Salvar e proximo'}
-          </button>
+
+        <footer className="catalog-photo-footer">
+          <div className="footer-left">
+            {isMulti && (
+              <button type="button" className="catalog-cancel" disabled={busy} onClick={onSkip}>
+                Pular este produto
+              </button>
+            )}
+            {!isMulti && (
+              <button type="button" className="catalog-cancel" disabled={busy} onClick={onClose}>
+                Cancelar
+              </button>
+            )}
+          </div>
+          <div className="footer-right">
+            <button type="button" className="secondary" disabled={busy} onClick={onCapture}>
+              <Camera size={15} /> Tirar foto
+            </button>
+            <button type="button" className="secondary" disabled={busy} onClick={onPickFile}>
+              <Upload size={15} /> Enviar arquivo
+            </button>
+            <button
+              type="button"
+              className="primary large-btn"
+              disabled={busy || !previewUrl}
+              onClick={onConfirm}
+            >
+              {busy ? (
+                'Salvando...'
+              ) : previewUrl ? (
+                <>
+                  <Check size={16} />
+                  {index === products.length - 1 ? 'Salvar foto' : 'Salvar e próximo'}
+                </>
+              ) : (
+                'Selecione uma foto'
+              )}
+            </button>
+          </div>
         </footer>
       </div>
     </div>
@@ -1818,6 +1996,7 @@ function Catalog({ products, categories, query, setQuery, category, setCategory,
           onPickFile={() => fileInputRef.current?.click()}
           onCapture={() => cameraInputRef.current?.click()}
           onConfirm={confirmPhotoForCurrent}
+          onClearPreview={resetPhotoDraft}
         />
       )}
     </section>

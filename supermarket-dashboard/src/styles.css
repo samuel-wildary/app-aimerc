@@ -2250,26 +2250,42 @@ tbody tr:last-child td {
   height: 26px;
 }
 
+.catalog-thumb-btn {
+  cursor: pointer;
+  transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease;
+}
+.catalog-thumb-btn:hover {
+  transform: scale(1.08);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.12);
+  border-color: var(--brand-success);
+}
+.catalog-thumb-btn:active {
+  transform: scale(0.96);
+}
+
 .catalog-row-actions {
   display: flex;
-  gap: 4px;
+  gap: 6px;
   justify-content: flex-end;
 }
 .edit-product-button {
-  min-height: 28px;
-  padding: 0 8px;
+  min-height: 30px;
+  padding: 0 10px;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-xs);
   background: var(--bg-surface);
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: 11.5px;
   font-weight: 600;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
+  cursor: pointer;
+  transition: all 0.12s ease;
 }
 .edit-product-button:hover {
-  background: var(--bg-subtle);
+  background: #f1f5f9;
+  border-color: #94a3b8;
   color: var(--text-primary);
 }
 
@@ -3636,19 +3652,112 @@ tbody tr:last-child td {
 .catalog-editor {
   width: min(840px, 100%);
   padding: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 .catalog-editor > header {
   padding: 18px 24px;
   border-bottom: 1px solid var(--border-subtle);
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
+  gap: 14px;
+  background: #ffffff;
+}
+.catalog-edit-head {
+  padding: 18px 24px;
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 14px;
+  background: #ffffff;
+}
+.catalog-edit-head h2 {
+  margin: 4px 0 2px;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
 }
 .catalog-editor-body {
   padding: 24px;
   display: grid;
   grid-template-columns: 240px minmax(0, 1fr);
   gap: 24px;
+  max-height: calc(90vh - 160px);
+  overflow-y: auto;
+}
+.catalog-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.catalog-fields label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.catalog-fields input, .catalog-fields select, .catalog-fields textarea {
+  width: 100%;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  font-size: 13.5px;
+  color: var(--text-primary);
+  background: #ffffff;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.catalog-fields input:focus, .catalog-fields select:focus, .catalog-fields textarea:focus {
+  border-color: var(--brand-success);
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(18, 201, 138, 0.2);
+}
+.product-image-editor {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 10px;
+}
+.product-image-preview {
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: var(--radius-md);
+  border: 2px dashed #cbd5e1;
+  background-size: contain;
+  background-position: center;
+  background-repeat: no-repeat;
+  display: grid;
+  place-items: center;
+  color: var(--text-muted);
+  background-color: #f8fafc;
+}
+.image-upload-button {
+  width: 100%;
+  border: 1px solid var(--border-strong);
+  background: #ffffff;
+  color: var(--text-primary);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  font-size: 12.5px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.image-upload-button:hover {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+}
+.image-upload-button input[type="file"] {
+  display: none;
 }
 .catalog-editor > footer {
   padding: 16px 24px;
@@ -3657,6 +3766,441 @@ tbody tr:last-child td {
   justify-content: flex-end;
   gap: 10px;
   background: var(--bg-subtle);
+}
+
+/* ==========================================================================
+   Catalog Photo Queue Modal & Asset Manager
+   ========================================================================== */
+
+.catalog-photo-modal {
+  width: min(740px, 96vw);
+  background: #ffffff;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(0, 0, 0, 0.06);
+  border: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  animation: fade 0.15s ease-out;
+}
+
+.catalog-photo-head {
+  padding: 18px 22px;
+  background: #ffffff;
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.photo-head-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
+}
+
+.photo-head-tags {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.photo-queue-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: #ecfdf5;
+  color: #065f46;
+  border: 1px solid #a7f3d0;
+  padding: 3px 9px;
+  border-radius: var(--radius-full);
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.photo-cat-badge {
+  display: inline-flex;
+  align-items: center;
+  background: var(--bg-subtle);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-subtle);
+  padding: 3px 8px;
+  border-radius: var(--radius-xs);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.photo-head-meta h2 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+  word-break: break-word;
+}
+
+.photo-head-sub {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+  flex-wrap: wrap;
+}
+
+.photo-head-sub code {
+  font-family: var(--font-mono);
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  padding: 1px 5px;
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.photo-head-sub .bullet {
+  color: var(--border-strong);
+}
+
+.photo-head-sub strong {
+  color: var(--text-primary);
+}
+
+.photo-head-sub .stock-ok {
+  color: #065f46;
+  font-weight: 600;
+}
+
+.photo-head-sub .stock-zero {
+  color: #b91c1c;
+  font-weight: 600;
+}
+
+/* Linear progress for multi-product queue */
+.photo-queue-progress-bar {
+  width: 100%;
+  height: 4px;
+  background: #f1f5f9;
+  overflow: hidden;
+}
+
+.photo-queue-progress-fill {
+  height: 100%;
+  background: var(--brand-success);
+  transition: width 0.25s ease;
+}
+
+/* Body & Side-by-Side Cards */
+.catalog-photo-body {
+  padding: 20px 22px;
+  background: #f8fafc;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.photo-compare-grid {
+  display: grid;
+  grid-template-columns: 1fr 1.3fr;
+  gap: 18px;
+  align-items: stretch;
+}
+
+@media (max-width: 640px) {
+  .photo-compare-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.photo-card-side {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.photo-card-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.badge-active {
+  font-size: 10.5px;
+  font-weight: 700;
+  background: #ecfdf5;
+  color: #065f46;
+  border: 1px solid #a7f3d0;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.badge-missing {
+  font-size: 10.5px;
+  font-weight: 700;
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fde68a;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.badge-pending {
+  font-size: 10.5px;
+  font-weight: 700;
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+/* Current photo frame */
+.photo-display-frame {
+  height: 220px;
+  background: #ffffff;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  padding: 12px;
+}
+
+.photo-display-frame img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: var(--radius-xs);
+}
+
+.no-image-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.no-image-placeholder svg {
+  opacity: 0.45;
+}
+
+.no-image-placeholder span {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.no-image-placeholder small {
+  font-size: 11px;
+}
+
+/* New upload dropzone frame */
+.photo-upload-frame {
+  height: 220px;
+  background: #ffffff;
+  border: 2px dashed #cbd5e1;
+  border-radius: var(--radius-md);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  transition: all 0.15s ease;
+  position: relative;
+}
+
+.photo-upload-frame:hover {
+  border-color: var(--brand-success);
+  background: #fcfdfd;
+}
+
+.photo-upload-frame.has-preview {
+  border-style: solid;
+  border-color: var(--brand-success);
+  padding: 12px;
+}
+
+.photo-preview-wrap {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+
+.photo-preview-wrap img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: var(--radius-xs);
+}
+
+.photo-preview-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px;
+  background: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(4px);
+  border-radius: 0 0 var(--radius-xs) var(--radius-xs);
+}
+
+.btn-overlay-change {
+  background: #ffffff;
+  color: #0f172a;
+  border: 0;
+  border-radius: 4px;
+  padding: 4px 9px;
+  font-size: 11.5px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.btn-overlay-change:hover {
+  background: #f1f5f9;
+}
+
+.btn-overlay-remove {
+  background: rgba(239, 68, 68, 0.2);
+  color: #fca5a5;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 4px;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.btn-overlay-remove:hover {
+  background: #ef4444;
+  color: #ffffff;
+}
+
+/* Empty dropzone state */
+.photo-dropzone-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 16px;
+  gap: 6px;
+}
+
+.dropzone-icon-wrap {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: #ecfdf5;
+  color: var(--brand-success);
+  display: grid;
+  place-items: center;
+  margin-bottom: 2px;
+}
+
+.photo-dropzone-actions strong {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.photo-dropzone-actions p {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--text-muted);
+  max-width: 240px;
+  line-height: 1.35;
+}
+
+.dropzone-buttons {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.btn-dropzone-action {
+  border: 1px solid var(--border-strong);
+  background: #ffffff;
+  color: var(--text-primary);
+  border-radius: var(--radius-sm);
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-dropzone-action:hover {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+}
+
+.btn-dropzone-action.primary-tint {
+  background: #0f3f2e;
+  border-color: #0f3f2e;
+  color: #ffffff;
+}
+
+.btn-dropzone-action.primary-tint:hover {
+  background: #09261c;
+}
+
+/* Footer & Actions */
+.catalog-photo-footer {
+  padding: 14px 22px;
+  background: #ffffff;
+  border-top: 1px solid var(--border-subtle);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.footer-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.footer-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.large-btn {
+  min-height: 38px;
+  padding: 0 16px;
+  font-weight: 700;
 }
 
 .drawer-head {
