@@ -409,7 +409,6 @@ CREATE INDEX IF NOT EXISTS orders_store_created_idx ON orders(store_id, created_
 CREATE INDEX IF NOT EXISTS orders_store_status_created_idx ON orders(store_id, status, created_at DESC);
 CREATE INDEX IF NOT EXISTS order_items_store_order_lookup_idx ON order_items(store_id, order_id);
 CREATE INDEX IF NOT EXISTS orders_customer_phone_idx ON orders(store_id, customer_phone, created_at DESC);
-CREATE INDEX IF NOT EXISTS customers_store_phone_idx ON customers(store_id, phone);
 CREATE UNIQUE INDEX IF NOT EXISTS orders_idempotency_idx ON orders(store_id, idempotency_key) WHERE idempotency_key IS NOT NULL;
 CREATE INDEX IF NOT EXISTS push_campaigns_pending_idx ON push_campaigns(store_id, status, scheduled_at);
 CREATE INDEX IF NOT EXISTS push_automations_due_idx ON push_automations(store_id, active, next_run_at);
