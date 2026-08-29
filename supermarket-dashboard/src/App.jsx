@@ -17,6 +17,7 @@ import {
   Eye,
   EyeOff,
   FileText,
+  Globe,
   HelpCircle,
   ImagePlus,
   ImageOff,
@@ -1451,19 +1452,68 @@ function CatalogPhotoQueue({
   index,
   busy,
   previewUrl,
+  api,
   onClose,
   onSkip,
   onPickFile,
   onCapture,
   onConfirm,
-  onClearPreview
+  onClearPreview,
+  onRemoteSaved
 }) {
   const current = products[index];
   if (!current) return null;
   const isMulti = products.length > 1;
 
+  const [mode, setMode] = useState('web'); // 'web' | 'manual'
+  const [searchQuery, setSearchQuery] = useState(current.name || '');
+  const [searchResults, setSearchResults] = useState([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchError, setSearchError] = useState('');
+  const [savingImageUrl, setSavingImageUrl] = useState(null);
+
+  // Auto-search whenever current product changes
+  useEffect(() => {
+    const q = current.name || current.barcode || '';
+    setSearchQuery(q);
+    if (q) {
+      triggerSearch(q);
+    }
+  }, [current.id, current.name]);
+
+  async function triggerSearch(termToSearch) {
+    const queryTerm = String(termToSearch != null ? termToSearch : searchQuery).trim();
+    if (!queryTerm) return;
+    setSearchLoading(true);
+    setSearchError('');
+    try {
+      const data = await api.searchProductWebImages(queryTerm);
+      setSearchResults(data.images || []);
+    } catch (err) {
+      setSearchError(err.message || 'Falha ao buscar imagens na web');
+      setSearchResults([]);
+    } finally {
+      setSearchLoading(false);
+    }
+  }
+
+  async function handleSelectWebImage(item) {
+    if (!item?.url || savingImageUrl || busy) return;
+    setSavingImageUrl(item.url);
+    try {
+      const res = await api.saveRemoteProductImage(current.id, item.url);
+      if (onRemoteSaved) {
+        await onRemoteSaved(res);
+      }
+    } catch (err) {
+      alert(err.message || 'Erro ao baixar e gravar a imagem no sistema');
+    } finally {
+      setSavingImageUrl(null);
+    }
+  }
+
   return (
-    <div className="catalog-editor-backdrop" onMouseDown={event => event.target === event.currentTarget && !busy && onClose()}>
+    <div className="catalog-editor-backdrop" onMouseDown={event => event.target === event.currentTarget && !busy && !savingImageUrl && onClose()}>
       <div className="catalog-editor catalog-photo-modal">
         <header className="catalog-photo-head">
           <div className="photo-head-meta">
@@ -1473,6 +1523,7 @@ function CatalogPhotoQueue({
                 {isMulti ? `Fila de Fotos · ${index + 1} de ${products.length}` : 'Foto do Produto'}
               </span>
               {current.category && <span className="photo-cat-badge">{current.category}</span>}
+              {current.hasImage ? <span className="badge-active">Foto Atual Ativa</span> : <span className="badge-missing">Foto Pendente</span>}
             </div>
             <h2 title={current.name}>{current.name}</h2>
             <div className="photo-head-sub">
@@ -1488,7 +1539,7 @@ function CatalogPhotoQueue({
               </span>
             </div>
           </div>
-          <button type="button" className="icon-button" onClick={onClose} disabled={busy} aria-label="Fechar">
+          <button type="button" className="icon-button" onClick={onClose} disabled={busy || Boolean(savingImageUrl)} aria-label="Fechar">
             <X size={18} />
           </button>
         </header>
@@ -1499,113 +1550,237 @@ function CatalogPhotoQueue({
           </div>
         )}
 
-        <div className="catalog-photo-body">
-          {/* Current Photo vs New Upload Comparison */}
-          <div className="photo-compare-grid">
-            {/* Current image card */}
-            <div className="photo-card-side">
-              <div className="photo-card-label">
-                <span>Foto Atual Cadastrada</span>
-                {current.hasImage ? <span className="badge-active">Ativa no App</span> : <span className="badge-missing">Pendente</span>}
-              </div>
-              <div className={`photo-display-frame ${current.hasImage ? '' : 'is-empty'}`}>
-                {current.hasImage && current.image ? (
-                  <img src={current.image} alt={current.name} />
-                ) : (
-                  <div className="no-image-placeholder">
-                    <ImageOff size={32} />
-                    <span>Nenhuma imagem cadastrada</span>
-                    <small>Este item está sem foto no aplicativo</small>
-                  </div>
-                )}
-              </div>
-            </div>
+        {/* Tab Selector */}
+        <div className="photo-modal-nav">
+          <button
+            type="button"
+            className={`photo-nav-btn ${mode === 'web' ? 'active' : ''}`}
+            onClick={() => setMode('web')}
+          >
+            <Globe size={15} />
+            <span>Buscar no Google / Shopping</span>
+            <span className="nav-tag-badge">1 Clique para Salvar</span>
+          </button>
+          <button
+            type="button"
+            className={`photo-nav-btn ${mode === 'manual' ? 'active' : ''}`}
+            onClick={() => setMode('manual')}
+          >
+            <Upload size={15} />
+            <span>Enviar Arquivo / Câmera</span>
+          </button>
+        </div>
 
-            {/* New upload dropzone / preview card */}
-            <div className="photo-card-side">
-              <div className="photo-card-label">
-                <span>{previewUrl ? 'Nova Foto Selecionada' : 'Enviar Nova Imagem'}</span>
-                {previewUrl && <span className="badge-pending">Pronta para Salvar</span>}
-              </div>
-              <div className={`photo-upload-frame ${previewUrl ? 'has-preview' : ''}`}>
-                {previewUrl ? (
-                  <div className="photo-preview-wrap">
-                    <img src={previewUrl} alt="Prévia da nova foto" />
-                    <div className="photo-preview-overlay">
-                      <button type="button" className="btn-overlay-change" onClick={onPickFile} disabled={busy}>
-                        <Upload size={14} /> Trocar arquivo
-                      </button>
-                      <button type="button" className="btn-overlay-change" onClick={onCapture} disabled={busy}>
-                        <Camera size={14} /> Tirar outra
-                      </button>
-                      {onClearPreview && (
-                        <button type="button" className="btn-overlay-remove" onClick={onClearPreview} disabled={busy} title="Remover prévia">
-                          <Trash2 size={14} />
+        <div className="catalog-photo-body">
+          {mode === 'web' ? (
+            <div className="photo-web-search-view">
+              <form
+                className="photo-search-bar"
+                onSubmit={e => {
+                  e.preventDefault();
+                  triggerSearch(searchQuery);
+                }}
+              >
+                <div className="photo-search-input-wrap">
+                  <Search size={16} />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={e => setSearchQuery(e.target.value)}
+                    placeholder="Digite o nome do produto ou marca..."
+                  />
+                  {searchQuery && (
+                    <button type="button" className="btn-clear-search" onClick={() => setSearchQuery('')}>
+                      <X size={14} />
+                    </button>
+                  )}
+                </div>
+                <button type="submit" className="primary" disabled={searchLoading}>
+                  {searchLoading ? 'Buscando...' : 'Buscar Imagens'}
+                </button>
+              </form>
+
+              {searchError && (
+                <div className="photo-search-error">
+                  <span>{searchError}</span>
+                  <button type="button" onClick={() => triggerSearch(searchQuery)}>Tentar novamente</button>
+                </div>
+              )}
+
+              {/* Search Results Grid */}
+              <div className="photo-web-results-container">
+                {searchLoading ? (
+                  <div className="photo-web-loading">
+                    <RefreshCw size={24} className="spin-anim" />
+                    <span>Buscando fotos de <strong>{searchQuery}</strong> no Google e na web...</span>
+                  </div>
+                ) : searchResults.length > 0 ? (
+                  <div className="photo-web-grid">
+                    {searchResults.map((item, idx) => {
+                      const isSavingThis = savingImageUrl === item.url;
+                      return (
+                        <div
+                          key={item.url + idx}
+                          className={`photo-web-card ${isSavingThis ? 'is-saving' : ''}`}
+                          onClick={() => handleSelectWebImage(item)}
+                          title={`Clique para salvar: ${item.title}`}
+                        >
+                          <div className="photo-web-img-frame">
+                            <img src={item.thumb || item.url} alt={item.title} loading="lazy" />
+                            {isSavingThis && (
+                              <div className="photo-card-saving-overlay">
+                                <RefreshCw size={20} className="spin-anim" />
+                                <span>Gravando no sistema...</span>
+                              </div>
+                            )}
+                            <div className="photo-card-hover-overlay">
+                              <span className="btn-use-photo">
+                                <Check size={14} /> Usar esta foto
+                              </span>
+                            </div>
+                          </div>
+                          <div className="photo-web-card-meta">
+                            <span className="photo-web-title" title={item.title}>{item.title}</span>
+                            <span className="photo-web-source">{item.source || 'Web'}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="photo-web-empty">
+                    <ImageOff size={36} />
+                    <strong>Nenhuma imagem encontrada para "{searchQuery}"</strong>
+                    <p>Tente buscar com palavras-chave mais simples ou pelo código de barras.</p>
+                    <div className="photo-web-suggestions">
+                      {current.barcode && (
+                        <button type="button" onClick={() => { setSearchQuery(current.barcode); triggerSearch(current.barcode); }}>
+                          Buscar por EAN: {current.barcode}
                         </button>
                       )}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="photo-dropzone-actions">
-                    <div className="dropzone-icon-wrap">
-                      <ImagePlus size={32} />
-                    </div>
-                    <strong>Selecione ou capture uma foto</strong>
-                    <p>Recomendado: produto centralizado, fundo claro ou neutro.</p>
-                    <div className="dropzone-buttons">
-                      <button type="button" className="btn-dropzone-action primary-tint" onClick={onPickFile} disabled={busy}>
-                        <Upload size={15} />
-                        <span>Escolher Arquivo</span>
-                      </button>
-                      <button type="button" className="btn-dropzone-action" onClick={onCapture} disabled={busy}>
-                        <Camera size={15} />
-                        <span>Tirar Foto</span>
+                      <button type="button" onClick={() => {
+                        const simpleName = (current.name || '').split(' ').slice(0, 3).join(' ');
+                        setSearchQuery(simpleName);
+                        triggerSearch(simpleName);
+                      }}>
+                        Buscar simplificado: {(current.name || '').split(' ').slice(0, 3).join(' ')}
                       </button>
                     </div>
                   </div>
                 )}
               </div>
             </div>
-          </div>
+          ) : (
+            /* Manual Upload & Camera View */
+            <div className="photo-compare-grid">
+              {/* Current image card */}
+              <div className="photo-card-side">
+                <div className="photo-card-label">
+                  <span>Foto Atual Cadastrada</span>
+                  {current.hasImage ? <span className="badge-active">Ativa no App</span> : <span className="badge-missing">Pendente</span>}
+                </div>
+                <div className={`photo-display-frame ${current.hasImage ? '' : 'is-empty'}`}>
+                  {current.hasImage && current.image ? (
+                    <img src={current.image} alt={current.name} />
+                  ) : (
+                    <div className="no-image-placeholder">
+                      <ImageOff size={32} />
+                      <span>Nenhuma imagem cadastrada</span>
+                      <small>Este item está sem foto no aplicativo</small>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* New upload dropzone / preview card */}
+              <div className="photo-card-side">
+                <div className="photo-card-label">
+                  <span>{previewUrl ? 'Nova Foto Selecionada' : 'Enviar Nova Imagem'}</span>
+                  {previewUrl && <span className="badge-pending">Pronta para Salvar</span>}
+                </div>
+                <div className={`photo-upload-frame ${previewUrl ? 'has-preview' : ''}`}>
+                  {previewUrl ? (
+                    <div className="photo-preview-wrap">
+                      <img src={previewUrl} alt="Prévia da nova foto" />
+                      <div className="photo-preview-overlay">
+                        <button type="button" className="btn-overlay-change" onClick={onPickFile} disabled={busy}>
+                          <Upload size={14} /> Trocar arquivo
+                        </button>
+                        <button type="button" className="btn-overlay-change" onClick={onCapture} disabled={busy}>
+                          <Camera size={14} /> Tirar outra
+                        </button>
+                        {onClearPreview && (
+                          <button type="button" className="btn-overlay-remove" onClick={onClearPreview} disabled={busy} title="Remover prévia">
+                            <Trash2 size={14} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="photo-dropzone-actions">
+                      <div className="dropzone-icon-wrap">
+                        <ImagePlus size={32} />
+                      </div>
+                      <strong>Selecione ou capture uma foto</strong>
+                      <p>Recomendado: produto centralizado, fundo claro ou neutro.</p>
+                      <div className="dropzone-buttons">
+                        <button type="button" className="btn-dropzone-action primary-tint" onClick={onPickFile} disabled={busy}>
+                          <Upload size={15} />
+                          <span>Escolher Arquivo</span>
+                        </button>
+                        <button type="button" className="btn-dropzone-action" onClick={onCapture} disabled={busy}>
+                          <Camera size={15} />
+                          <span>Tirar Foto</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         <footer className="catalog-photo-footer">
           <div className="footer-left">
-            {isMulti && (
-              <button type="button" className="catalog-cancel" disabled={busy} onClick={onSkip}>
+            {isMulti ? (
+              <button type="button" className="catalog-cancel" disabled={busy || Boolean(savingImageUrl)} onClick={onSkip}>
                 Pular este produto
               </button>
-            )}
-            {!isMulti && (
-              <button type="button" className="catalog-cancel" disabled={busy} onClick={onClose}>
-                Cancelar
+            ) : (
+              <button type="button" className="catalog-cancel" disabled={busy || Boolean(savingImageUrl)} onClick={onClose}>
+                Fechar
               </button>
             )}
           </div>
           <div className="footer-right">
-            <button type="button" className="secondary" disabled={busy} onClick={onCapture}>
-              <Camera size={15} /> Tirar foto
-            </button>
-            <button type="button" className="secondary" disabled={busy} onClick={onPickFile}>
-              <Upload size={15} /> Enviar arquivo
-            </button>
-            <button
-              type="button"
-              className="primary large-btn"
-              disabled={busy || !previewUrl}
-              onClick={onConfirm}
-            >
-              {busy ? (
-                'Salvando...'
-              ) : previewUrl ? (
-                <>
-                  <Check size={16} />
-                  {index === products.length - 1 ? 'Salvar foto' : 'Salvar e próximo'}
-                </>
-              ) : (
-                'Selecione uma foto'
-              )}
-            </button>
+            {mode === 'manual' ? (
+              <>
+                <button type="button" className="secondary" disabled={busy} onClick={onCapture}>
+                  <Camera size={15} /> Tirar foto
+                </button>
+                <button type="button" className="secondary" disabled={busy} onClick={onPickFile}>
+                  <Upload size={15} /> Enviar arquivo
+                </button>
+                <button
+                  type="button"
+                  className="primary large-btn"
+                  disabled={busy || !previewUrl}
+                  onClick={onConfirm}
+                >
+                  {busy ? 'Salvando...' : previewUrl ? (
+                    <>
+                      <Check size={16} />
+                      {index === products.length - 1 ? 'Salvar foto' : 'Salvar e próximo'}
+                    </>
+                  ) : 'Selecione uma foto'}
+                </button>
+              </>
+            ) : (
+              <span className="photo-footer-hint">
+                ✨ Clique em qualquer imagem acima para baixar e salvar diretamente no seu produto.
+              </span>
+            )}
           </div>
         </footer>
       </div>
@@ -1991,12 +2166,23 @@ function Catalog({ products, categories, query, setQuery, category, setCategory,
           index={photoIndex}
           busy={photoBusy}
           previewUrl={photoPreview}
+          api={api}
           onClose={closePhotoQueue}
           onSkip={skipPhotoCurrent}
           onPickFile={() => fileInputRef.current?.click()}
           onCapture={() => cameraInputRef.current?.click()}
           onConfirm={confirmPhotoForCurrent}
           onClearPreview={resetPhotoDraft}
+          onRemoteSaved={async () => {
+            if (onChanged) await onChanged();
+            if (photoIndex < photoQueue.length - 1) {
+              setPhotoIndex(curr => curr + 1);
+              resetPhotoDraft();
+            } else {
+              setAssimilateMsg('Foto gravada e armazenada com sucesso no sistema!');
+              closePhotoQueue();
+            }
+          }}
         />
       )}
     </section>

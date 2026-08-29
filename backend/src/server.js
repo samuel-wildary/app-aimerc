@@ -98,6 +98,7 @@ import { integrationProvider, integrationProviders, publicIntegrationProvider } 
 import { encryptIntegrationSecret } from './lib/store-integration.js';
 import { ApiError, normalizeEmail, oneOf, optionalText, positiveNumber, requiredText, slugify } from './lib/validation.js';
 import { assimilateStoreCatalogImages, linkCatalogImageToProduct, searchCatalogImages, syncStoreEanImages } from './lib/catalog-image-match.js';
+import { searchWebProductImages, downloadRemoteImage } from './lib/web-image-search.js';
 import { runCatalogImageAudit, deleteCatalogMismatches } from './lib/catalog-audit.js';
 import { resolveAiCredentials } from './lib/ai-image-match.js';
 import { getAiSearchAgent, saveAiSearchAgent } from './lib/platform-settings.js';
@@ -1066,6 +1067,31 @@ app.post(
     res.json({ success: true, productId: product.id, ...stored });
   })
 );
+
+app.get('/api/store/products/web-images', requireAuth('STORE_MANAGER'), asyncRoute(async (req, res) => {
+  await managerStore(req);
+  const q = String(req.query.q || '').trim();
+  if (!q) throw new ApiError(400, 'Termo de busca nao informado');
+  const results = await searchWebProductImages(q);
+  res.json({ query: q, total: results.length, images: results });
+}));
+
+app.post('/api/store/products/:productId/save-web-image', requireAuth('STORE_MANAGER'), asyncRoute(async (req, res) => {
+  await managerStore(req);
+  const product = await getProduct(req.user.storeId, req.params.productId);
+  if (!product) throw new ApiError(404, 'Produto nao encontrado');
+  const imageUrl = requiredText(req.body?.imageUrl, 'URL da imagem nao informada', 2000);
+  
+  const { buffer, contentType } = await downloadRemoteImage(imageUrl);
+  const stored = await storeProductImage(req.user.storeId, product, buffer, contentType, 'web-search');
+  
+  res.json({
+    success: true,
+    productId: product.id,
+    image: `/api/products/${product.id}/image?t=${Date.now()}`,
+    ...stored
+  });
+}));
 
 app.get('/api/admin/overview', requireAuth('PLATFORM_ADMIN'), asyncRoute(async (req, res) => {
   res.json(await adminOverview());

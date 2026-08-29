@@ -92,6 +92,15 @@ export class ApiClient {
     if (!response.ok) throw new Error(data.error || 'Nao foi possivel enviar a imagem do produto');
     return data;
   }
+  searchProductWebImages(query = '') {
+    return this.request(`/store/products/web-images?q=${encodeURIComponent(query)}`);
+  }
+  saveRemoteProductImage(productId, imageUrl) {
+    return this.request(`/store/products/${encodeURIComponent(productId)}/save-web-image`, {
+      method: 'POST',
+      body: JSON.stringify({ imageUrl })
+    });
+  }
   customers(query = '') { return this.request(`/customers${query ? `?q=${encodeURIComponent(query)}` : ''}`); }
   reports() { return this.request('/reports/overview'); }
   reportDeliveries(start, end) { return this.request(`/reports/deliveries?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`); }
