@@ -1783,8 +1783,494 @@ function CatalogPhotoQueue({
   );
 }
 
+function BulkPhotoModal({ products, api, onClose, onChanged }) {
+  const [localProducts, setLocalProducts] = useState(() => products || []);
+  const [filterMode, setFilterMode] = useState('without'); // 'without' | 'all' | 'with'
+  const [searchListQuery, setSearchListQuery] = useState('');
+  const [selectedId, setSelectedId] = useState(null);
+
+  // Active product web image search
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchError, setSearchError] = useState('');
+  const [savingImageUrl, setSavingImageUrl] = useState(null);
+  const [savedSuccessId, setSavedSuccessId] = useState(null);
+  const searchCache = useRef(new Map());
+  const fileInputRef = useRef(null);
+
+  useEffect(() => {
+    setLocalProducts(products || []);
+  }, [products]);
+
+  const filteredList = useMemo(() => {
+    return localProducts.filter(p => {
+      if (filterMode === 'without' && p.hasImage) return false;
+      if (filterMode === 'with' && !p.hasImage) return false;
+      if (!searchListQuery) return true;
+      const q = searchListQuery.toLowerCase();
+      return (
+        (p.name && p.name.toLowerCase().includes(q)) ||
+        (p.barcode && p.barcode.includes(q)) ||
+        (p.sku && p.sku.includes(q)) ||
+        (p.category && p.category.toLowerCase().includes(q))
+      );
+    });
+  }, [localProducts, filterMode, searchListQuery]);
+
+  useEffect(() => {
+    if (!selectedId && filteredList.length > 0) {
+      setSelectedId(filteredList[0].id);
+    } else if (selectedId && !filteredList.some(p => p.id === selectedId) && filteredList.length > 0) {
+      setSelectedId(filteredList[0].id);
+    }
+  }, [filteredList, selectedId]);
+
+  const currentProduct = useMemo(() => {
+    return localProducts.find(p => p.id === selectedId) || filteredList[0] || null;
+  }, [localProducts, selectedId, filteredList]);
+
+  useEffect(() => {
+    if (!currentProduct) return;
+    const cleanName = currentProduct.name ? currentProduct.name.replace(/^[0-9]+[xX]?\s*[-–]\s*/, '').trim() : '';
+    setSearchQuery(cleanName);
+    fetchImages(cleanName);
+  }, [currentProduct?.id]);
+
+  async function fetchImages(query) {
+    if (!query || !query.trim()) {
+      setSearchResults([]);
+      return;
+    }
+    const term = query.trim();
+    if (searchCache.current.has(term)) {
+      setSearchResults(searchCache.current.get(term));
+      setSearchError('');
+      return;
+    }
+
+    setSearchLoading(true);
+    setSearchError('');
+    try {
+      const res = await api.searchProductWebImages(term);
+      const images = res?.images || [];
+      searchCache.current.set(term, images);
+      setSearchResults(images);
+    } catch (err) {
+      setSearchError(err.message || 'Erro ao buscar imagens na web');
+      setSearchResults([]);
+    } finally {
+      setSearchLoading(false);
+    }
+  }
+
+  async function handleSelectWebImage(item) {
+    if (!currentProduct || !item?.url || savingImageUrl) return;
+    setSavingImageUrl(item.url);
+    const prodId = currentProduct.id;
+    try {
+      const res = await api.saveRemoteProductImage(prodId, item.url, item.thumb);
+      
+      setLocalProducts(prev => prev.map(p => {
+        if (p.id === prodId) {
+          return {
+            ...p,
+            hasImage: true,
+            image: res.image || item.thumb || item.url
+          };
+        }
+        return p;
+      }));
+
+      setSavedSuccessId(prodId);
+      setTimeout(() => setSavedSuccessId(curr => curr === prodId ? null : curr), 1500);
+
+      if (onChanged) {
+        onChanged();
+      }
+
+      // Automatically advance to the next pending product
+      const currentIndex = filteredList.findIndex(p => p.id === prodId);
+      const nextPending = filteredList.slice(currentIndex + 1).find(p => !p.hasImage) ||
+                          filteredList.find(p => p.id !== prodId && !p.hasImage);
+      if (nextPending) {
+        setSelectedId(nextPending.id);
+      } else if (currentIndex < filteredList.length - 1) {
+        setSelectedId(filteredList[currentIndex + 1].id);
+      }
+    } catch (err) {
+      alert(err.message || 'Erro ao gravar imagem no sistema');
+    } finally {
+      setSavingImageUrl(null);
+    }
+  }
+
+  async function handleFileUpload(event) {
+    const file = event.target.files?.[0];
+    if (!file || !currentProduct) return;
+    event.target.value = '';
+    const prodId = currentProduct.id;
+    setSavingImageUrl('file');
+    try {
+      const res = await api.uploadProductImage(prodId, file);
+      setLocalProducts(prev => prev.map(p => {
+        if (p.id === prodId) {
+          return {
+            ...p,
+            hasImage: true,
+            image: res.image || URL.createObjectURL(file)
+          };
+        }
+        return p;
+      }));
+
+      setSavedSuccessId(prodId);
+      setTimeout(() => setSavedSuccessId(curr => curr === prodId ? null : curr), 1500);
+
+      if (onChanged) {
+        onChanged();
+      }
+
+      const currentIndex = filteredList.findIndex(p => p.id === prodId);
+      const nextPending = filteredList.slice(currentIndex + 1).find(p => !p.hasImage) ||
+                          filteredList.find(p => p.id !== prodId && !p.hasImage);
+      if (nextPending) {
+        setSelectedId(nextPending.id);
+      }
+    } catch (err) {
+      alert(err.message || 'Erro ao enviar imagem');
+    } finally {
+      setSavingImageUrl(null);
+    }
+  }
+
+  function handleSkipNext() {
+    if (!currentProduct) return;
+    const currentIndex = filteredList.findIndex(p => p.id === currentProduct.id);
+    if (currentIndex < filteredList.length - 1) {
+      setSelectedId(filteredList[currentIndex + 1].id);
+    } else if (filteredList.length > 0) {
+      setSelectedId(filteredList[0].id);
+    }
+  }
+
+  function handlePrev() {
+    if (!currentProduct) return;
+    const currentIndex = filteredList.findIndex(p => p.id === currentProduct.id);
+    if (currentIndex > 0) {
+      setSelectedId(filteredList[currentIndex - 1].id);
+    }
+  }
+
+  const totalCount = localProducts.length;
+  const withImageCount = localProducts.filter(p => p.hasImage).length;
+  const withoutImageCount = totalCount - withImageCount;
+  const percentDone = totalCount > 0 ? Math.round((withImageCount / totalCount) * 100) : 0;
+
+  return (
+    <div className="catalog-editor-backdrop" onMouseDown={event => event.target === event.currentTarget && !savingImageUrl && onClose()}>
+      <div className="catalog-editor bulk-photo-modal">
+        {/* Header */}
+        <header className="bulk-photo-head">
+          <div className="bulk-head-title-wrap">
+            <div className="bulk-title-row">
+              <span className="bulk-title-icon">
+                <Sparkles size={18} />
+              </span>
+              <h2>Adicionar Imagens em Massa</h2>
+              <span className="bulk-progress-pill">
+                {withImageCount} de {totalCount} com foto ({percentDone}%)
+              </span>
+            </div>
+            <div className="bulk-progress-mini-track">
+              <div className="bulk-progress-mini-fill" style={{ width: `${percentDone}%` }} />
+            </div>
+          </div>
+
+          <div className="bulk-head-filters">
+            <button
+              type="button"
+              className={`bulk-filter-chip ${filterMode === 'without' ? 'active' : ''}`}
+              onClick={() => setFilterMode('without')}
+            >
+              <ImageOff size={13} />
+              <span>Sem Foto ({withoutImageCount})</span>
+            </button>
+            <button
+              type="button"
+              className={`bulk-filter-chip ${filterMode === 'all' ? 'active' : ''}`}
+              onClick={() => setFilterMode('all')}
+            >
+              <span>Todos ({totalCount})</span>
+            </button>
+            <button
+              type="button"
+              className={`bulk-filter-chip ${filterMode === 'with' ? 'active' : ''}`}
+              onClick={() => setFilterMode('with')}
+            >
+              <Check size={13} />
+              <span>Com Foto ({withImageCount})</span>
+            </button>
+          </div>
+
+          <button type="button" className="icon-button" onClick={onClose} disabled={Boolean(savingImageUrl)} aria-label="Fechar">
+            <X size={18} />
+          </button>
+        </header>
+
+        {/* Body Split View */}
+        <div className="bulk-photo-body">
+          {/* Left: Products List Sidebar */}
+          <aside className="bulk-products-sidebar">
+            <div className="bulk-sidebar-search">
+              <Search size={14} />
+              <input
+                type="text"
+                value={searchListQuery}
+                onChange={e => setSearchListQuery(e.target.value)}
+                placeholder="Filtrar por nome ou código..."
+              />
+              {searchListQuery && (
+                <button type="button" className="btn-clear-search" onClick={() => setSearchListQuery('')}>
+                  <X size={12} />
+                </button>
+              )}
+            </div>
+
+            <div className="bulk-products-list">
+              {filteredList.length === 0 ? (
+                <div className="bulk-list-empty">
+                  <ImageOff size={24} />
+                  <span>Nenhum produto neste filtro</span>
+                </div>
+              ) : (
+                filteredList.map((product) => {
+                  const isSelected = currentProduct?.id === product.id;
+                  const isSaving = savingImageUrl && currentProduct?.id === product.id;
+                  const isJustSaved = savedSuccessId === product.id;
+
+                  return (
+                    <button
+                      key={product.id}
+                      type="button"
+                      className={`bulk-product-row ${isSelected ? 'is-selected' : ''} ${isJustSaved ? 'is-just-saved' : ''}`}
+                      onClick={() => setSelectedId(product.id)}
+                    >
+                      <div
+                        className={`bulk-row-thumb ${product.hasImage ? 'has-img' : 'no-img'}`}
+                        style={{ backgroundImage: product.hasImage && product.image ? `url(${product.image})` : 'none' }}
+                      >
+                        {!product.hasImage && <ImageOff size={14} />}
+                      </div>
+
+                      <div className="bulk-row-info">
+                        <span className="bulk-row-name" title={product.name}>
+                          {product.name}
+                        </span>
+                        <div className="bulk-row-meta">
+                          <code>{product.barcode || product.sku || 'Sem código'}</code>
+                          <span className="bullet">·</span>
+                          <strong>{money(product.price)}</strong>
+                        </div>
+                      </div>
+
+                      <div className="bulk-row-status">
+                        {isSaving ? (
+                          <span className="badge-saving">
+                            <RefreshCw size={12} className="spin-anim" />
+                          </span>
+                        ) : product.hasImage ? (
+                          <span className="badge-saved-mini" title="Foto ativa">
+                            <Check size={12} />
+                          </span>
+                        ) : (
+                          <span className="badge-pending-mini" title="Sem foto">
+                            •
+                          </span>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </aside>
+
+          {/* Right: Active Product & Instant Web Image Gallery */}
+          <main className="bulk-picker-main">
+            {currentProduct ? (
+              <div className="bulk-picker-content">
+                {/* Active Product Banner */}
+                <div className="bulk-active-banner">
+                  <div
+                    className={`bulk-active-thumb ${currentProduct.hasImage ? 'has-img' : 'no-img'}`}
+                    style={{ backgroundImage: currentProduct.hasImage && currentProduct.image ? `url(${currentProduct.image})` : 'none' }}
+                  >
+                    {!currentProduct.hasImage && <ImageOff size={22} />}
+                  </div>
+
+                  <div className="bulk-active-details">
+                    <div className="bulk-active-tags">
+                      <span className="photo-cat-badge">{currentProduct.category || 'Geral'}</span>
+                      {currentProduct.hasImage ? (
+                        <span className="badge-active">Foto Atual Salva</span>
+                      ) : (
+                        <span className="badge-missing">Foto Pendente</span>
+                      )}
+                      <span className="bulk-active-stock">
+                        Estoque: <strong>{currentProduct.stock} {currentProduct.unit || 'un'}</strong>
+                      </span>
+                    </div>
+                    <h3 title={currentProduct.name}>{currentProduct.name}</h3>
+                    <div className="bulk-active-meta">
+                      <span>EAN / Código: <code>{currentProduct.barcode || currentProduct.sku || 'Sem código'}</code></span>
+                      <span className="bullet">·</span>
+                      <span>Preço: <strong>{money(currentProduct.price)}</strong></span>
+                    </div>
+                  </div>
+
+                  <div className="bulk-active-nav">
+                    <button
+                      type="button"
+                      className="btn-bulk-nav"
+                      onClick={handlePrev}
+                      title="Produto anterior"
+                    >
+                      ← Anterior
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-bulk-nav"
+                      onClick={handleSkipNext}
+                      title="Pular para o próximo produto"
+                    >
+                      Pular →
+                    </button>
+                  </div>
+                </div>
+
+                {/* Search Bar */}
+                <form
+                  className="photo-search-bar"
+                  onSubmit={e => {
+                    e.preventDefault();
+                    fetchImages(searchQuery);
+                  }}
+                >
+                  <div className="photo-search-input-wrap">
+                    <Search size={16} />
+                    <input
+                      type="text"
+                      value={searchQuery}
+                      onChange={e => setSearchQuery(e.target.value)}
+                      placeholder="Pesquise o produto no Google / Shopping..."
+                    />
+                    {searchQuery && (
+                      <button type="button" className="btn-clear-search" onClick={() => setSearchQuery('')}>
+                        <X size={14} />
+                      </button>
+                    )}
+                  </div>
+                  <button type="submit" className="primary" disabled={searchLoading}>
+                    {searchLoading ? 'Buscando...' : 'Buscar Imagens'}
+                  </button>
+                </form>
+
+                {searchError && (
+                  <div className="photo-search-error">
+                    <span>{searchError}</span>
+                    <button type="button" onClick={() => fetchImages(searchQuery)}>Tentar novamente</button>
+                  </div>
+                )}
+
+                {/* Instant Image Selection Grid */}
+                <div className="bulk-images-container">
+                  {searchLoading ? (
+                    <div className="photo-web-loading">
+                      <RefreshCw size={26} className="spin-anim" />
+                      <span>Buscando imagens de <strong>{searchQuery}</strong> no Google...</span>
+                    </div>
+                  ) : searchResults.length > 0 ? (
+                    <div className="photo-web-grid bulk-grid">
+                      {searchResults.map((item, idx) => {
+                        const isSavingThis = savingImageUrl === item.url;
+                        return (
+                          <div
+                            key={item.url + idx}
+                            className={`photo-web-card ${isSavingThis ? 'is-saving' : ''}`}
+                            onClick={() => handleSelectWebImage(item)}
+                            title="Clique para gravar esta imagem no produto e avançar"
+                          >
+                            <div className="photo-web-img-frame">
+                              <img src={item.thumb || item.url} alt="Foto do produto" loading="lazy" />
+                              {isSavingThis && (
+                                <div className="photo-card-saving-overlay">
+                                  <RefreshCw size={20} className="spin-anim" />
+                                  <span>Gravando...</span>
+                                </div>
+                              )}
+                              <div className="photo-card-hover-overlay">
+                                <span className="btn-use-photo">
+                                  <Check size={14} /> Usar esta foto
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="photo-web-empty">
+                      <ImageOff size={36} />
+                      <strong>Nenhuma foto encontrada para "{searchQuery}"</strong>
+                      <p>Tente buscar com palavras-chave mais simples ou pelo código de barras.</p>
+                      <div className="photo-web-suggestions">
+                        {currentProduct.barcode && (
+                          <button type="button" onClick={() => { setSearchQuery(currentProduct.barcode); fetchImages(currentProduct.barcode); }}>
+                            Buscar por EAN: {currentProduct.barcode}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Bottom Bar: Instant save note + manual upload */}
+                <div className="bulk-picker-footer">
+                  <span className="bulk-footer-tip">
+                    ✨ <b>Dica rápida:</b> Basta clicar em qualquer imagem acima para gravar no produto e avançar automaticamente para o próximo!
+                  </span>
+
+                  <input ref={fileInputRef} type="file" accept="image/*" hidden onChange={handleFileUpload} />
+                  <button
+                    type="button"
+                    className="btn-bulk-file-upload"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={Boolean(savingImageUrl)}
+                    title="Enviar imagem do seu computador para este produto"
+                  >
+                    <Upload size={14} />
+                    <span>Subir do computador</span>
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="bulk-empty-selection">
+                <PackageCheck size={48} />
+                <h3>Todos os produtos desta lista já possuem foto!</h3>
+                <p>Alterne para "Todos" no topo se desejar alterar as fotos de outros itens.</p>
+              </div>
+            )}
+          </main>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Catalog({ products, categories, query, setQuery, category, setCategory, onChanged }) {
   const [editing, setEditing] = useState(null);
+  const [bulkPhotoModalOpen, setBulkPhotoModalOpen] = useState(false);
   const [page, setPage] = useState(1);
   const [imageFilter, setImageFilter] = useState('all');
   const [assimilateMsg, setAssimilateMsg] = useState('');
@@ -1983,14 +2469,25 @@ function Catalog({ products, categories, query, setQuery, category, setCategory,
       {assimilateMsg && <div className="catalog-sync-note"><Images size={16} /><span>{assimilateMsg}</span></div>}
 
       <div className="image-filter-bar">
-        <span>Fotos do catalogo</span>
-        <div>
-          <button className={imageFilter === 'all' ? 'active' : ''} onClick={() => setImageFilter('all')}>Todos <b>{products.length}</b></button>
-          <button className={imageFilter === 'with' ? 'active' : ''} onClick={() => setImageFilter('with')}><Images size={14} /> Com imagem <b>{withImage}</b></button>
-          <button className={imageFilter === 'without' ? 'active warning' : 'warning'} onClick={() => setImageFilter('without')}><ImageOff size={14} /> Sem imagem <b>{withoutImage}</b></button>
-          <button className={imageFilter === 'internal_ean' ? 'active' : ''} onClick={() => setImageFilter('internal_ean')}><Tags size={14} /> EAN da empresa <b>{internalEanCount}</b></button>
-          <button className={imageFilter === 'out_of_stock' ? 'active danger' : 'danger'} onClick={() => setImageFilter('out_of_stock')}><Boxes size={14} /> Estoque zerado <b>{outOfStock}</b></button>
+        <div className="image-filter-left">
+          <span>Fotos do catálogo</span>
+          <div className="image-filter-buttons">
+            <button className={imageFilter === 'all' ? 'active' : ''} onClick={() => setImageFilter('all')}>Todos <b>{products.length}</b></button>
+            <button className={imageFilter === 'with' ? 'active' : ''} onClick={() => setImageFilter('with')}><Images size={14} /> Com imagem <b>{withImage}</b></button>
+            <button className={imageFilter === 'without' ? 'active warning' : 'warning'} onClick={() => setImageFilter('without')}><ImageOff size={14} /> Sem imagem <b>{withoutImage}</b></button>
+            <button className={imageFilter === 'internal_ean' ? 'active' : ''} onClick={() => setImageFilter('internal_ean')}><Tags size={14} /> EAN da empresa <b>{internalEanCount}</b></button>
+            <button className={imageFilter === 'out_of_stock' ? 'active danger' : 'danger'} onClick={() => setImageFilter('out_of_stock')}><Boxes size={14} /> Estoque zerado <b>{outOfStock}</b></button>
+          </div>
         </div>
+        <button
+          type="button"
+          className="btn-bulk-photos-action"
+          onClick={() => setBulkPhotoModalOpen(true)}
+          title="Adicionar fotos em massa com busca rápida no Google"
+        >
+          <Sparkles size={16} />
+          <span>Adicionar Imagens em Massa</span>
+        </button>
       </div>
 
       <div className="category-chips">
@@ -2178,6 +2675,14 @@ function Catalog({ products, categories, query, setQuery, category, setCategory,
               closePhotoQueue();
             }
           }}
+        />
+      )}
+      {bulkPhotoModalOpen && (
+        <BulkPhotoModal
+          products={products}
+          api={api}
+          onClose={() => setBulkPhotoModalOpen(false)}
+          onChanged={onChanged}
         />
       )}
     </section>
